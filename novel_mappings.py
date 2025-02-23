@@ -19,7 +19,7 @@ HOSTING_SITE_DATA = {
         "host_logo": "https://dragonholic.com/wp-content/uploads/2025/01/Web-Logo-White.png",
         "novels": {
             "Quick Transmigration: The Villain Is Too Pampered and Alluring": {
-                "discord_role_id": "<@&1286581623848046662>",
+                "discord_role_id": "<@&1329391480435114005>",
                 "novel_url": "https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/",
                 "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/177838.jpg"
             },
