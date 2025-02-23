@@ -1,14 +1,26 @@
-# novel_mappings.py
-# Mapping dictionary for hosting site to their list of novel titles, translator, logo, discord roles, URLs, and novel covers.
+"""
+novel_mappings.py
+
+Mapping file for your own novel feed.
+For each hosting site, we store:
+  - translator: your username on that site.
+  - host_logo: the URL for the site's logo.
+  - novels: a dictionary mapping novel titles to their details:
+      - discord_role_id: the Discord role ID for the novel.
+      - novel_url: the manual URL for the novel.
+      - featured_image: the URL for the novel's featured image.
+      
+Also included is a list (via get_nsfw_novels) for NSFW novels.
+"""
 
 HOSTING_SITE_DATA = {
     "Dragonholic": {
         "translator": "Cannibal Turtle",
-        "host_logo": "https://dragonholic.com/wp-content/uploads/2025/01/Web-Logo-White.png",
+        "host_logo": "https://dragonholic.com/wp-content/uploads/2024/08/dragonholic_logo.jpg",  # Replace with your actual logo URL.
         "novels": {
             "Quick Transmigration: The Villain Is Too Pampered and Alluring": {
                 "discord_role_id": "<@&1286581623848046662>",
-                "novel_url": "https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/",
+                "novel_url": "https://dragonholic.com/quick-transmigration",  # Replace with your manual URL.
                 "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/177838.jpg"
             },
             "Second Novel Title Example": {
@@ -16,10 +28,10 @@ HOSTING_SITE_DATA = {
                 "novel_url": "https://dragonholic.com/second-novel",  # Replace with the manual URL for the second novel.
                 "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/second-novel.jpg"
             },
-            # Add more novels here if needed.
+            # Add more novels for Dragonholic here if needed.
         }
     },
-    # Other hosting sites can be added here in the future.
+    # Add other hosting sites here if needed.
 }
 
 def get_host_translator(host):
@@ -37,11 +49,6 @@ def get_host_logo(host):
 def get_novel_details(host, novel_title):
     """
     Returns the details of a novel (as a dict) from the specified hosting site.
-    Details include:
-      - discord_role_id
-      - novel_url
-      - featured_image
-    If no details are found, returns an empty dictionary.
     """
     return HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(novel_title, {})
 
@@ -65,9 +72,12 @@ def get_featured_image(novel_title, host="Dragonholic"):
     """
     details = get_novel_details(host, novel_title)
     return details.get("featured_image", "")
-    
+
 def get_nsfw_novels():
     """
-    Returns the list of NSFW novels.
+    Returns the list of NSFW novel titles.
     """
+    NSFW_NOVELS = [
+        # Add NSFW novel titles here, e.g. "Some NSFW Novel Title"
+    ]
     return NSFW_NOVELS
