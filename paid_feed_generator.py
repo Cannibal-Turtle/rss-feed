@@ -211,7 +211,7 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         
         discord_role = get_novel_discord_role(self.title, self.host)
         if category_value == "NSFW":
-            discord_role += " <@&1304077473998442506>"
+            discord_role += " <@&1343352825811439616>"
         writer.write(indent + "    <discord_role_id><![CDATA[%s]]></discord_role_id>" % discord_role + newl)
         
         writer.write(indent + '    <featuredImage url="%s"/>' % escape(get_featured_image(self.title, self.host)) + newl)
