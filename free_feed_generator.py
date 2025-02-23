@@ -2,6 +2,7 @@ import datetime
 import feedparser
 import PyRSS2Gen
 import xml.dom.minidom
+import re
 from xml.sax.saxutils import escape
 
 # Import host-specific utilities (for Dragonholic's formatting)
@@ -17,6 +18,18 @@ from novel_mappings import (
     get_featured_image,
     get_nsfw_novels
 )
+
+def compact_cdata(xml_str):
+    """
+    Finds <description><![CDATA[ ... ]]></description> sections and replaces
+    newlines and extra whitespace inside the CDATA with a single space.
+    """
+    pattern = re.compile(r'(<description><!\[CDATA\[)(.*?)(\]\]></description>)', re.DOTALL)
+    def repl(match):
+        start, cdata, end = match.groups()
+        compact = re.sub(r'\s+', ' ', cdata.strip())
+        return f"{start}{compact}{end}"
+    return pattern.sub(repl, xml_str)
 
 class MyRSSItem(PyRSS2Gen.RSSItem):
     def __init__(self, *args, chaptername="", nameextend="", host="", **kwargs):
@@ -45,7 +58,6 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         
         # Retrieve the novel-specific Discord role.
         discord_role = get_novel_discord_role(self.title, self.host)
-        # Append an additional role if the item is NSFW.
         if category_value == "NSFW":
             discord_role += " <@&1304077473998442506>"
         writer.write(indent + "    <discord_role_id><![CDATA[%s]]></discord_role_id>" % discord_role + newl)
@@ -60,14 +72,11 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         writer.write(indent + "    <host>%s</host>" % escape(self.host) + newl)
         writer.write(indent + '    <hostLogo url="%s"/>' % escape(get_host_logo(self.host)) + newl)
         
-        writer.write(indent + "    <guid isPermaLink=\"%s\">%s</guid>" % (str(self.guid.isPermaLink).lower(), self.guid.guid) + newl)
+        writer.write(indent + "    <guid isPermaLink=\"%s\">%s</guid>" %
+                     (str(self.guid.isPermaLink).lower(), self.guid.guid) + newl)
         writer.write(indent + "  </item>" + newl)
 
 class CustomRSS2(PyRSS2Gen.RSS2):
-    """
-    Subclass of PyRSS2Gen.RSS2 that overrides the writexml() method so that the 
-    opening <rss> tag contains the desired namespace declarations.
-    """
     def writexml(self, writer, indent="", addindent="", newl=""):
         writer.write('<?xml version="1.0" encoding="utf-8"?>' + newl)
         writer.write(
@@ -110,7 +119,7 @@ def main():
     parsed_feed = feedparser.parse(feed_url)
     
     for entry in parsed_feed.entries:
-        # Use host-specific splitting to obtain the main title, chapter name, and extension.
+        # Use host_utils.split_title() to extract main title, chapter name, and extension.
         main_title, chaptername, nameextend = split_title(host, entry.title)
         # Retrieve novel details from the mapping using the host and the main title.
         novel_details = get_novel_details(host, main_title)
@@ -121,7 +130,7 @@ def main():
         pub_date = datetime.datetime(*entry.published_parsed[:6])
         item = MyRSSItem(
             title=main_title,
-            link=entry.link,  # Optionally, use get_novel_url(main_title, host) if you prefer.
+            link=entry.link,  # Optionally, use get_novel_url(main_title, host) if preferred.
             description=entry.description,
             guid=PyRSS2Gen.Guid(entry.id, isPermaLink=False),
             pubDate=pub_date,
@@ -131,12 +140,8 @@ def main():
         )
         rss_items.append(item)
     
-    # Sort items by publication date (newest first) and then by chapter number.
-    rss_items.sort(key=lambda item: (
-        item.pubDate,
-        item.title,
-        chapter_num(host, item.chaptername)
-    ), reverse=True)
+    # Sort items by publication date, title, and chapter number (descending order).
+    rss_items.sort(key=lambda item: (item.pubDate, item.title, chapter_num(host, item.chaptername)), reverse=True)
     
     new_feed = CustomRSS2(
         title=parsed_feed.feed.title,
@@ -150,12 +155,14 @@ def main():
     with open(output_file, "w", encoding="utf-8") as f:
         new_feed.writexml(f, indent="  ", addindent="  ", newl="\n")
     
+    # Pretty-print the XML (except for the description content) and then compact the description CDATA.
     with open(output_file, "r", encoding="utf-8") as f:
         xml_content = f.read()
     dom = xml.dom.minidom.parseString(xml_content)
     pretty_xml = "\n".join([line for line in dom.toprettyxml(indent="  ").splitlines() if line.strip()])
+    compacted_xml = compact_cdata(pretty_xml)
     with open(output_file, "w", encoding="utf-8") as f:
-        f.write(pretty_xml)
+        f.write(compacted_xml)
     
     print("Modified feed generated with", len(rss_items), "items.")
     print("Output written to", output_file)
