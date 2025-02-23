@@ -1,3 +1,6 @@
+# novel_mappings.py
+# Mapping dictionary for hosting site to their list of novel titles, translator, logo, discord roles, URLs, and novel covers.
+
 HOSTING_SITE_DATA = {
     "Dragonholic": {
         "translator": "Cannibal Turtle",
@@ -5,7 +8,7 @@ HOSTING_SITE_DATA = {
         "novels": {
             "Quick Transmigration: The Villain Is Too Pampered and Alluring": {
                 "discord_role_id": "<@&1286581623848046662>",
-                "novel_url": "https://dragonholic.com/quick-transmigration",  # Replace with your manual URL.
+                "novel_url": "https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/",
                 "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/177838.jpg"
             },
             "Second Novel Title Example": {
