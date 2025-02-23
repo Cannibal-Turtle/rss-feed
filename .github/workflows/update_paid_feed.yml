@@ -25,7 +25,7 @@ jobs:
           pip install feedparser PyRSS2Gen aiohttp beautifulsoup4
 
       - name: Run Paid Feed Generator
-        run: python paid_feed_generator.py
+        run: python paid_feed_gen.py
 
       - name: Commit and Push Changes
         env:
