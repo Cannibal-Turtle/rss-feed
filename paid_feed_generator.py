@@ -275,11 +275,9 @@ async def process_novel(session, host, novel_title):
                 pub_date = chap["pubDate"]
                 if pub_date.tzinfo is None:
                     pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
-
-                        # Override pubDate for the specific novel
-            if novel_title == "Quick Transmigration: The Villain Is Too Pampered and Alluring":
-                pub_date = pub_date.replace(hour=12, minute=0, second=0)
-
+                # Override pubDate for the specific novel.
+                if novel_title == "Quick Transmigration: The Villain Is Too Pampered and Alluring":
+                    pub_date = pub_date.replace(hour=12, minute=0, second=0)
                 item = MyRSSItem(
                     title=novel_title,
                     link=chap["link"],
@@ -322,7 +320,7 @@ async def main_async():
         items=rss_items
     )
     
-    output_file = "paid_chapters_feed.xml"
+    output_file = "dh_paid_feed.xml"
     with open(output_file, "w", encoding="utf-8") as f:
         new_feed.writexml(f, indent="  ", addindent="  ", newl="\n")
     
@@ -333,12 +331,4 @@ async def main_async():
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(pretty_xml)
     
-    # Debug: print chapter numbers and pubDates again after feed generation.
-    for item in rss_items:
-        print(f"{item.title} - {item.chaptername} ({chapter_num(item.host, item.chaptername)}) : {item.pubDate}")
-    
-    print(f"Modified feed generated with {len(rss_items)} items.")
-    print(f"Output written to {output_file}")
-
-if __name__ == "__main__":
-    asyncio.run(main_async())
+    # Debug: print chapter numbers and pubDat
