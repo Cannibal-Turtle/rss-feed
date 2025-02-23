@@ -65,3 +65,9 @@ def get_featured_image(novel_title, host="Dragonholic"):
     """
     details = get_novel_details(host, novel_title)
     return details.get("featured_image", "")
+    
+def get_nsfw_novels():
+    """
+    Returns the list of NSFW novels.
+    """
+    return NSFW_NOVELS
