@@ -1,4 +1,4 @@
-name: Update Dragonholic Feed
+name: Update Feed
 
 on:
   schedule:
