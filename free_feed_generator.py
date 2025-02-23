@@ -59,7 +59,7 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         # Retrieve the novel-specific Discord role.
         discord_role = get_novel_discord_role(self.title, self.host)
         if category_value == "NSFW":
-            discord_role += " <@&1304077473998442506>"
+            discord_role += " <@&1343352825811439616>"
         writer.write(indent + "    <discord_role_id><![CDATA[%s]]></discord_role_id>" % discord_role + newl)
         
         # Output the featured image.
