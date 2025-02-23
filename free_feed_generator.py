@@ -146,7 +146,7 @@ def main():
         items=rss_items
     )
     
-    output_file = "dh_modified_feed.xml"
+    output_file = "free_chapters_feed.xml"
     with open(output_file, "w", encoding="utf-8") as f:
         new_feed.writexml(f, indent="  ", addindent="  ", newl="\n")
     
