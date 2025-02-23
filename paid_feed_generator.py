@@ -331,4 +331,12 @@ async def main_async():
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(pretty_xml)
     
-    # Debug: print chapter numbers and pubDat
+    # Debug: print chapter numbers and pubDates again after feed generation.
+    for item in rss_items:
+        print(f"{item.title} - {item.chaptername} ({chapter_num(item.host, item.chaptername)}) : {item.pubDate}")
+    
+    print(f"Modified feed generated with {len(rss_items)} items.")
+    print(f"Output written to {output_file}")
+
+if __name__ == "__main__":
+    asyncio.run(main_async())
