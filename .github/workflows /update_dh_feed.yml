@@ -25,7 +25,7 @@ jobs:
           pip install feedparser PyRSS2Gen requests beautifulsoup4
 
       - name: Run Feed Generator
-        run: python free_generator.py
+        run: python free_feed_generator.py
 
       - name: Commit and Push Changes
         run: |
