@@ -320,7 +320,7 @@ async def main_async():
         items=rss_items
     )
     
-    output_file = "dh_paid_feed.xml"
+    output_file = "paid_chapters_feed.xml"
     with open(output_file, "w", encoding="utf-8") as f:
         new_feed.writexml(f, indent="  ", addindent="  ", newl="\n")
     
