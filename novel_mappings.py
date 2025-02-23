@@ -4,7 +4,7 @@
 HOSTING_SITE_DATA = {
     "Dragonholic": {
         "translator": "Cannibal Turtle",
-        "host_logo": "https://dragonholic.com/wp-content/uploads/2024/08/dragonholic_logo.jpg",  # Replace with your actual logo URL.
+        "host_logo": "https://dragonholic.com/wp-content/uploads/2025/01/Web-Logo-White.png",
         "novels": {
             "Quick Transmigration: The Villain Is Too Pampered and Alluring": {
                 "discord_role_id": "<@&1286581623848046662>",
