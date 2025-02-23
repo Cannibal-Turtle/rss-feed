@@ -27,6 +27,9 @@ jobs:
       - name: Run Paid Feed Generator
         run: python paid_feed_generator.py
 
+      - name: List files after generation
+        run: ls -la
+
       - name: Commit and Push Changes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
