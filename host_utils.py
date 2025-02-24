@@ -115,7 +115,7 @@ async def scrape_paid_chapters_async(session, novel_url):
       - `nameextend`
     """
     print(f"DEBUG: Scraping {novel_url}")
-    
+
     try:
         html = await fetch_page(session, novel_url)
     except Exception as e:
@@ -126,7 +126,8 @@ async def scrape_paid_chapters_async(session, novel_url):
     desc_div = soup.find("div", class_="description-summary")
     main_desc = clean_description(desc_div.decode_contents()) if desc_div else ""
 
-    chapters = soup.find_all("li", class_="wp-manga-chapter premium")
+    # ✅ FIX: Properly selecting all PAID chapters (premium)
+    chapters = soup.select("li.wp-manga-chapter.premium")
     print(f"DEBUG: Found {len(chapters)} paid chapters on {novel_url}")
 
     paid_chapters = []
@@ -146,7 +147,8 @@ async def scrape_paid_chapters_async(session, novel_url):
         raw_title = a_tag.get_text(" ", strip=True)
         print(f"DEBUG: Processing chapter - {raw_title}")
 
-        chaptername, nameextend = split_paid_chapter_dragonholic(raw_title)  # ✅ Correct function
+        # ✅ FIX: Use split_paid_chapter_dragonholic()
+        chaptername, nameextend = split_paid_chapter_dragonholic(raw_title)
 
         href = a_tag.get("href", "").strip()
         guid = next((cls.replace("data-chapter-", "") for cls in chap.get("class", []) if cls.startswith("data-chapter-")), "unknown")
