@@ -17,9 +17,9 @@ from bs4 import BeautifulSoup
 
 def split_title_dragonholic(full_title):
     """
-    Splits a standard Dragonholic free feed title, e.g.:
-      "After Rebirth, I Married My Archenemy - Chapter 76 - Because of Guilt"
-    Returns (main_title, chaptername, nameextend).
+    Splits a Dragonholic chapter title.
+    Expected format: "Main Title - Chapter Name - (Optional Extension)"
+    Returns a tuple: (main_title, chaptername, nameextend)
     """
     parts = full_title.split(" - ")
     if len(parts) == 2:
@@ -27,7 +27,7 @@ def split_title_dragonholic(full_title):
     elif len(parts) >= 3:
         main_title = parts[0].strip()
         chaptername = parts[1].strip()
-        nameextend = parts[2].strip() if parts[2].strip() else ""
+        nameextend = parts[2].strip() if parts[2].strip() else (parts[3].strip() if len(parts) > 3 else "")
         return main_title, chaptername, nameextend
     else:
         return full_title.strip(), "", ""
