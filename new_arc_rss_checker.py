@@ -144,7 +144,7 @@ message = (
     "## :loudspeaker: NEW ARC ALERT˚ · .˚ ༘:butterfly:⋆｡˚\n"
     f"***《World {world_number}》is Live for***\n"
     "### [Quick Transmigration: The Villain Is Too Pampered and Alluring]"
-    "(https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/) <:Hehe:1329429547229122580>"
+    "(https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/) <:Hehe:1329429547229122580>\n"
     "❀° ┄───────────────────────╮\n"
     "**`Unlocked 🔓`**\n"
     f"||{unlocked_section}||\n\n"
