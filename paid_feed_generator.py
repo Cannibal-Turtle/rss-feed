@@ -20,26 +20,17 @@ from novel_mappings import (
     get_nsfw_novels
 )
 
-# Import host utilities dispatcher
+# Import host utilities dispatcher from host_utils.py
 from host_utils import get_host_utils
 
 # ---------------- Concurrency Control ----------------
 semaphore = asyncio.Semaphore(100)
 
-# ---------------- Helper Functions (Synchronous) ----------------
+# ---------------- Helper Functions ----------------
 
 def normalize_date(dt):
     """Normalizes a datetime by removing microseconds."""
     return dt.replace(microsecond=0)
-
-# ---------------- Asynchronous Fetch Functions ----------------
-
-async def fetch_page(session, url):
-    """Fetches a URL using aiohttp and returns the response text."""
-    async with session.get(url) as response:
-        return await response.text()
-
-# (Note: The functions for fetching, cleaning, and date extraction are now inside host_utils for Dragonholic)
 
 # ---------------- Main Processing Functions ----------------
 
@@ -49,9 +40,11 @@ async def process_novel(session, host, novel_title):
         novel_url = get_novel_url(novel_title, host)
         print(f"Scraping: {novel_url}")
         utils = get_host_utils(host)
+        # Check for recent premium update using the host-specific function.
         if not await utils["novel_has_paid_update_async"](session, novel_url):
             print(f"Skipping {novel_title}: no recent premium update found.")
             return []
+        # Scrape paid chapters using the host-specific function.
         paid_chapters, main_desc = await utils["scrape_paid_chapters_async"](session, novel_url)
         items = []
         if paid_chapters:
@@ -62,9 +55,7 @@ async def process_novel(session, host, novel_title):
                 # Override pubDate for the specific novel.
                 if novel_title == "Quick Transmigration: The Villain Is Too Pampered and Alluring":
                     pub_date = pub_date.replace(hour=12, minute=0, second=0)
-                # Use the split_title function from the dispatcher to get title components.
-                main_title, chaptername, nameextend = utils["split_title"](chap["link"])  # If you want to re-split based on the link, or you can use the chapter data already scraped.
-                # Here, we assume the chapter data already holds proper title info:
+                # Create RSS item using the scraped chapter data.
                 item = MyRSSItem(
                     title=novel_title,
                     link=chap["link"],
@@ -86,7 +77,7 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         self.chaptername = chaptername
         self.nameextend = nameextend
         self.coin = coin
-        self.host = host  # E.g., "Dragonholic"
+        self.host = host  # For example, "Dragonholic"
         super().__init__(*args, **kwargs)
     
     def writexml(self, writer, indent="", addindent="", newl=""):
@@ -116,7 +107,7 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         writer.write(indent + "    <pubDate>%s</pubDate>" % self.pubDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
         writer.write(indent + "    <host>%s</host>" % escape(self.host) + newl)
         writer.write(indent + '    <hostLogo url="%s"/>' % escape(get_host_logo(self.host)) + newl)
-        writer.write(indent + "    <guid isPermaLink=\"%s\">%s</guid>" % 
+        writer.write(indent + "    <guid isPermaLink=\"%s\">%s</guid>" %
                      (str(self.guid.isPermaLink).lower(), self.guid.guid) + newl)
         writer.write(indent + "  </item>" + newl)
 
@@ -142,7 +133,7 @@ class CustomRSS2(PyRSS2Gen.RSS2):
         if hasattr(self, 'language') and self.language:
             writer.write(indent + addindent + "<language>%s</language>" % escape(self.language) + newl)
         if hasattr(self, 'lastBuildDate') and self.lastBuildDate:
-            writer.write(indent + addindent + "<lastBuildDate>%s</lastBuildDate>" % 
+            writer.write(indent + addindent + "<lastBuildDate>%s</lastBuildDate>" %
                          self.lastBuildDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
         if hasattr(self, 'docs') and self.docs:
             writer.write(indent + addindent + "<docs>%s</docs>" % escape(self.docs) + newl)
@@ -168,7 +159,7 @@ async def main_async():
         for items in results:
             rss_items.extend(items)
     
-    # For sorting, use the chapter_num function from the host utilities.
+    # Sort by normalized pubDate and chapter number (using the host's chapter_num function)
     rss_items.sort(key=lambda item: (normalize_date(item.pubDate), 
                                      get_host_utils(item.host)["chapter_num"](item.chaptername)),
                    reverse=True)
@@ -178,8 +169,7 @@ async def main_async():
         print(f"{item.title} - {item.chaptername} ({get_host_utils(item.host)['chapter_num'](item.chaptername)}) : {item.pubDate}")
     
     new_feed = CustomRSS2(
-        title="Dragonholic Paid Chapters",
-        link="https://dragonholic.com",
+        title="Aggregated Paid Chapters Feed",
         description="Aggregated RSS feed for paid chapters across mapped novels.",
         lastBuildDate=datetime.datetime.now(datetime.timezone.utc),
         items=rss_items
