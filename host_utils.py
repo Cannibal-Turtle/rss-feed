@@ -42,37 +42,26 @@ def split_title_dragonholic(full_title):
 
 def split_paid_chapter_dragonholic(raw_title):
     """
-    This function specifically handles a raw title like:
-        "Chapter 633 <i class=\"fas fa-lock\"></i> - The Abandoned Supporting Female Role 015"
-    1. Removes any <i>...</i> tags.
-    2. Splits on ' - ' (the first occurrence) to separate 'Chapter 633' from 'The Abandoned Supporting Female Role 015'.
-    Returns a tuple: (chaptername, nameextend).
+    Handles a raw title like:
+      "Chapter 640 <i class=\"fas fa-lock\"></i> - The Abandoned Supporting Female Role 022"
+    1) Remove <i ...>...</i> tags.
+    2) Split once on " - " to separate "Chapter 640" from "The Abandoned Supporting Female Role 022".
+    Returns (chaptername, nameextend).
     """
-    # Remove <i ...>...</i> using a regex
+    # Remove <i ...>...</i>
     cleaned = re.sub(r'<i[^>]*>.*?</i>', '', raw_title).strip()
-    # After removal, cleaned might look like: "Chapter 633  - The Abandoned Supporting Female Role 015"
+    # e.g. cleaned might be: "Chapter 640  - The Abandoned Supporting Female Role 022"
 
-    # Split on ' - ' (only once) to separate the left (chapter) from the right (extension)
+    # Split once on ' - '
     parts = cleaned.split(' - ', 1)
     if len(parts) == 2:
         chaptername = parts[0].strip()
         nameextend  = parts[1].strip()
     else:
-        # If there's no ' - ', just assume there's only a chapter part
+        # If there's no ' - ', fallback
         chaptername = cleaned
         nameextend  = ""
     return chaptername, nameextend
-
-
-def chapter_num_dragonholic(chaptername):
-    """
-    Extracts numeric sequences from a Dragonholic chapter name.
-    Returns a tuple of numbers (ints or floats) found in the chapter name.
-    """
-    numbers = re.findall(r'\d+(?:\.\d+)?', chaptername)
-    if not numbers:
-        return (0,)
-    return tuple(float(n) if '.' in n else int(n) for n in numbers)
 
 def clean_description(raw_desc):
     """
@@ -161,10 +150,33 @@ async def novel_has_paid_update_async(session, novel_url):
     return False
 
 async def scrape_paid_chapters_async(session, novel_url):
-    # ...
+    try:
+        html = await fetch_page(session, novel_url)
+    except Exception as e:
+        print(f"Error fetching {novel_url}: {e}")
+        return [], ""
+
+    soup = BeautifulSoup(html, "html.parser")
+    desc_div = soup.find("div", class_="description-summary")
+    if desc_div:
+        main_desc = clean_description(desc_div.decode_contents())
+        print("Main description fetched.")
+    else:
+        main_desc = ""
+        print("No main description found.")
+
+    chapters = soup.find_all("li", class_="wp-manga-chapter")
+    paid_chapters = []
+    now = datetime.datetime.now(datetime.timezone.utc)
+    print(f"Found {len(chapters)} chapter elements on {novel_url}")
+
     for chap in chapters:
+        # Only handle premium chapters
         if "free-chap" in chap.get("class", []):
             continue
+        if "premium" not in chap.get("class", []):
+            continue
+
         pub_dt = extract_pubdate_from_soup(chap)
         if pub_dt < now - datetime.timedelta(days=7):
             break
@@ -172,28 +184,26 @@ async def scrape_paid_chapters_async(session, novel_url):
         a_tag = chap.find("a")
         if not a_tag:
             continue
-
         raw_title = a_tag.get_text(" ", strip=True)
         print(f"Processing chapter: {raw_title}")
 
-        # Instead of split_title_dragonholic, call the new function
+        # >>> Call the new function <<<
         chaptername, nameextend = split_paid_chapter_dragonholic(raw_title)
 
-        href = a_tag.get("href") or ""
-        if not href.strip() or href.strip() == "#":
-            # fallback logic
+        href = a_tag.get("href")
+        if not href or href.strip() == "#":
+            # fallback if no href
             parts = chaptername.split()
             chapter_num_str = parts[-1] if parts else "unknown"
             href = f"{novel_url}chapter-{chapter_num_str}/"
 
-        # 'guid' logic remains the same
         guid = None
         for cls in chap.get("class", []):
             if cls.startswith("data-chapter-"):
                 guid = cls.replace("data-chapter-", "")
                 break
         if not guid:
-            # fallback if no data-chapter- is found
+            # fallback if not found
             parts = chaptername.split()
             guid = parts[-1] if parts else "unknown"
 
@@ -201,17 +211,17 @@ async def scrape_paid_chapters_async(session, novel_url):
         coin_value = coin_span.get_text(strip=True) if coin_span else ""
 
         paid_chapters.append({
-            "chaptername": chaptername,    # e.g. "Chapter 633"
-            "nameextend": nameextend,      # e.g. "The Abandoned Supporting Female Role 015"
+            "chaptername": chaptername,     # e.g. "Chapter 640"
+            "nameextend": nameextend,       # e.g. "The Abandoned Supporting Female Role 022"
             "link": href.strip(),
             "description": main_desc,
             "pubDate": pub_dt,
             "guid": guid,
             "coin": coin_value
         })
-    # ...
-    return paid_chapters, main_desc
 
+    print(f"Total paid chapters processed from {novel_url}: {len(paid_chapters)}")
+    return paid_chapters, main_desc
 
 # ---------------- Dispatcher for Dragonholic ----------------
 
