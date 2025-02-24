@@ -147,10 +147,10 @@ def main():
     feed_description = "Aggregated RSS feed for free chapters across all hosting sites."
     
     new_feed = CustomRSS2(
-        title=feed_title,
-        link=feed_link,
-        description=feed_description,
-        lastBuildDate=datetime.datetime.now(),
+        title="Aggregated Free Chapters Feed",
+        link="https://github.com/cannibal-turtle/",
+        description="Aggregated RSS feed for free chapters across all hosting sites.",
+        lastBuildDate=datetime.datetime.now(), 
         items=rss_items
     )
     
