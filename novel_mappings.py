@@ -41,7 +41,11 @@ HOSTING_SITE_DATA = {
         "translator": "",
         "host_logo": "",
         "novels": {
-              
+            "": {
+                "discord_role_id": "",
+                "novel_url": "",
+                "featured_image": "",
+                "pub_date_override":      
             },
 }
 
