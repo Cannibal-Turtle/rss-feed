@@ -170,6 +170,7 @@ async def main_async():
     
     new_feed = CustomRSS2(
         title="Aggregated Paid Chapters Feed",
+        link="https://github.com/cannibal-turtle/",
         description="Aggregated RSS feed for paid chapters across mapped novels.",
         lastBuildDate=datetime.datetime.now(datetime.timezone.utc),
         items=rss_items
