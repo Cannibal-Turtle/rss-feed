@@ -12,6 +12,7 @@ import re
 import datetime
 import aiohttp
 from bs4 import BeautifulSoup
+from novel_mappings import HOSTING_SITE_DATA
 
 # ---------------- FREE FEED Split Function (DO NOT TOUCH) ----------------
 
