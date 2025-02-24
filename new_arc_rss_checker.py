@@ -2,6 +2,7 @@ import requests
 import feedparser
 import os
 import json
+import re
 
 # === CONFIGURATION ===
 FREE_FEED_URL = "https://cannibal-turtle.github.io/rss-feed/free_chapters_feed.xml"
@@ -31,11 +32,23 @@ def clean_title(raw_title):
     # Remove unwanted markdown characters from the raw title.
     return raw_title.replace("*", "").strip()
 
+def extract_arc_number(title):
+    """
+    Extracts the arc number from a title string.
+    Expected format: "【Arc 16】 The Abandoned Supporting Female Role"
+    Returns an integer if found, otherwise None.
+    """
+    match = re.search(r"Arc\s*(\d+)", title)
+    if match:
+        return int(match.group(1))
+    return None
+
 # === FETCH FEEDS ===
 free_feed = feedparser.parse(FREE_FEED_URL)
 paid_feed = feedparser.parse(PAID_FEED_URL)
 
-# Extract arc titles based on first chapter indicator (" 001")
+# Extract arc titles based on the first chapter indicator (" 001")
+# Clean the titles so stored history is plain text.
 free_arcs_feed = [clean_title(entry.get("nameextend", "").split(" 001")[0])
                    for entry in free_feed.entries if " 001" in entry.get("nameextend", "")]
 paid_arcs_feed = [clean_title(entry.get("nameextend", "").split(" 001")[0])
@@ -80,15 +93,22 @@ with open(LAST_ARC_FILE, "w") as f:
     f.write(new_locked_arc if new_locked_arc else "")
 
 # === BUILD THE DISCORD MESSAGE ===
-total_unlocked = len(history["unlocked"])
-total_locked = len(history["locked"])
-new_arc_number = total_unlocked + total_locked + 1  # New arc's number
+# For the new arc number, try to extract the number from the new locked arc title.
+extracted_num = extract_arc_number(new_locked_arc) if new_locked_arc else None
+if extracted_num is not None:
+    new_arc_number = extracted_num
+else:
+    # Fallback: count all arcs and add 1.
+    new_arc_number = len(history["unlocked"]) + len(history["locked"]) + 1
 
-# Build sections with plain titles; numbering will be applied by the script.
-unlocked_section = "\n".join([f"**【Arc {i+1}】** {title}" for i, title in enumerate(history["unlocked"])])
-locked_section_lines = [f"**【Arc {i+total_unlocked+1}】** {title}" for i, title in enumerate(history["locked"])]
+# Build message sections.
+# For unlocked arcs, simply join the stored titles.
+unlocked_section = "\n".join(history["unlocked"])
+# For locked arcs, join them as stored.
+locked_section_lines = history["locked"].copy()  # make a copy
 if locked_section_lines:
-    locked_section_lines[0] = f"☛{locked_section_lines[0]}"  # Mark the new locked arc with ☛
+    # Prefix the new locked arc with the ☛ emoji.
+    locked_section_lines[0] = f"☛{locked_section_lines[0]}"
 locked_section = "\n".join(locked_section_lines)
 
 message = (
