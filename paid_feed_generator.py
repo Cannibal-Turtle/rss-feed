@@ -17,7 +17,8 @@ from novel_mappings import (
     get_host_logo,
     get_novel_details,
     get_novel_discord_role,
-    get_nsfw_novels
+    get_nsfw_novels,
+    get_pub_date_override  # Make sure this function is defined in novel_mappings.py
 )
 
 # Import host utilities dispatcher from host_utils.py
@@ -49,12 +50,14 @@ async def process_novel(session, host, novel_title):
         items = []
         if paid_chapters:
             for chap in paid_chapters:
+                # Get the published date from the feed entry (assuming it was scraped already)
                 pub_date = chap["pubDate"]
                 if pub_date.tzinfo is None:
                     pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
-                # Override pubDate for the specific novel.
-                if novel_title == "Quick Transmigration: The Villain Is Too Pampered and Alluring":
-                    pub_date = pub_date.replace(hour=12, minute=0, second=0)
+                # Apply publication date override if defined in the mappings.
+                override = get_pub_date_override(novel_title, host)
+                if override:
+                    pub_date = pub_date.replace(**override)
                 # Create RSS item using the scraped chapter data.
                 item = MyRSSItem(
                     title=novel_title,
@@ -77,7 +80,7 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         self.chaptername = chaptername
         self.nameextend = nameextend
         self.coin = coin
-        self.host = host  # For example, "Dragonholic"
+        self.host = host  # e.g., "Dragonholic"
         super().__init__(*args, **kwargs)
     
     def writexml(self, writer, indent="", addindent="", newl=""):
@@ -105,8 +108,7 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         writer.write(indent + "    <pubDate>%s</pubDate>" % self.pubDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
         writer.write(indent + "    <host>%s</host>" % escape(self.host) + newl)
         writer.write(indent + '    <hostLogo url="%s"/>' % escape(get_host_logo(self.host)) + newl)
-        writer.write(indent + "    <guid isPermaLink=\"%s\">%s</guid>" %
-                     (str(self.guid.isPermaLink).lower(), self.guid.guid) + newl)
+        writer.write(indent + "    <guid isPermaLink=\"%s\">%s</guid>" % (str(self.guid.isPermaLink).lower(), self.guid.guid) + newl)
         writer.write(indent + "  </item>" + newl)
 
 class CustomRSS2(PyRSS2Gen.RSS2):
@@ -157,7 +159,7 @@ async def main_async():
         for items in results:
             rss_items.extend(items)
     
-    # Sort by normalized pubDate and chapter number (using the host's chapter_num function)
+    # Sort items by publication date and chapter number (using host's chapter_num function)
     rss_items.sort(key=lambda item: (normalize_date(item.pubDate), 
                                      get_host_utils(item.host)["chapter_num"](item.chaptername)),
                    reverse=True)
@@ -167,14 +169,14 @@ async def main_async():
         print(f"{item.title} - {item.chaptername} ({get_host_utils(item.host)['chapter_num'](item.chaptername)}) : {item.pubDate}")
     
     new_feed = CustomRSS2(
-        title="Aggregated Paid Chapters Feed",
+        title="Aggregated Free Chapters Feed",
         link="https://github.com/cannibal-turtle/",
-        description="Aggregated RSS feed for paid chapters across mapped novels.",
+        description="Aggregated RSS feed for free chapters across all hosting sites.",
         lastBuildDate=datetime.datetime.now(datetime.timezone.utc),
         items=rss_items
     )
     
-    output_file = "paid_chapters_feed.xml"
+    output_file = "free_chapters_feed.xml"
     with open(output_file, "w", encoding="utf-8") as f:
         new_feed.writexml(f, indent="  ", addindent="  ", newl="\n")
     
@@ -182,6 +184,7 @@ async def main_async():
         xml_content = f.read()
     dom = xml.dom.minidom.parseString(xml_content)
     pretty_xml = "\n".join([line for line in dom.toprettyxml(indent="  ").splitlines() if line.strip()])
+    # Optionally, compact the description CDATA if needed.
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(pretty_xml)
     
@@ -193,4 +196,5 @@ async def main_async():
     print(f"Output written to {output_file}")
 
 if __name__ == "__main__":
+    import asyncio
     asyncio.run(main_async())
