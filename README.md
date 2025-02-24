@@ -1,4 +1,3 @@
-```markdown
 # Guide for Updating Novel/Translator Mappings and Host Utilities
 
 This guide explains which elements need to be updated whenever a new novel, translator, or hosting site is added. Please update the following files accordingly.
