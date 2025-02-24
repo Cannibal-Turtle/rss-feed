@@ -16,6 +16,7 @@ This file contains mapping data for each hosting site. When adding a **new novel
     - `discord_role_id`: The Discord role ID  
     - `novel_url`: The manual URL for the novel’s main page  
     - `featured_image`: The URL for the novel’s featured image
+    - `pub_date_override`: The override for the system's default time of scraping
 
 ### Example
 
@@ -29,7 +30,9 @@ HOSTING_SITE_DATA = {
             "Quick Transmigration: The Villain Is Too Pampered and Alluring": {
                 "discord_role_id": "<@&1329391480435114005>",
                 "novel_url": "https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/",
-                "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/177838.jpg"
+                "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/177838.jpg",
+                "pub_date_override": {"hour": 12, "minute": 0, "second": 0}
+
             },
             "Second Novel Title Example": {
                 "discord_role_id": "<@&123456789012345678>",
