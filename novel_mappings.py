@@ -15,6 +15,7 @@ Also included is a list (via get_nsfw_novels) for NSFW novels.
 
 HOSTING_SITE_DATA = {
     "Dragonholic": {
+        "feed_url": "https://dragonholic.com/feed/manga-chapters/",
         "translator": "Cannibal Turtle",
         "host_logo": "https://dragonholic.com/wp-content/uploads/2025/01/Web-Logo-White.png",
         "novels": {
