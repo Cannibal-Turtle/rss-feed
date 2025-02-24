@@ -264,4 +264,3 @@ def get_host_utils(host):
    - In `host_utils.py`, create new site‑specific functions and group them in a new dictionary. Update `get_host_utils(host)` to return that dictionary.
 
 Following these steps keeps your feed generator modular and easy to update.
-```
