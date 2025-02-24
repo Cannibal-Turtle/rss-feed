@@ -35,10 +35,7 @@ HOSTING_SITE_DATA = {
                 "pub_date_override": {"hour": 12, "minute": 0, "second": 0}
 
             },
-            "Second Novel Title Example": {
-                "discord_role_id": "<@&123456789012345678>",
-                "novel_url": "https://dragonholic.com/second-novel",
-                "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/second-novel.jpg"
+            # Second novel here
             },
             # Add more novels as needed.
         }
