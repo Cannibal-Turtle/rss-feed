@@ -141,11 +141,7 @@ def main():
     # Sort items by publication date, title, and chapter number (using host's chapter_num)
     rss_items.sort(key=lambda item: (item.pubDate, item.title, utils["chapter_num"](item.chaptername)), reverse=True)
     
-    # Define generic feed properties for aggregated free chapters.
-    feed_title = "Aggregated Free Chapters Feed"
-    feed_link = "https://youraggregator.example.com/free-chapters"
-    feed_description = "Aggregated RSS feed for free chapters across all hosting sites."
-    
+    # Define generic feed properties for aggregated free chapters.    
     new_feed = CustomRSS2(
         title="Aggregated Free Chapters Feed",
         link="https://github.com/cannibal-turtle/",
