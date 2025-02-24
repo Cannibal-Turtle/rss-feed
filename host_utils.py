@@ -107,14 +107,44 @@ async def novel_has_paid_update_async(session, novel_url):
 
 # ---------------- SCRAPING PAID CHAPTERS (Calls split_paid_chapter_dragonholic) ----------------
 
-async def scrape_paid_chapters_async(session, novel_url):
+import feedparser
+
+async def scrape_paid_chapters_async(session, novel_url, host):
     """
-    Scrapes the Dragonholic page for **paid** chapters.
-    Uses `split_paid_chapter_dragonholic` to correctly extract:
-      - `chaptername`
-      - `nameextend`
+    Fetches paid chapters for a novel.
+    - If the host has a `paid_feed_url`, it will parse the feed.
+    - Otherwise, it scrapes the website.
     """
-    print(f"DEBUG: Scraping {novel_url}")
+    utils = get_host_utils(host)
+    paid_feed_url = HOSTING_SITE_DATA.get(host, {}).get("paid_feed_url")  # Check for a paid feed
+
+    if paid_feed_url:
+        print(f"DEBUG: Fetching paid chapters from feed: {paid_feed_url}")
+        parsed_feed = feedparser.parse(paid_feed_url)
+        paid_chapters = []
+
+        for entry in parsed_feed.entries:
+            # Use host-specific title splitting
+            chaptername, nameextend = utils["split_paid_title"](entry.title)
+
+            pub_date = datetime.datetime(*entry.published_parsed[:6], tzinfo=datetime.timezone.utc)
+            guid = entry.id if entry.id else chaptername
+
+            paid_chapters.append({
+                "chaptername": chaptername,
+                "nameextend": nameextend,
+                "link": entry.link,
+                "description": entry.description,
+                "pubDate": pub_date,
+                "guid": guid,
+                "coin": ""  # Some feeds don't provide coin data
+            })
+
+        print(f"DEBUG: {len(paid_chapters)} paid chapters fetched from feed ({host})")
+        return paid_chapters, ""
+
+    # Fallback: Scrape paid chapters from the website
+    print(f"DEBUG: Scraping paid chapters from {novel_url}")
 
     try:
         html = await fetch_page(session, novel_url)
@@ -126,7 +156,7 @@ async def scrape_paid_chapters_async(session, novel_url):
     desc_div = soup.find("div", class_="description-summary")
     main_desc = clean_description(desc_div.decode_contents()) if desc_div else ""
 
-    # ✅ FIX: Properly selecting all PAID chapters (premium)
+    # ✅ Fix: Properly selecting all PAID chapters (premium)
     chapters = soup.select("li.wp-manga-chapter.premium")
     print(f"DEBUG: Found {len(chapters)} paid chapters on {novel_url}")
 
@@ -147,8 +177,8 @@ async def scrape_paid_chapters_async(session, novel_url):
         raw_title = a_tag.get_text(" ", strip=True)
         print(f"DEBUG: Processing chapter - {raw_title}")
 
-        # ✅ FIX: Use split_paid_chapter_dragonholic()
-        chaptername, nameextend = split_paid_chapter_dragonholic(raw_title)
+        # ✅ Fix: Use `split_paid_chapter_dragonholic()`
+        chaptername, nameextend = utils["split_paid_title"](raw_title)
 
         href = a_tag.get("href", "").strip()
         guid = next((cls.replace("data-chapter-", "") for cls in chap.get("class", []) if cls.startswith("data-chapter-")), "unknown")
