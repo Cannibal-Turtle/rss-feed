@@ -59,24 +59,22 @@ latest_arc_number = len(free_arcs) + 1
 latest_arc_title = next_locked_arc if next_locked_arc else "TBA"
 
 # Construct Discord message
-message = f"""
-<@&1329391480435114005> <@&1329502951764525187>
-## :loudspeaker: NEW ARC ALERT˚ · .˚ ༘:butterfly:⋆｡˚
-***《World {latest_arc_number}》is Live for***
-### [Quick Transmigration: The Villain Is Too Pampered and Alluring](https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/) :dracthyrhehe:
-
-❀° ┄───────────────────────╮
-**`Unlocked 🔓`**
-||{''.join([f"**【Arc {i+1}】** {arc}\n" for i, arc in enumerate(free_arcs)])}||
-
-**`Locked 🔐`**
-||{''.join([f"**【Arc {i+len(free_arcs)+1}】** {arc}\n" for i, arc in enumerate(locked_arcs[:-1])])}
-☛**【Arc {latest_arc_number}】 {latest_arc_title}**||
-╰───────────────────────┄ °❀
-> *Advance access is ready for you on Dragonholic! :rose:*
-✎﹏﹏﹏﹏﹏﹏﹏﹏
--# React to the :turtle: @ https://discord.com/channels/1259711953690165360/1259711954411327491/1286576999858573365 to get notified on updates and announcements~
-"""
+message = (
+    f"<@&1329391480435114005> <@&1329502951764525187>\n"
+    "## :loudspeaker: NEW ARC ALERT˚ · .˚ ༘:butterfly:⋆｡˚\n"
+    f"***《World {latest_arc_number}》is Live for***\n"
+    "### [Quick Transmigration: The Villain Is Too Pampered and Alluring](https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/) :dracthyrhehe:\n\n"
+    "❀° ┄───────────────────────╮\n"
+    "**`Unlocked 🔓`**\n"
+    "||" + "".join([f"**【Arc {i+1}】** {arc}\n" for i, arc in enumerate(free_arcs)]) + "||\n\n"
+    "**`Locked 🔐`**\n"
+    "||" + "".join([f"**【Arc {i+len(free_arcs)+1}】** {arc}\n" for i, arc in enumerate(locked_arcs[:-1])]) +
+    f"☛**【Arc {latest_arc_number}】 {latest_arc_title}**||\n"
+    "╰───────────────────────┄ °❀\n"
+    "> *Advance access is ready for you on Dragonholic! :rose:*\n"
+    "✎﹏﹏﹏﹏﹏﹏﹏﹏\n"
+    "-# React to the :man_supervillain: @ https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458 to get notified on updates and announcements~"
+)
 
 # Send message to Discord
 data = {"content": message}
