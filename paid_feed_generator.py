@@ -8,7 +8,7 @@ import xml.dom.minidom
 from xml.sax.saxutils import escape
 from collections import defaultdict
 
-# Import mapping functions and data from your mappings file (novel_mappings.py)
+# Import mapping functions and data from novel_mappings.py
 from novel_mappings import (
     HOSTING_SITE_DATA,
     get_novel_url,
@@ -20,54 +20,13 @@ from novel_mappings import (
     get_nsfw_novels
 )
 
-# Import host-specific utilities (for parsing chapter titles and numbers)
-from host_utils import split_title, chapter_num
+# Import the host utilities dispatcher
+from host_utils import get_host_utils
 
 # ---------------- Concurrency Control ----------------
-# Limit concurrent processing to 100 tasks.
 semaphore = asyncio.Semaphore(100)
 
 # ---------------- Helper Functions (Synchronous) ----------------
-
-def clean_description(raw_desc):
-    """Cleans the raw HTML description by removing extra whitespace."""
-    soup = BeautifulSoup(raw_desc, "html.parser")
-    for div in soup.find_all("div", class_="c-content-readmore"):
-        div.decompose()
-    cleaned = soup.decode_contents()
-    return re.sub(r'\s+', ' ', cleaned).strip()
-
-def extract_pubdate_from_soup(chap):
-    """
-    Extracts the publication date from a chapter element.
-    Tries an absolute date (e.g. "February 16, 2025") or a relative date.
-    """
-    release_span = chap.find("span", class_="chapter-release-date")
-    if release_span:
-        i_tag = release_span.find("i")
-        if i_tag:
-            date_str = i_tag.get_text(strip=True)
-            try:
-                pub_dt = datetime.datetime.strptime(date_str, "%B %d, %Y")
-                return pub_dt.replace(tzinfo=datetime.timezone.utc)
-            except Exception:
-                if "ago" in date_str.lower():
-                    now = datetime.datetime.now(datetime.timezone.utc)
-                    parts = date_str.lower().split()
-                    try:
-                        number = int(parts[0])
-                        unit = parts[1]
-                        if "minute" in unit:
-                            return now - datetime.timedelta(minutes=number)
-                        elif "hour" in unit:
-                            return now - datetime.timedelta(hours=number)
-                        elif "day" in unit:
-                            return now - datetime.timedelta(days=number)
-                        elif "week" in unit:
-                            return now - datetime.timedelta(weeks=number)
-                    except Exception as e:
-                        print(f"Error parsing relative date '{date_str}': {e}")
-    return datetime.datetime.now(datetime.timezone.utc)
 
 def normalize_date(dt):
     """Normalizes a datetime by removing microseconds."""
@@ -80,117 +39,55 @@ async def fetch_page(session, url):
     async with session.get(url) as response:
         return await response.text()
 
-async def novel_has_paid_update_async(session, novel_url):
-    """
-    Quickly checks if the novel page has a recent premium (paid/locked) update.
-    Loads the page, finds the first chapter element, and if it has the 'premium'
-    class (and not 'free-chap') with a release date within the last 7 days, returns True.
-    """
-    try:
-        html = await fetch_page(session, novel_url)
-    except Exception as e:
-        print(f"Error fetching {novel_url} for quick check: {e}")
-        return False
+# Note: The following functions are now part of host_utils for Dragonholic.
+# For this script, we'll continue to use them via the dispatcher.
 
-    soup = BeautifulSoup(html, "html.parser")
-    chapter_li = soup.find("li", class_="wp-manga-chapter")
-    if chapter_li:
-        classes = chapter_li.get("class", [])
-        if "premium" in classes and "free-chap" not in classes:
-            pub_span = chapter_li.find("span", class_="chapter-release-date")
-            if pub_span:
-                i_tag = pub_span.find("i")
-                if i_tag:
-                    date_str = i_tag.get_text(strip=True)
-                    try:
-                        pub_dt = datetime.datetime.strptime(date_str, "%B %d, %Y").replace(tzinfo=datetime.timezone.utc)
-                    except Exception:
-                        pub_dt = datetime.datetime.now(datetime.timezone.utc)
-                    now = datetime.datetime.now(datetime.timezone.utc)
-                    if pub_dt >= now - datetime.timedelta(days=7):
-                        return True
-            else:
-                return True
-    return False
+# ---------------- Main Processing Functions ----------------
 
-async def scrape_paid_chapters_async(session, novel_url):
-    """
-    Asynchronously fetches the novel page and extracts:
-      - The main description.
-      - Paid chapters (excluding free chapters) from <li class="wp-manga-chapter"> elements.
-    Stops processing once a chapter older than 7 days is encountered.
-    Returns a tuple: (list_of_chapters, main_description)
-    """
-    try:
-        html = await fetch_page(session, novel_url)
-    except Exception as e:
-        print(f"Error fetching {novel_url}: {e}")
-        return [], ""
-    
-    soup = BeautifulSoup(html, "html.parser")
-    desc_div = soup.find("div", class_="description-summary")
-    if desc_div:
-        main_desc = clean_description(desc_div.decode_contents())
-        print("Main description fetched.")
-    else:
-        main_desc = ""
-        print("No main description found.")
-    
-    chapters = soup.find_all("li", class_="wp-manga-chapter")
-    paid_chapters = []
-    now = datetime.datetime.now(datetime.timezone.utc)
-    print(f"Found {len(chapters)} chapter elements on {novel_url}")
-    for chap in chapters:
-        # Skip free chapters.
-        if "free-chap" in chap.get("class", []):
-            continue
-        pub_dt = extract_pubdate_from_soup(chap)
-        if pub_dt < now - datetime.timedelta(days=7):
-            break  # Assumes chapters are sorted newest first.
-        a_tag = chap.find("a")
-        if not a_tag:
-            continue
-        raw_title = a_tag.get_text(" ", strip=True)
-        print(f"Processing chapter: {raw_title}")
-        # Unpack three values from split_title (host is "Dragonholic")
-        chapter_num_text, chapter_title, _ = split_title("Dragonholic", raw_title)
-        href = a_tag.get("href")
-        if href and href.strip() != "#":
-            chapter_link = href.strip()
-        else:
-            parts = chapter_num_text.split()
-            chapter_num_str = parts[-1] if parts else "unknown"
-            chapter_link = f"{novel_url}chapter-{chapter_num_str}/"
-        guid = None
-        for cls in chap.get("class", []):
-            if cls.startswith("data-chapter-"):
-                guid = cls.replace("data-chapter-", "")
-                break
-        if not guid:
-            parts = chapter_num_text.split()
-            guid = parts[-1] if parts else "unknown"
-        coin_span = chap.find("span", class_="coin")
-        coin_value = coin_span.get_text(strip=True) if coin_span else ""
-        paid_chapters.append({
-            "chaptername": chapter_num_text,
-            "nameextend": chapter_title,
-            "link": chapter_link,
-            "description": main_desc,
-            "pubDate": pub_dt,
-            "guid": guid,
-            "coin": coin_value
-        })
-    print(f"Total paid chapters processed from {novel_url}: {len(paid_chapters)}")
-    return paid_chapters, main_desc
+async def process_novel(session, host, novel_title):
+    """Processes a single novel under the semaphore limit."""
+    async with semaphore:
+        novel_url = get_novel_url(novel_title, host)
+        print(f"Scraping: {novel_url}")
+        # Obtain the utilities for the host.
+        utils = get_host_utils(host)
+        # Check for a recent premium update.
+        if not await utils["novel_has_paid_update_async"](session, novel_url):
+            print(f"Skipping {novel_title}: no recent premium update found.")
+            return []
+        # Scrape paid chapters using the host's function.
+        paid_chapters, main_desc = await utils["scrape_paid_chapters_async"](session, novel_url)
+        items = []
+        if paid_chapters:
+            for chap in paid_chapters:
+                pub_date = chap["pubDate"]
+                if pub_date.tzinfo is None:
+                    pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
+                # Override pubDate for the specific novel.
+                if novel_title == "Quick Transmigration: The Villain Is Too Pampered and Alluring":
+                    pub_date = pub_date.replace(hour=12, minute=0, second=0)
+                item = MyRSSItem(
+                    title=novel_title,
+                    link=chap["link"],
+                    description=chap["description"],
+                    guid=PyRSS2Gen.Guid(chap["guid"], isPermaLink=False),
+                    pubDate=pub_date,
+                    chaptername=chap["chaptername"],
+                    nameextend=chap["nameextend"],
+                    coin=chap.get("coin", ""),
+                    host=host
+                )
+                items.append(item)
+        return items
 
-# ---------------- RSS Generation Classes (Synchronous) ----------------
+# ---------------- RSS Generation Classes ----------------
 
 class MyRSSItem(PyRSS2Gen.RSSItem):
     def __init__(self, *args, chaptername="", nameextend="", coin="", host="", **kwargs):
         self.chaptername = chaptername
         self.nameextend = nameextend
         self.coin = coin
-        self.host = host  # New attribute for host (e.g., "Dragonholic")
+        self.host = host  # E.g. "Dragonholic"
         super().__init__(*args, **kwargs)
     
     def writexml(self, writer, indent="", addindent="", newl=""):
@@ -218,11 +115,9 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         if self.coin:
             writer.write(indent + "    <coin>%s</coin>" % escape(self.coin) + newl)
         writer.write(indent + "    <pubDate>%s</pubDate>" % self.pubDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
-        # New elements: host and hostLogo.
         writer.write(indent + "    <host>%s</host>" % escape(self.host) + newl)
         writer.write(indent + '    <hostLogo url="%s"/>' % escape(get_host_logo(self.host)) + newl)
-        writer.write(indent + "    <guid isPermaLink=\"%s\">%s</guid>" %
-                     (str(self.guid.isPermaLink).lower(), self.guid.guid) + newl)
+        writer.write(indent + "    <guid isPermaLink=\"%s\">%s</guid>" % (str(self.guid.isPermaLink).lower(), self.guid.guid) + newl)
         writer.write(indent + "  </item>" + newl)
 
 class CustomRSS2(PyRSS2Gen.RSS2):
@@ -260,38 +155,6 @@ class CustomRSS2(PyRSS2Gen.RSS2):
         writer.write(indent + "</channel>" + newl)
         writer.write("</rss>" + newl)
 
-async def process_novel(session, host, novel_title):
-    """Processes a single novel under the semaphore limit."""
-    async with semaphore:
-        novel_url = get_novel_url(novel_title, host)
-        print(f"Scraping: {novel_url}")
-        if not await novel_has_paid_update_async(session, novel_url):
-            print(f"Skipping {novel_title}: no recent premium update found.")
-            return []
-        paid_chapters, main_desc = await scrape_paid_chapters_async(session, novel_url)
-        items = []
-        if paid_chapters:
-            for chap in paid_chapters:
-                pub_date = chap["pubDate"]
-                if pub_date.tzinfo is None:
-                    pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
-                # Override pubDate for the specific novel.
-                if novel_title == "Quick Transmigration: The Villain Is Too Pampered and Alluring":
-                    pub_date = pub_date.replace(hour=12, minute=0, second=0)
-                item = MyRSSItem(
-                    title=novel_title,
-                    link=chap["link"],
-                    description=chap["description"],
-                    guid=PyRSS2Gen.Guid(chap["guid"], isPermaLink=False),
-                    pubDate=pub_date,
-                    chaptername=chap["chaptername"],
-                    nameextend=chap["nameextend"],
-                    coin=chap.get("coin", ""),
-                    host=host
-                )
-                items.append(item)
-        return items
-
 async def main_async():
     rss_items = []
     async with aiohttp.ClientSession() as session:
@@ -300,17 +163,19 @@ async def main_async():
         for host, data in HOSTING_SITE_DATA.items():
             for novel_title in data["novels"].keys():
                 tasks.append(asyncio.create_task(process_novel(session, host, novel_title)))
-        # Wait for all novel tasks to complete.
+        # Wait for all tasks to complete.
         results = await asyncio.gather(*tasks)
         for items in results:
             rss_items.extend(items)
     
     # Sort by normalized pubDate and chapter number in descending order.
-    rss_items.sort(key=lambda item: (normalize_date(item.pubDate), chapter_num(item.host, item.chaptername)), reverse=True)
+    rss_items.sort(key=lambda item: (normalize_date(item.pubDate), 
+                                     get_host_utils(item.host)["chapter_num"](item.chaptername)),
+                   reverse=True)
     
     # Debug: print chapter numbers and pubDates for verification.
     for item in rss_items:
-        print(f"{item.title} - {item.chaptername} ({chapter_num(item.host, item.chaptername)}) : {item.pubDate}")
+        print(f"{item.title} - {item.chaptername} ({get_host_utils(item.host)['chapter_num'](item.chaptername)}) : {item.pubDate}")
     
     new_feed = CustomRSS2(
         title="Dragonholic Paid Chapters",
@@ -333,7 +198,7 @@ async def main_async():
     
     # Debug: print chapter numbers and pubDates again after feed generation.
     for item in rss_items:
-        print(f"{item.title} - {item.chaptername} ({chapter_num(item.host, item.chaptername)}) : {item.pubDate}")
+        print(f"{item.title} - {item.chaptername} ({get_host_utils(item.host)['chapter_num'](item.chaptername)}) : {item.pubDate}")
     
     print(f"Modified feed generated with {len(rss_items)} items.")
     print(f"Output written to {output_file}")
