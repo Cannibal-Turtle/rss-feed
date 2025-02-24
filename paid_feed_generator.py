@@ -18,49 +18,50 @@ from novel_mappings import (
     get_novel_details,
     get_novel_discord_role,
     get_nsfw_novels,
-    get_pub_date_override
+    get_pub_date_override  # If you have pub_date overrides
 )
 
-# Import host utilities dispatcher from host_utils.py
+# Import the dispatcher from host_utils.py
 from host_utils import get_host_utils
 
 # ---------------- Concurrency Control ----------------
 semaphore = asyncio.Semaphore(100)
 
-# ---------------- Helper Functions ----------------
-
 def normalize_date(dt):
-    """Normalizes a datetime by removing microseconds."""
+    """Remove microseconds from a datetime."""
     return dt.replace(microsecond=0)
 
-# ---------------- Main Processing Functions ----------------
-
 async def process_novel(session, host, novel_title):
-    """Processes a single novel under the semaphore limit."""
     async with semaphore:
         novel_url = get_novel_url(novel_title, host)
         print(f"Scraping: {novel_url}")
         utils = get_host_utils(host)
 
-        # Check for recent premium update using the host-specific function.
+        # 1) Check if there's a recent premium update
         if not await utils["novel_has_paid_update_async"](session, novel_url):
             print(f"Skipping {novel_title}: no recent premium update found.")
             return []
 
-        # Scrape paid chapters using the host-specific function.
+        # 2) Scrape paid chapters
         paid_chapters, main_desc = await utils["scrape_paid_chapters_async"](session, novel_url)
         items = []
-
         if paid_chapters:
             for chap in paid_chapters:
-                chaptername = chap["chaptername"].strip()
-                nameextend  = f"***{chap['nameextend'].strip()}***" if chap["nameextend"] else ""
+                # chap["chaptername"] -> e.g. "Chapter 640"
+                # chap["nameextend"]  -> e.g. "The Abandoned Supporting Female Role 022"
+
+                raw_chaptername = chap["chaptername"].strip()
+                raw_nameextend  = chap["nameextend"].strip()
+                
+                # Build final strings
+                chaptername = raw_chaptername
+                nameextend  = f"***{raw_nameextend}***" if raw_nameextend else ""
 
                 pub_date = chap["pubDate"]
                 if pub_date.tzinfo is None:
                     pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
 
-                # Apply publication date override if defined.
+                # (Optional) override date
                 override = get_pub_date_override(novel_title, host)
                 if override:
                     pub_date = pub_date.replace(**override)
@@ -78,28 +79,28 @@ async def process_novel(session, host, novel_title):
                     host=host
                 )
                 items.append(item)
-
         return items
-
-# ---------------- RSS Generation Classes ----------------
 
 class MyRSSItem(PyRSS2Gen.RSSItem):
     def __init__(self, *args, chaptername="", nameextend="", coin="", host="", **kwargs):
         self.chaptername = chaptername
-        self.nameextend = nameextend
-        self.coin = coin
-        self.host = host  # e.g., "Dragonholic"
+        self.nameextend  = nameextend
+        self.coin        = coin
+        self.host        = host
         super().__init__(*args, **kwargs)
 
     def writexml(self, writer, indent="", addindent="", newl=""):
         writer.write(indent + "  <item>" + newl)
         writer.write(indent + "    <title>%s</title>" % escape(self.title) + newl)
         writer.write(indent + "    <chaptername>%s</chaptername>" % escape(self.chaptername) + newl)
-        formatted_nameextend = f"{self.nameextend}" if self.nameextend.strip() else ""
+
+        formatted_nameextend = self.nameextend.strip()
         writer.write(indent + "    <nameextend>%s</nameextend>" % escape(formatted_nameextend) + newl)
+
         writer.write(indent + "    <link>%s</link>" % escape(self.link) + newl)
         writer.write(indent + "    <description><![CDATA[%s]]></description>" % self.description + newl)
 
+        # Category: NSFW or SFW
         nsfw_list = get_nsfw_novels()
         category_value = "NSFW" if self.title in nsfw_list else "SFW"
         writer.write(indent + "    <category>%s</category>" % escape(category_value) + newl)
@@ -114,7 +115,6 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         if self.coin:
             writer.write(indent + "    <coin>%s</coin>" % escape(self.coin) + newl)
 
-        # Format the pubDate
         writer.write(indent + "    <pubDate>%s</pubDate>" %
                      self.pubDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
 
@@ -158,6 +158,7 @@ class CustomRSS2(PyRSS2Gen.RSS2):
 
         for item in self.items:
             item.writexml(writer, indent + addindent, addindent, newl)
+
         writer.write(indent + "</channel>" + newl)
         writer.write("</rss>" + newl)
 
@@ -165,24 +166,24 @@ async def main_async():
     rss_items = []
     async with aiohttp.ClientSession() as session:
         tasks = []
-        # Iterate over each host and each novel in the mapping
+        # Create a task for each novel under each host
         for host, data in HOSTING_SITE_DATA.items():
             for novel_title in data["novels"].keys():
                 tasks.append(asyncio.create_task(process_novel(session, host, novel_title)))
-        # Wait for all tasks to complete
         results = await asyncio.gather(*tasks)
         for items in results:
             rss_items.extend(items)
 
-    # Sort items primarily by pubDate, then chapter number
+    # Sort by (normalized pubDate, then chapter_num)
     rss_items.sort(key=lambda item: (
         normalize_date(item.pubDate),
         get_host_utils(item.host)["chapter_num"](item.chaptername)
     ), reverse=True)
 
-    # Debug
+    # Debug prints
     for item in rss_items:
-        print(f"{item.title} - {item.chaptername} ({get_host_utils(item.host)['chapter_num'](item.chaptername)}) : {item.pubDate}")
+        nums = get_host_utils(item.host)["chapter_num"](item.chaptername)
+        print(f"{item.title} - {item.chaptername} ({nums}) : {item.pubDate}")
 
     new_feed = CustomRSS2(
         title="Aggregated Paid Chapters Feed",
@@ -196,6 +197,7 @@ async def main_async():
     with open(output_file, "w", encoding="utf-8") as f:
         new_feed.writexml(f, indent="  ", addindent="  ", newl="\n")
 
+    # Optional: pretty-print
     with open(output_file, "r", encoding="utf-8") as f:
         xml_content = f.read()
     dom = xml.dom.minidom.parseString(xml_content)
@@ -206,12 +208,14 @@ async def main_async():
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(pretty_xml)
 
-    # Debug
+    # Final debug
     for item in rss_items:
-        print(f"{item.title} - {item.chaptername} ({get_host_utils(item.host)['chapter_num'](item.chaptername)}) : {item.pubDate}")
+        nums = get_host_utils(item.host)["chapter_num"](item.chaptername)
+        print(f"{item.title} - {item.chaptername} ({nums}) : {item.pubDate}")
 
     print(f"Modified feed generated with {len(rss_items)} items.")
     print(f"Output written to {output_file}")
 
 if __name__ == "__main__":
+    import asyncio
     asyncio.run(main_async())
