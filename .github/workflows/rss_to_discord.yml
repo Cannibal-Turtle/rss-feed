@@ -12,6 +12,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
+      with:
+        persist-credentials: true  # Allows pushing back to the repo
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -19,9 +21,18 @@ jobs:
         python-version: '3.10'
 
     - name: Install dependencies
-      run: pip install feedparser requests  # Install required libraries
+      run: pip install feedparser requests
 
     - name: Run RSS Checker
       run: python new_arc_rss_checker.py
       env:
         DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+
+    - name: Commit updated arc_history.json if changed
+      run: |
+        git config --global user.name "github-actions"
+        git config --global user.email "github-actions@github.com"
+        git add arc_history.json || echo "arc_history.json not found"
+        git diff --cached --quiet || (git commit -m "Update arc_history.json" && git push)
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
