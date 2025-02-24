@@ -30,11 +30,19 @@ HOSTING_SITE_DATA = {
                 "discord_role_id": "<@&123456789012345678>",  # Replace with the actual Discord role ID.
                 "novel_url": "https://dragonholic.com/second-novel",  # Replace with the manual URL for the second novel.
                 "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/second-novel.jpg"
+                "pub_date_override": {"hour": 12, "minute": 0, "second": 0}
             },
             # Add more novels for Dragonholic here if needed.
         }
     },
-    # Add other hosting sites here if needed.
+    "Lily on The Valley": {
+        "feed_url": "",
+        "paid_feed_url": "",
+        "translator": "",
+        "host_logo": "",
+        "novels": {
+              
+            },
 }
 
 def get_host_translator(host):
