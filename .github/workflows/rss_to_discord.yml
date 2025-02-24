@@ -2,7 +2,7 @@ name: Check RSS and Send to Discord
 
 on:
   schedule:
-    - cron: "0 16 * * *"  # Runs daily at 16:00 UTC (as a backup)
+    - cron: "0 16 * * *"  # Runs daily at 16:00 UTC (backup schedule)
   workflow_dispatch:  # Allows manual trigger
 
 jobs:
@@ -13,7 +13,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
       with:
-        persist-credentials: true  # Allows pushing back to the repo
+        persist-credentials: true
 
     - name: Set up Python
       uses: actions/setup-python@v4
