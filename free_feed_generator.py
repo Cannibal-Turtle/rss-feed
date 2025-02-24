@@ -5,19 +5,20 @@ import xml.dom.minidom
 import re
 from xml.sax.saxutils import escape
 
-# Import host-specific utilities (for Dragonholic's formatting)
-from host_utils import split_title, chapter_num
-
-# Import mapping functions from your mappings file (novel_mappings.py)
+# Import mapping functions and data from novel_mappings.py
 from novel_mappings import (
+    HOSTING_SITE_DATA,
+    get_novel_url,
+    get_featured_image,
     get_host_translator,
     get_host_logo,
     get_novel_details,
     get_novel_discord_role,
-    get_novel_url,
-    get_featured_image,
     get_nsfw_novels
 )
+
+# Import host utilities dispatcher from host_utils.py
+from host_utils import get_host_utils
 
 def compact_cdata(xml_str):
     """
@@ -35,7 +36,7 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
     def __init__(self, *args, chaptername="", nameextend="", host="", **kwargs):
         self.chaptername = chaptername
         self.nameextend = nameextend
-        self.host = host  # e.g. "Dragonholic"
+        self.host = host  # e.g., "Dragonholic", "Foxaholic", etc.
         super().__init__(*args, **kwargs)
     
     def writexml(self, writer, indent="", addindent="", newl=""):
@@ -47,28 +48,22 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         writer.write(indent + "    <link>%s</link>" % escape(self.link) + newl)
         writer.write(indent + "    <description><![CDATA[%s]]></description>" % self.description + newl)
         
-        # New <category> element based on NSFW status.
         nsfw_list = get_nsfw_novels()
         category_value = "NSFW" if self.title in nsfw_list else "SFW"
         writer.write(indent + "    <category>%s</category>" % escape(category_value) + newl)
         
-        # Get the translator name for this host.
         translator = get_host_translator(self.host)
         writer.write(indent + "    <translator>%s</translator>" % escape(translator) + newl)
         
-        # Retrieve the novel-specific Discord role.
         discord_role = get_novel_discord_role(self.title, self.host)
         if category_value == "NSFW":
             discord_role += " <@&1343352825811439616>"
         writer.write(indent + "    <discord_role_id><![CDATA[%s]]></discord_role_id>" % discord_role + newl)
         
-        # Output the featured image.
         writer.write(indent + '    <featuredImage url="%s"/>' % escape(get_featured_image(self.title, self.host)) + newl)
         
-        # Publication date.
         writer.write(indent + "    <pubDate>%s</pubDate>" % self.pubDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
         
-        # New elements: host and hostLogo.
         writer.write(indent + "    <host>%s</host>" % escape(self.host) + newl)
         writer.write(indent + '    <hostLogo url="%s"/>' % escape(get_host_logo(self.host)) + newl)
         
@@ -112,41 +107,49 @@ class CustomRSS2(PyRSS2Gen.RSS2):
         writer.write("</rss>" + newl)
 
 def main():
-    # For now, we only support Dragonholic.
-    host = "Dragonholic"
     rss_items = []
-    feed_url = "https://dragonholic.com/feed/manga-chapters/"
-    parsed_feed = feedparser.parse(feed_url)
-    
-    for entry in parsed_feed.entries:
-        # Use host_utils.split_title() to extract main title, chapter name, and extension.
-        main_title, chaptername, nameextend = split_title(host, entry.title)
-        # Retrieve novel details from the mapping using the host and the main title.
-        novel_details = get_novel_details(host, main_title)
-        if not novel_details:
-            print("Skipping item (novel not found in mapping):", main_title)
+    # Loop over each host defined in the mapping.
+    for host, data in HOSTING_SITE_DATA.items():
+        # Expect each host mapping to include a "feed_url" for free chapters.
+        feed_url = data.get("feed_url")
+        if not feed_url:
+            print(f"No feed URL defined for host: {host}")
             continue
-        
-        pub_date = datetime.datetime(*entry.published_parsed[:6])
-        item = MyRSSItem(
-            title=main_title,
-            link=entry.link,  # Optionally, use get_novel_url(main_title, host) if preferred.
-            description=entry.description,
-            guid=PyRSS2Gen.Guid(entry.id, isPermaLink=False),
-            pubDate=pub_date,
-            chaptername=chaptername,
-            nameextend=nameextend,
-            host=host
-        )
-        rss_items.append(item)
+        parsed_feed = feedparser.parse(feed_url)
+        utils = get_host_utils(host)
+        for entry in parsed_feed.entries:
+            # Use the host-specific split_title function.
+            main_title, chaptername, nameextend = utils["split_title"](entry.title)
+            # Retrieve novel details using the host and main title.
+            novel_details = get_novel_details(host, main_title)
+            if not novel_details:
+                print("Skipping item (novel not found in mapping):", main_title)
+                continue
+            pub_date = datetime.datetime(*entry.published_parsed[:6])
+            item = MyRSSItem(
+                title=main_title,
+                link=entry.link,  # Alternatively, use get_novel_url(main_title, host)
+                description=entry.description,
+                guid=PyRSS2Gen.Guid(entry.id, isPermaLink=False),
+                pubDate=pub_date,
+                chaptername=chaptername,
+                nameextend=nameextend,
+                host=host
+            )
+            rss_items.append(item)
     
-    # Sort items by publication date, title, and chapter number (descending order).
-    rss_items.sort(key=lambda item: (item.pubDate, item.title, chapter_num(host, item.chaptername)), reverse=True)
+    # Sort items by publication date, title, and chapter number (using host's chapter_num)
+    rss_items.sort(key=lambda item: (item.pubDate, item.title, utils["chapter_num"](item.chaptername)), reverse=True)
+    
+    # Define generic feed properties for aggregated free chapters.
+    feed_title = "Aggregated Free Chapters Feed"
+    feed_link = "https://youraggregator.example.com/free-chapters"
+    feed_description = "Aggregated RSS feed for free chapters across all hosting sites."
     
     new_feed = CustomRSS2(
-        title=parsed_feed.feed.title,
-        link=parsed_feed.feed.link,
-        description=(parsed_feed.feed.subtitle if hasattr(parsed_feed.feed, 'subtitle') else "Modified feed"),
+        title=feed_title,
+        link=feed_link,
+        description=feed_description,
         lastBuildDate=datetime.datetime.now(),
         items=rss_items
     )
@@ -155,7 +158,6 @@ def main():
     with open(output_file, "w", encoding="utf-8") as f:
         new_feed.writexml(f, indent="  ", addindent="  ", newl="\n")
     
-    # Pretty-print the XML (except for the description content) and then compact the description CDATA.
     with open(output_file, "r", encoding="utf-8") as f:
         xml_content = f.read()
     dom = xml.dom.minidom.parseString(xml_content)
