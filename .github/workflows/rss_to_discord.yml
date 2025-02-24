@@ -1,0 +1,19 @@
+name: Check RSS and Send to Discord
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"  # Runs every 15 minutes
+  workflow_dispatch:  # Allows manual trigger
+
+jobs:
+  rss_to_discord:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Fetch RSS Feed and Send to Discord
+      run: python scripts/new_arc_rss_checker.py
+      env:
+        DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
