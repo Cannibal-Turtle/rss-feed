@@ -11,6 +11,9 @@ DISCORD_WEBHOOK = os.getenv("DISCORD_WEBHOOK")
 if not DISCORD_WEBHOOK:
     raise ValueError("❌ DISCORD_WEBHOOK environment variable is not set! Make sure to add it as a GitHub Secret.")
 
+# File to store last detected arc
+LAST_ARC_FILE = "last_arc.txt"
+
 # Fetch Feeds
 free_feed = feedparser.parse(FREE_FEED_URL)
 paid_feed = feedparser.parse(PAID_FEED_URL)
@@ -34,6 +37,22 @@ else:
 
 # Find the next locked arc (for the "☛" emoji)
 next_locked_arc = locked_arcs[0] if locked_arcs else None
+
+# Read the last stored arc (to prevent duplicate announcements)
+if os.path.exists(LAST_ARC_FILE):
+    with open(LAST_ARC_FILE, "r") as f:
+        last_stored_arc = f.read().strip()
+else:
+    last_stored_arc = ""
+
+# If there's no new arc, exit early to avoid unnecessary GitHub Actions runs
+if next_locked_arc == last_stored_arc:
+    print(f"✅ No new arc detected. Last stored arc: {last_stored_arc}")
+    exit(0)  # Stop script execution
+
+# Update the stored arc file
+with open(LAST_ARC_FILE, "w") as f:
+    f.write(next_locked_arc)
 
 # Update the "World X is Live for" section (Latest arc number = Total free arcs + 1)
 latest_arc_number = len(free_arcs) + 1
