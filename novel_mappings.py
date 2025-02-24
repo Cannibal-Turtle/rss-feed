@@ -23,6 +23,8 @@ HOSTING_SITE_DATA = {
                 "discord_role_id": "<@&1329391480435114005>",
                 "novel_url": "https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/",
                 "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/177838.jpg"
+                "pub_date_override": {"hour": 12, "minute": 0, "second": 0}
+              
             },
             "Second Novel Title Example": {
                 "discord_role_id": "<@&123456789012345678>",  # Replace with the actual Discord role ID.
@@ -88,3 +90,12 @@ def get_nsfw_novels():
         # Add NSFW novel titles here, e.g.:
         # "Some NSFW Novel Title"
     ]
+# In novel_mappings.py, add the following helper function:
+
+def get_pub_date_override(novel_title, host="Dragonholic"):
+    """
+    Returns a dictionary of pub_date override values (e.g. {"hour": 12, "minute": 0, "second": 0})
+    for the given novel. If no override is defined, returns None.
+    """
+    details = get_novel_details(host, novel_title)
+    return details.get("pub_date_override", None)
