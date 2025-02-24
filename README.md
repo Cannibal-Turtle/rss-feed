@@ -78,7 +78,7 @@ To get the appropriate utility functions for a specific host, use:
 get_host_utils("Dragonholic")
 
 ---
-
+```
 ## Summary Checklist
 
 1. **Add a New Novel on an Existing Host:**
