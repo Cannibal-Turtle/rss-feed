@@ -2,17 +2,16 @@
 host_utils.py
 
 This module groups all host‑specific logic under an umbrella for each hosting site.
-Currently, all functions here are tailored for Dragonholic. They include:
+Currently, all functions here are tailored for Dragonholic. They include functions for:
   - Splitting chapter titles into (main_title, chaptername, nameextend)
   - Extracting chapter numbers from chapter names
   - Cleaning HTML descriptions
   - Extracting publication dates from chapter elements
-  - Checking for recent premium updates
+  - Checking for recent premium (paid) updates
   - Scraping paid chapters from a Dragonholic novel page
-  - Asynchronous page fetching
+  - Fetching pages asynchronously
 
-When adding support for a new hosting site (e.g. "Foxaholic"), you can create
-a new dictionary of functions (e.g. FOXAHOLIC_UTILS) and update the dispatcher.
+When adding a new hosting site (e.g. "Foxaholic"), add that host’s functions and update the dispatcher.
 """
 
 import re
@@ -35,6 +34,7 @@ def split_title_dragonholic(full_title):
     elif len(parts) >= 3:
         main_title = parts[0].strip()
         chaptername = parts[1].strip()
+        # Use the third part if non-empty; otherwise, try a fourth part.
         nameextend = parts[2].strip() if parts[2].strip() else (parts[3].strip() if len(parts) > 3 else "")
         return main_title, chaptername, nameextend
     else:
@@ -52,8 +52,8 @@ def chapter_num_dragonholic(chaptername):
 
 def clean_description(raw_desc):
     """
-    Cleans the raw HTML description by removing extra whitespace and
-    any <div class="c-content-readmore"> elements.
+    Cleans the raw HTML description by removing extra whitespace and unwanted elements.
+    Specifically, it removes any <div> with the class "c-content-readmore".
     """
     soup = BeautifulSoup(raw_desc, "html.parser")
     for div in soup.find_all("div", class_="c-content-readmore"):
@@ -64,8 +64,8 @@ def clean_description(raw_desc):
 def extract_pubdate_from_soup(chap):
     """
     Extracts the publication date from a chapter element.
-    Expects a <span class="chapter-release-date"> with an <i> tag containing a date
-    in the format "%B %d, %Y", or a relative date like "2 days ago".
+    Expects a <span class="chapter-release-date"> containing an <i> tag with a date
+    in the format "%B %d, %Y" (or relative dates like "2 days ago").
     """
     release_span = chap.find("span", class_="chapter-release-date")
     if release_span:
@@ -105,8 +105,8 @@ async def novel_has_paid_update_async(session, novel_url):
     """
     Checks if the Dragonholic novel page has a recent premium (paid) update.
     Loads the page, finds the first chapter element with class "wp-manga-chapter",
-    and if it has the 'premium' class (and not 'free-chap') with a release date
-    within the last 7 days, returns True.
+    and if it has the 'premium' class (and not 'free-chap') with a release date within
+    the last 7 days, returns True.
     """
     try:
         async with session.get(novel_url) as response:
@@ -143,7 +143,8 @@ async def scrape_paid_chapters_async(session, novel_url):
     all paid chapters (from <li class="wp-manga-chapter"> elements), stopping when
     a chapter older than 7 days is encountered.
     
-    Returns a tuple: (list_of_chapters, main_description)
+    Returns:
+      tuple: (list_of_chapters, main_description)
     """
     try:
         async with session.get(novel_url) as response:
@@ -176,13 +177,13 @@ async def scrape_paid_chapters_async(session, novel_url):
             continue
         raw_title = a_tag.get_text(" ", strip=True)
         print(f"Processing chapter: {raw_title}")
-        # Use Dragonholic-specific title splitting.
-        chapter_num_text, chapter_title, _ = split_title("Dragonholic", raw_title)
+        # Use the dispatcher for splitting titles.
+        main_title, chaptername, nameextend = split_title("Dragonholic", raw_title)
         href = a_tag.get("href")
         if href and href.strip() != "#":
             chapter_link = href.strip()
         else:
-            parts = chapter_num_text.split()
+            parts = chaptername.split()
             chapter_num_str = parts[-1] if parts else "unknown"
             chapter_link = f"{novel_url}chapter-{chapter_num_str}/"
         guid = None
@@ -191,13 +192,13 @@ async def scrape_paid_chapters_async(session, novel_url):
                 guid = cls.replace("data-chapter-", "")
                 break
         if not guid:
-            parts = chapter_num_text.split()
+            parts = chaptername.split()
             guid = parts[-1] if parts else "unknown"
         coin_span = chap.find("span", class_="coin")
         coin_value = coin_span.get_text(strip=True) if coin_span else ""
         paid_chapters.append({
-            "chaptername": chapter_num_text,
-            "nameextend": chapter_title,
+            "chaptername": chaptername,
+            "nameextend": nameextend,
             "link": chapter_link,
             "description": main_desc,
             "pubDate": pub_dt,
@@ -216,7 +217,6 @@ DRAGONHOLIC_UTILS = {
     "extract_pubdate": extract_pubdate_from_soup,
     "novel_has_paid_update_async": novel_has_paid_update_async,
     "scrape_paid_chapters_async": scrape_paid_chapters_async,
-    # Note: fetch_page is generally used directly with an async session.
 }
 
 def get_host_utils(host):
@@ -226,5 +226,5 @@ def get_host_utils(host):
     """
     if host == "Dragonholic":
         return DRAGONHOLIC_UTILS
-    # Extend here for other hosts in the future.
+    # Extend here for additional hosts.
     return {}
