@@ -167,89 +167,32 @@ async def novel_has_paid_update_async(session, novel_url):
                 return True
     return False
 
-async def scrape_paid_chapters_async(session, novel_url):
-    # Scrapes the Dragonholic novel page for paid chapters.
-    # Returns a tuple: (list_of_chapters, main_description)
-    try:
-        async with session.get(novel_url) as response:
-            html = await response.text()
-    except Exception as e:
-        print(f"Error fetching {novel_url}: {e}")
-        return [], ""
-    
-    soup = BeautifulSoup(html, "html.parser")
-    desc_div = soup.find("div", class_="description-summary")
-    if desc_div:
-        main_desc = clean_description(desc_div.decode_contents())
-        print("Main description fetched.")
-    else:
-        main_desc = ""
-        print("No main description found.")
-    
-    chapters = soup.find_all("li", class_="wp-manga-chapter")
-    paid_chapters = []
-    now = datetime.datetime.now(datetime.timezone.utc)
-    print(f"Found {len(chapters)} chapter elements on {novel_url}")
-    for chap in chapters:
-        if "free-chap" in chap.get("class", []):
-            continue
-        pub_dt = extract_pubdate_from_soup(chap)
-        if pub_dt < now - datetime.timedelta(days=7):
-            break
-        a_tag = chap.find("a")
-        if not a_tag:
-            continue
-        raw_title = a_tag.get_text(" ", strip=True)
-        print(f"Processing chapter: {raw_title}")
-        main_title, chaptername, nameextend = split_title_dragonholic(raw_title)
-        href = a_tag.get("href")
-        if href and href.strip() != "#":
-            chapter_link = href.strip()
-        else:
-            parts = chaptername.split()
-            chapter_num_str = parts[-1] if parts else "unknown"
-            chapter_link = f"{novel_url}chapter-{chapter_num_str}/"
-        guid = None
-        for cls in chap.get("class", []):
-            if cls.startswith("data-chapter-"):
-                guid = cls.replace("data-chapter-", "")
-                break
-        if not guid:
-            parts = chaptername.split()
-            guid = parts[-1] if parts else "unknown"
-        coin_span = chap.find("span", class_="coin")
-        coin_value = coin_span.get_text(strip=True) if coin_span else ""
-        paid_chapters.append({
-            "chaptername": chaptername,
-            "nameextend": nameextend,
-            "link": chapter_link,
-            "description": main_desc,
-            "pubDate": pub_dt,
-            "guid": guid,
-            "coin": coin_value
-        })
-    print(f"Total paid chapters processed from {novel_url}: {len(paid_chapters)}")
-    return paid_chapters, main_desc
-
-# Dispatcher Dictionary
 DRAGONHOLIC_UTILS = {
-    "split_title": split_title_dragonholic,
+    "split_title": split_title_dragonholic,  # Free feed
+    "split_paid_title": split_paid_chapter_dragonholic,  # Paid feed
     "chapter_num": chapter_num_dragonholic,
     "clean_description": clean_description,
     "extract_pubdate": extract_pubdate_from_soup,
     "novel_has_paid_update_async": novel_has_paid_update_async,
-    "scrape_paid_chapters_async": scrape_paid_chapters_async,
+    "scrape_paid_chapters_async": scrape_paid_chapters_async
 }
 
 def get_host_utils(host):
     """
-    Returns the utilities dictionary for the given host.
-    For now, only "Dragonholic" is supported.
-    If adding new hosts, add a similar dictionary (e.g. FOXAHOLIC_UTILS)
-    and extend the logic here.
+    Returns utility functions for the given host.
     """
     if host == "Dragonholic":
         return DRAGONHOLIC_UTILS
+    elif host == "LilyontheValley":
+        return {
+            "split_title": split_title_lily,
+            "split_paid_title": split_title_lily,  # Same function for now
+            "chapter_num": chapter_num_generic,
+            "clean_description": clean_description,
+            "extract_pubdate": extract_pubdate_from_soup,
+            "novel_has_paid_update_async": novel_has_paid_update_async,
+            "scrape_paid_chapters_async": scrape_paid_chapters_async
+        }
     return {}
 ```
 
