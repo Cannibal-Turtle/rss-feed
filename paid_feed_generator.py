@@ -53,16 +53,8 @@ async def process_novel(session, host, novel_title):
 
         if paid_chapters:
             for chap in paid_chapters:
-                # The scraped data:
-                # chap["chaptername"] might be "Chapter 639"
-                # chap["nameextend"] might be "The Abandoned Supporting Female Role 021"
-                raw_chaptername = chap["chaptername"].strip() if chap["chaptername"] else ""
-                raw_nameextend = chap["nameextend"].strip() if chap["nameextend"] else ""
-
-                # If "Chapter 639" is in chap["chaptername"] and "The Abandoned Supporting Female Role 021"
-                # is in chap["nameextend"], then keep them as is:
-                chaptername = raw_chaptername  # e.g. "Chapter 639"
-                nameextend = f"***{raw_nameextend}***" if raw_nameextend else ""
+                chaptername = chap["chaptername"].strip()
+                nameextend  = f"***{chap['nameextend'].strip()}***" if chap["nameextend"] else ""
 
                 pub_date = chap["pubDate"]
                 if pub_date.tzinfo is None:
