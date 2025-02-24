@@ -43,7 +43,7 @@ async def process_novel(session, host, novel_title):
             return []
 
         # 2) Scrape paid chapters
-        paid_chapters, main_desc = await utils["scrape_paid_chapters_async"](session, novel_url)
+        paid_chapters, main_desc = await utils["scrape_paid_chapters_async"](session, novel_url, host)
         items = []
         if paid_chapters:
             for chap in paid_chapters:
