@@ -11,7 +11,7 @@ if not DISCORD_WEBHOOK:
     raise ValueError("❌ DISCORD_WEBHOOK environment variable is not set! Make sure to add it as a GitHub Secret.")
 
 # Files for persistent storage
-HISTORY_FILE = "arc_history.json"  # JSON file that stores all arc names
+HISTORY_FILE = "arc_history.json"  # JSON file to store all arc names
 LAST_ARC_FILE = "last_arc.txt"       # Used to check if the new locked arc has already been announced
 
 # === HELPER FUNCTIONS ===
@@ -28,14 +28,14 @@ def save_history(history):
         json.dump(history, f, indent=4)
 
 def clean_title(raw_title):
-    # Remove any unwanted markdown characters (like asterisks) from the raw title.
+    # Remove unwanted markdown characters from the raw title.
     return raw_title.replace("*", "").strip()
 
 # === FETCH FEEDS ===
 free_feed = feedparser.parse(FREE_FEED_URL)
 paid_feed = feedparser.parse(PAID_FEED_URL)
 
-# Extract arc titles based on the first chapter indicator (" 001")
+# Extract arc titles based on first chapter indicator (" 001")
 free_arcs_feed = [clean_title(entry.get("nameextend", "").split(" 001")[0])
                    for entry in free_feed.entries if " 001" in entry.get("nameextend", "")]
 paid_arcs_feed = [clean_title(entry.get("nameextend", "").split(" 001")[0])
@@ -49,11 +49,10 @@ history = load_history()
 for arc in free_arcs_feed:
     if arc not in history["unlocked"]:
         history["unlocked"].append(arc)
-    # Remove from locked if it is there
     if arc in history["locked"]:
         history["locked"].remove(arc)
 
-# Any arc found in the paid feed that is not already unlocked and not stored should be added as locked.
+# Any arc found in the paid feed that is not already unlocked or stored is added as locked.
 for arc in paid_arcs_feed:
     if arc not in history["unlocked"] and arc not in history["locked"]:
         history["locked"].append(arc)
@@ -62,7 +61,7 @@ for arc in paid_arcs_feed:
 save_history(history)
 
 # === DETERMINE NEW LOCKED ARC TO ANNOUNCE ===
-# We assume that the first element in the locked list is the next new arc.
+# We assume the first element in the locked list is the next new arc.
 new_locked_arc = history["locked"][0] if history["locked"] else None
 
 # Read last announced locked arc to avoid duplicate announcements.
@@ -72,7 +71,6 @@ if os.path.exists(LAST_ARC_FILE):
 else:
     last_announced = ""
 
-# If the new locked arc is the same as last announced, exit without re-announcing.
 if new_locked_arc == last_announced:
     print(f"✅ No new arc detected. Last announced locked arc: {last_announced}")
     exit(0)
@@ -82,20 +80,17 @@ with open(LAST_ARC_FILE, "w") as f:
     f.write(new_locked_arc if new_locked_arc else "")
 
 # === BUILD THE DISCORD MESSAGE ===
-# Total number for new arc is computed by counting all arcs (unlocked + locked) and then adding 1.
 total_unlocked = len(history["unlocked"])
 total_locked = len(history["locked"])
 new_arc_number = total_unlocked + total_locked + 1  # New arc's number
 
-# Build message sections:
+# Build sections with plain titles; numbering will be applied by the script.
 unlocked_section = "\n".join([f"**【Arc {i+1}】** {title}" for i, title in enumerate(history["unlocked"])])
 locked_section_lines = [f"**【Arc {i+total_unlocked+1}】** {title}" for i, title in enumerate(history["locked"])]
-# Mark the new locked arc (assumed to be the first locked arc) with the ☛ emoji:
 if locked_section_lines:
-    locked_section_lines[0] = f"☛{locked_section_lines[0]}"
+    locked_section_lines[0] = f"☛{locked_section_lines[0]}"  # Mark the new locked arc with ☛
 locked_section = "\n".join(locked_section_lines)
 
-# Construct the full message
 message = (
     f"<@&1329391480435114005> <@&1329502951764525187>\n"
     "## :loudspeaker: NEW ARC ALERT˚ · .˚ ༘:butterfly:⋆｡˚\n"
@@ -114,7 +109,6 @@ message = (
     "to get notified on updates and announcements~"
 )
 
-# Optionally disable embeds (if desired)
 data = {
     "content": message,
     "allowed_mentions": {"parse": []},
