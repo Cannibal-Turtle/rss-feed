@@ -36,11 +36,7 @@ def normalize_date(dt):
 # ---------------- Main Processing Functions ----------------
 
 async def process_novel(session, host, novel_title):
-    """
-    Processes a single novel under the semaphore limit.
-    This function scrapes the paid chapters, applies any pub_date overrides,
-    and creates RSS items with the correct chaptername / nameextend assignment.
-    """
+    """Processes a single novel under the semaphore limit."""
     async with semaphore:
         novel_url = get_novel_url(novel_title, host)
         print(f"Scraping: {novel_url}")
@@ -57,30 +53,25 @@ async def process_novel(session, host, novel_title):
 
         if paid_chapters:
             for chap in paid_chapters:
+                # The scraped data:
+                # chap["chaptername"] might be "Chapter 639"
+                # chap["nameextend"] might be "The Abandoned Supporting Female Role 021"
+                raw_chaptername = chap["chaptername"].strip() if chap["chaptername"] else ""
+                raw_nameextend = chap["nameextend"].strip() if chap["nameextend"] else ""
+
+                # If "Chapter 639" is in chap["chaptername"] and "The Abandoned Supporting Female Role 021"
+                # is in chap["nameextend"], then keep them as is:
+                chaptername = raw_chaptername  # e.g. "Chapter 639"
+                nameextend = f"***{raw_nameextend}***" if raw_nameextend else ""
+
                 pub_date = chap["pubDate"]
                 if pub_date.tzinfo is None:
                     pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
 
-                # Apply publication date override if defined in the mappings.
+                # Apply publication date override if defined.
                 override = get_pub_date_override(novel_title, host)
                 if override:
                     pub_date = pub_date.replace(**override)
-
-                # Now handle the splitting logic to ensure the correct assignment
-                # of chaptername vs. nameextend. Suppose the utility function
-                # returns (main_title, nameextend, chaptername) when you want
-                # (main_title, chaptername, nameextend).
-                # We can re-split the raw_title here, or directly swap after scraping.
-                # Here, let's assume chap["chaptername"] is actually the "extra"
-                # portion, and chap["nameextend"] is the "temp" portion:
-                
-                # For example, if your utilities currently return:
-                #   (main_title, nameextend, chaptername)
-                # But you want:
-                #   (main_title, chaptername, nameextend)
-                # Do this swap:
-                actual_chaptername = chap["nameextend"]  # e.g. "Chapter 196"
-                actual_nameextend = chap["chaptername"]  # e.g. "***The Village Girl Supporting Role...***"
 
                 # Create RSS item
                 item = MyRSSItem(
@@ -89,9 +80,8 @@ async def process_novel(session, host, novel_title):
                     description=chap["description"],
                     guid=PyRSS2Gen.Guid(chap["guid"], isPermaLink=False),
                     pubDate=pub_date,
-                    # Use the swapped variables
-                    chaptername=actual_chaptername,
-                    nameextend=actual_nameextend,
+                    chaptername=chaptername,
+                    nameextend=nameextend,
                     coin=chap.get("coin", ""),
                     host=host
                 )
@@ -108,12 +98,12 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         self.coin = coin
         self.host = host  # e.g., "Dragonholic"
         super().__init__(*args, **kwargs)
-    
+
     def writexml(self, writer, indent="", addindent="", newl=""):
         writer.write(indent + "  <item>" + newl)
         writer.write(indent + "    <title>%s</title>" % escape(self.title) + newl)
         writer.write(indent + "    <chaptername>%s</chaptername>" % escape(self.chaptername) + newl)
-        formatted_nameextend = f"***{self.nameextend}***" if self.nameextend.strip() else ""
+        formatted_nameextend = f"{self.nameextend}" if self.nameextend.strip() else ""
         writer.write(indent + "    <nameextend>%s</nameextend>" % escape(formatted_nameextend) + newl)
         writer.write(indent + "    <link>%s</link>" % escape(self.link) + newl)
         writer.write(indent + "    <description><![CDATA[%s]]></description>" % self.description + newl)
@@ -121,19 +111,24 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         nsfw_list = get_nsfw_novels()
         category_value = "NSFW" if self.title in nsfw_list else "SFW"
         writer.write(indent + "    <category>%s</category>" % escape(category_value) + newl)
-        
+
         translator = get_host_translator(self.host)
         writer.write(indent + "    <translator>%s</translator>" % escape(translator) + newl)
-        
+
         discord_role = get_novel_discord_role(self.title, self.host)
         writer.write(indent + "    <discord_role_id><![CDATA[%s]]></discord_role_id>" % discord_role + newl)
-        
+
         writer.write(indent + '    <featuredImage url="%s"/>' % escape(get_featured_image(self.title, self.host)) + newl)
         if self.coin:
             writer.write(indent + "    <coin>%s</coin>" % escape(self.coin) + newl)
-        writer.write(indent + "    <pubDate>%s</pubDate>" % self.pubDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
+
+        # Format the pubDate
+        writer.write(indent + "    <pubDate>%s</pubDate>" %
+                     self.pubDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
+
         writer.write(indent + "    <host>%s</host>" % escape(self.host) + newl)
         writer.write(indent + '    <hostLogo url="%s"/>' % escape(get_host_logo(self.host)) + newl)
+
         writer.write(indent + "    <guid isPermaLink=\"%s\">%s</guid>" %
                      (str(self.guid.isPermaLink).lower(), self.guid.guid) + newl)
         writer.write(indent + "  </item>" + newl)
@@ -168,6 +163,7 @@ class CustomRSS2(PyRSS2Gen.RSS2):
             writer.write(indent + addindent + "<generator>%s</generator>" % escape(self.generator) + newl)
         if hasattr(self, 'ttl') and self.ttl is not None:
             writer.write(indent + addindent + "<ttl>%s</ttl>" % escape(str(self.ttl)) + newl)
+
         for item in self.items:
             item.writexml(writer, indent + addindent, addindent, newl)
         writer.write(indent + "</channel>" + newl)
@@ -177,26 +173,25 @@ async def main_async():
     rss_items = []
     async with aiohttp.ClientSession() as session:
         tasks = []
-        # Iterate over each host and each novel in the mapping.
+        # Iterate over each host and each novel in the mapping
         for host, data in HOSTING_SITE_DATA.items():
             for novel_title in data["novels"].keys():
                 tasks.append(asyncio.create_task(process_novel(session, host, novel_title)))
-        # Wait for all tasks to complete.
+        # Wait for all tasks to complete
         results = await asyncio.gather(*tasks)
         for items in results:
             rss_items.extend(items)
-    
-    # Sort items by publication date and chapter number (using host's chapter_num function).
+
+    # Sort items primarily by pubDate, then chapter number
     rss_items.sort(key=lambda item: (
         normalize_date(item.pubDate),
         get_host_utils(item.host)["chapter_num"](item.chaptername)
     ), reverse=True)
-    
-    # Debug: print chapter numbers and pubDates for verification.
+
+    # Debug
     for item in rss_items:
-        chapter_nums = get_host_utils(item.host)["chapter_num"](item.chaptername)
-        print(f"{item.title} - {item.chaptername} ({chapter_nums}) : {item.pubDate}")
-    
+        print(f"{item.title} - {item.chaptername} ({get_host_utils(item.host)['chapter_num'](item.chaptername)}) : {item.pubDate}")
+
     new_feed = CustomRSS2(
         title="Aggregated Paid Chapters Feed",
         link="https://github.com/cannibal-turtle/",
@@ -204,11 +199,11 @@ async def main_async():
         lastBuildDate=datetime.datetime.now(datetime.timezone.utc),
         items=rss_items
     )
-    
+
     output_file = "paid_chapters_feed.xml"
     with open(output_file, "w", encoding="utf-8") as f:
         new_feed.writexml(f, indent="  ", addindent="  ", newl="\n")
-    
+
     with open(output_file, "r", encoding="utf-8") as f:
         xml_content = f.read()
     dom = xml.dom.minidom.parseString(xml_content)
@@ -218,12 +213,11 @@ async def main_async():
     ])
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(pretty_xml)
-    
-    # Debug: print chapter numbers and pubDates again after feed generation.
+
+    # Debug
     for item in rss_items:
-        chapter_nums = get_host_utils(item.host)["chapter_num"](item.chaptername)
-        print(f"{item.title} - {item.chaptername} ({chapter_nums}) : {item.pubDate}")
-    
+        print(f"{item.title} - {item.chaptername} ({get_host_utils(item.host)['chapter_num'](item.chaptername)}) : {item.pubDate}")
+
     print(f"Modified feed generated with {len(rss_items)} items.")
     print(f"Output written to {output_file}")
 
