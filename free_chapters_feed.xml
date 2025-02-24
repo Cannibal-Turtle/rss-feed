@@ -2,9 +2,9 @@
 <rss xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:wfw="http://wellformedweb.org/CommentAPI/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" xmlns:slash="http://purl.org/rss/1.0/modules/slash/" xmlns:webfeeds="http://www.webfeeds.org/rss/1.0" xmlns:georss="http://www.georss.org/georss" xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" version="2.0">
   <channel>
     <title>Aggregated Free Chapters Feed</title>
-    <link>https://youraggregator.example.com/free-chapters</link>
+    <link>https://github.com/cannibal-turtle/</link>
     <description>Aggregated RSS feed for free chapters across all hosting sites.</description>
-    <lastBuildDate>Mon, 24 Feb 2025 07:47:12 +0000</lastBuildDate>
+    <lastBuildDate>Mon, 24 Feb 2025 07:51:10 +0000</lastBuildDate>
     <docs>http://blogs.law.harvard.edu/tech/rss</docs>
     <generator>PyRSS2Gen-1.1.0</generator>
     <item>
