@@ -13,6 +13,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
       with:
+        token: ${{ secrets.GITHUB_TOKEN }}   # or use your PAT secret if needed
         persist-credentials: true
 
     - name: Set up Python
@@ -35,4 +36,4 @@ jobs:
         git add arc_history.json || echo "arc_history.json not found"
         git diff --cached --quiet || (git commit -m "Update arc_history.json" && git push)
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # or use your PAT secret if needed
