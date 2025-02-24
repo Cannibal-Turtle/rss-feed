@@ -55,11 +55,16 @@ def get_novel_details(host, novel_title):
 
 def get_novel_discord_role(novel_title, host="Dragonholic"):
     """
-    Returns the Discord role ID for the given novel on the specified hosting site.
+    Returns the Discord role ID for the given novel.
+    If the novel title appears in the NSFW list (via get_nsfw_novels()),
+    appends the extra role.
     """
     details = get_novel_details(host, novel_title)
-    return details.get("discord_role_id", "")
-
+    base_role = details.get("discord_role_id", "")
+    if novel_title in get_nsfw_novels():
+        base_role += " <@&1343352825811439616>"
+    return base_role
+  
 def get_novel_url(novel_title, host="Dragonholic"):
     """
     Returns the URL for the given novel on the specified hosting site.
@@ -74,13 +79,12 @@ def get_featured_image(novel_title, host="Dragonholic"):
     details = get_novel_details(host, novel_title)
     return details.get("featured_image", "")
 
-def get_novel_discord_role(novel_title, host="Dragonholic"):
+def get_nsfw_novels():
     """
-    Returns the Discord role ID for the given novel on the specified hosting site.
-    If the novel title is listed in get_nsfw_novels(), an extra role is appended.
+    Returns the list of NSFW novel titles.
+    Update this list if a novel is considered NSFW.
     """
-    details = HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(novel_title, {})
-    base_role = details.get("discord_role_id", "")
-    if novel_title in get_nsfw_novels():
-        base_role += " <@&1343352825811439616>"
-    return base_role
+    return [
+        # Add NSFW novel titles here, e.g.:
+        # "Some NSFW Novel Title"
+    ]
