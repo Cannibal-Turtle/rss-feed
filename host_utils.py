@@ -11,7 +11,8 @@ Currently, all functions here are tailored for Dragonholic. They include functio
   - Scraping paid chapters from a Dragonholic novel page
   - Fetching pages asynchronously
 
-When adding a new hosting site (e.g. "Foxaholic"), add that host’s functions and update the dispatcher.
+When adding a new hosting site (e.g. "Foxaholic"), you can write its own functions
+and add them to a new dictionary, then update get_host_utils() accordingly.
 """
 
 import re
@@ -34,7 +35,6 @@ def split_title_dragonholic(full_title):
     elif len(parts) >= 3:
         main_title = parts[0].strip()
         chaptername = parts[1].strip()
-        # Use the third part if non-empty; otherwise, try a fourth part.
         nameextend = parts[2].strip() if parts[2].strip() else (parts[3].strip() if len(parts) > 3 else "")
         return main_title, chaptername, nameextend
     else:
@@ -177,8 +177,8 @@ async def scrape_paid_chapters_async(session, novel_url):
             continue
         raw_title = a_tag.get_text(" ", strip=True)
         print(f"Processing chapter: {raw_title}")
-        # Use the dispatcher for splitting titles.
-        main_title, chaptername, nameextend = split_title("Dragonholic", raw_title)
+        # Use the Dragonholic-specific title splitting.
+        main_title, chaptername, nameextend = split_title_dragonholic(raw_title)
         href = a_tag.get("href")
         if href and href.strip() != "#":
             chapter_link = href.strip()
@@ -217,6 +217,7 @@ DRAGONHOLIC_UTILS = {
     "extract_pubdate": extract_pubdate_from_soup,
     "novel_has_paid_update_async": novel_has_paid_update_async,
     "scrape_paid_chapters_async": scrape_paid_chapters_async,
+    # Note: fetch_page is used directly with an async session.
 }
 
 def get_host_utils(host):
