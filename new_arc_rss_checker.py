@@ -58,6 +58,11 @@ with open(LAST_ARC_FILE, "w") as f:
 latest_arc_number = len(free_arcs) + 1
 latest_arc_title = next_locked_arc if next_locked_arc else "TBA"
 
+# Format the Unlocked and Locked sections properly
+unlocked_section = "\n".join([f"**【Arc {i+1}】** {arc}" for i, arc in enumerate(free_arcs)])
+locked_section = "\n".join([f"**【Arc {i+len(free_arcs)+1}】** {arc}" for i, arc in enumerate(locked_arcs[:-1])])
+locked_section += f"\n☛**【Arc {latest_arc_number}】 {latest_arc_title}**"  # Place "☛" on latest locked arc
+
 # Construct Discord message
 message = (
     f"<@&1329391480435114005> <@&1329502951764525187>\n"
@@ -66,10 +71,9 @@ message = (
     "### [Quick Transmigration: The Villain Is Too Pampered and Alluring](https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/) :dracthyrhehe:\n\n"
     "❀° ┄───────────────────────╮\n"
     "**`Unlocked 🔓`**\n"
-    "||" + "".join([f"**【Arc {i+1}】** {arc}\n" for i, arc in enumerate(free_arcs)]) + "||\n\n"
+    f"||\n{unlocked_section}\n||\n\n"
     "**`Locked 🔐`**\n"
-    "||" + "".join([f"**【Arc {i+len(free_arcs)+1}】** {arc}\n" for i, arc in enumerate(locked_arcs[:-1])]) +
-    f"☛**【Arc {latest_arc_number}】 {latest_arc_title}**||\n"
+    f"||\n{locked_section}\n||\n"
     "╰───────────────────────┄ °❀\n"
     "> *Advance access is ready for you on Dragonholic! :rose:*\n"
     "✎﹏﹏﹏﹏﹏﹏﹏﹏\n"
