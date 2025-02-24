@@ -2,7 +2,7 @@ name: Check RSS and Send to Discord
 
 on:
   schedule:
-    - cron: "0 16 * * *"  # Runs daily at 16:00 UTC
+    - cron: "0 16 * * *"  # Runs daily at 16:00 UTC (as a backup)
   workflow_dispatch:  # Allows manual trigger
 
 jobs:
@@ -16,7 +16,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.10'  # Use Python 3.10 (or latest stable version)
+        python-version: '3.10'
 
     - name: Install dependencies
       run: pip install feedparser requests  # Install required libraries
