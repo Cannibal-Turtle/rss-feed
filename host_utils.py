@@ -114,10 +114,12 @@ async def scrape_paid_chapters_async(session, novel_url):
       - `chaptername`
       - `nameextend`
     """
+    print(f"DEBUG: Scraping {novel_url}")
+    
     try:
         html = await fetch_page(session, novel_url)
     except Exception as e:
-        print(f"Error fetching {novel_url}: {e}")
+        print(f"ERROR fetching {novel_url}: {e}")
         return [], ""
 
     soup = BeautifulSoup(html, "html.parser")
@@ -125,20 +127,26 @@ async def scrape_paid_chapters_async(session, novel_url):
     main_desc = clean_description(desc_div.decode_contents()) if desc_div else ""
 
     chapters = soup.find_all("li", class_="wp-manga-chapter premium")
+    print(f"DEBUG: Found {len(chapters)} paid chapters on {novel_url}")
+
     paid_chapters = []
     now = datetime.datetime.now(datetime.timezone.utc)
 
     for chap in chapters:
         pub_dt = extract_pubdate_from_soup(chap)
         if pub_dt < now - datetime.timedelta(days=7):
+            print(f"DEBUG: Skipping old chapter ({pub_dt})")
             break
 
         a_tag = chap.find("a")
         if not a_tag:
+            print("DEBUG: Skipping chapter with no <a> tag")
             continue
 
         raw_title = a_tag.get_text(" ", strip=True)
-        chaptername, nameextend = split_paid_chapter_dragonholic(raw_title)  # **Correct function called here**
+        print(f"DEBUG: Processing chapter - {raw_title}")
+
+        chaptername, nameextend = split_paid_chapter_dragonholic(raw_title)  # ✅ Correct function
 
         href = a_tag.get("href", "").strip()
         guid = next((cls.replace("data-chapter-", "") for cls in chap.get("class", []) if cls.startswith("data-chapter-")), "unknown")
@@ -155,6 +163,7 @@ async def scrape_paid_chapters_async(session, novel_url):
             "coin": coin_value
         })
 
+    print(f"DEBUG: {len(paid_chapters)} paid chapters processed from {novel_url}")
     return paid_chapters, main_desc
 
 # ---------------- CHAPTER NUMBER EXTRACTION (DO NOT TOUCH) ----------------
