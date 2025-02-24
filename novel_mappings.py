@@ -24,15 +24,14 @@ HOSTING_SITE_DATA = {
                 "novel_url": "https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/",
                 "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/177838.jpg",
                 "pub_date_override": {"hour": 12, "minute": 0, "second": 0}
-              
             },
             "Second Novel Title Example": {
                 "discord_role_id": "<@&123456789012345678>",  # Replace with the actual Discord role ID.
-                "novel_url": "https://dragonholic.com/second-novel",  # Replace with the manual URL for the second novel.
-                "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/second-novel.jpg"
+                "novel_url": "https://dragonholic.com/second-novel",  # Replace with the actual URL.
+                "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/second-novel.jpg",
                 "pub_date_override": {"hour": 12, "minute": 0, "second": 0}
-            },
-            # Add more novels for Dragonholic here if needed.
+            }
+            # Add more novels here if needed.
         }
     },
     "Lily on The Valley": {
@@ -40,31 +39,22 @@ HOSTING_SITE_DATA = {
         "paid_feed_url": "",
         "translator": "",
         "host_logo": "",
-        "novels": {
-            "": {
-                "discord_role_id": "",
-                "novel_url": "",
-                "featured_image": "",
-                "pub_date_override":      
-            },
+        "novels": {}
+    }
 }
 
+# ---------------- Utility Functions ----------------
+
 def get_host_translator(host):
-    """
-    Returns the translator name for the given hosting site.
-    """
+    """Returns the translator name for the given hosting site."""
     return HOSTING_SITE_DATA.get(host, {}).get("translator", "")
 
 def get_host_logo(host):
-    """
-    Returns the hosting site's logo URL for the given host.
-    """
+    """Returns the hosting site's logo URL for the given host."""
     return HOSTING_SITE_DATA.get(host, {}).get("host_logo", "")
 
 def get_novel_details(host, novel_title):
-    """
-    Returns the details of a novel (as a dict) from the specified hosting site.
-    """
+    """Returns the details of a novel (as a dict) from the specified hosting site."""
     return HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(novel_title, {})
 
 def get_novel_discord_role(novel_title, host="Dragonholic"):
@@ -80,29 +70,21 @@ def get_novel_discord_role(novel_title, host="Dragonholic"):
     return base_role
   
 def get_novel_url(novel_title, host="Dragonholic"):
-    """
-    Returns the URL for the given novel on the specified hosting site.
-    """
+    """Returns the URL for the given novel on the specified hosting site."""
     details = get_novel_details(host, novel_title)
     return details.get("novel_url", "")
 
 def get_featured_image(novel_title, host="Dragonholic"):
-    """
-    Returns the featured image URL for the given novel on the specified hosting site.
-    """
+    """Returns the featured image URL for the given novel on the specified hosting site."""
     details = get_novel_details(host, novel_title)
     return details.get("featured_image", "")
 
 def get_nsfw_novels():
-    """
-    Returns the list of NSFW novel titles.
-    Update this list if a novel is considered NSFW.
-    """
+    """Returns the list of NSFW novel titles."""
     return [
         # Add NSFW novel titles here, e.g.:
         # "Some NSFW Novel Title"
     ]
-# In novel_mappings.py, add the following helper function:
 
 def get_pub_date_override(novel_title, host="Dragonholic"):
     """
