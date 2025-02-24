@@ -74,11 +74,13 @@ def get_featured_image(novel_title, host="Dragonholic"):
     details = get_novel_details(host, novel_title)
     return details.get("featured_image", "")
 
-def get_nsfw_novels():
+def get_novel_discord_role(novel_title, host="Dragonholic"):
     """
-    Returns the list of NSFW novel titles.
+    Returns the Discord role ID for the given novel on the specified hosting site.
+    If the novel title is listed in get_nsfw_novels(), an extra role is appended.
     """
-    NSFW_NOVELS = [
-        # Add NSFW novel titles here, e.g. "Some NSFW Novel Title"
-    ]
-    return NSFW_NOVELS
+    details = HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(novel_title, {})
+    base_role = details.get("discord_role_id", "")
+    if novel_title in get_nsfw_novels():
+        base_role += " <@&1343352825811439616>"
+    return base_role
