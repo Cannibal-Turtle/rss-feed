@@ -9,7 +9,8 @@ This guide explains which elements need to be updated whenever a new novel, tran
 This file contains mapping data for each hosting site. When adding a **new novel** or **new hosting site**, you will update:
 
 - **`HOSTING_SITE_DATA`**  
-  - `feed_url`: The URL for the feed (e.g., free chapters)  
+  - `feed_url`: The URL for the feed (e.g., free chapters)
+  - `paid_feed_url`: If site has URL for paid feed
   - `translator`: Your username on that site  
   - `host_logo`: The URL for the hosting site's logo  
   - `novels`: A dictionary that maps each novel title to:
