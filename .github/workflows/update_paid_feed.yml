@@ -37,3 +37,11 @@ jobs:
           git commit -m "Update paid feed XML" || echo "No changes to commit"
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
           git push
+
+      # 🔽 NEW: Trigger Discord Webhook Workflow in Different Repo
+      - name: Trigger Discord Webhook Workflow
+        run: |
+          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+               -H "Accept: application/vnd.github.v3+json" \
+               https://api.github.com/repos/Cannibal-Turtle/discord-webhook/actions/workflows/rss_to_discord.yml/dispatches \
+               -d '{"ref":"main"}'
