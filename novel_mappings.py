@@ -66,7 +66,7 @@ def get_novel_discord_role(novel_title, host="Dragonholic"):
     details = get_novel_details(host, novel_title)
     base_role = details.get("discord_role_id", "")
     if novel_title in get_nsfw_novels():
-        base_role += " <@&1343352825811439616>"
+        base_role += " | <@&1343352825811439616>"
     return base_role
   
 def get_novel_url(novel_title, host="Dragonholic"):
