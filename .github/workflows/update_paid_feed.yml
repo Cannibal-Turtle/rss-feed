@@ -41,7 +41,7 @@ jobs:
       # 🔽 NEW: Trigger Discord Webhook Workflow in Different Repo
       - name: Trigger Discord Webhook Workflow
         run: |
-          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-               -H "Accept: application/vnd.github.v3+json" \
-               https://api.github.com/repos/Cannibal-Turtle/discord-webhook/actions/workflows/rss_to_discord.yml/dispatches \
-               -d '{"ref":"main"}'
+          curl -X POST -H "Accept: application/vnd.github.v3+json" \
+               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+               https://api.github.com/repos/Cannibal-Turtle/discord-webhook/dispatches \
+               -d '{"event_type": "trigger-discord-notify"}'
