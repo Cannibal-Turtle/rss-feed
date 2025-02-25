@@ -42,6 +42,6 @@ jobs:
       - name: Trigger Discord Webhook Workflow
         run: |
           curl -X POST -H "Accept: application/vnd.github.v3+json" \
-               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+               -H "Authorization: Bearer ${{ secrets.PAT_GITHUB }}" \
                https://api.github.com/repos/Cannibal-Turtle/discord-webhook/dispatches \
                -d '{"event_type": "trigger-discord-notify"}'
