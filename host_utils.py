@@ -182,6 +182,7 @@ async def scrape_paid_chapters_async(session, novel_url, host):
         chaptername, nameextend = utils["split_paid_title"](raw_title)
 
         href = a_tag.get("href", "").strip()
+        print(f"DEBUG: Extracted href: {href}")
         guid = next((cls.replace("data-chapter-", "") for cls in chap.get("class", []) if cls.startswith("data-chapter-")), "unknown")
         coin_span = chap.find("span", class_="coin")
         coin_value = coin_span.get_text(strip=True) if coin_span else ""
