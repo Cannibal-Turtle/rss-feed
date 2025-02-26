@@ -183,6 +183,14 @@ async def scrape_paid_chapters_async(session, novel_url, host):
 
         href = a_tag.get("href", "").strip()
         print(f"DEBUG: Extracted href: {href}")
+        # Fallback: If href is missing or a placeholder, reconstruct the URL.
+        if not href or href == "#":
+            # Attempt to extract the chapter number from chaptername.
+            parts = chaptername.split()
+            chapter_num_str = parts[-1] if parts else "unknown"
+            href = f"{novel_url}chapter-{chapter_num_str}/"
+            print(f"DEBUG: Fallback constructed href: {href}")
+
         guid = next((cls.replace("data-chapter-", "") for cls in chap.get("class", []) if cls.startswith("data-chapter-")), "unknown")
         coin_span = chap.find("span", class_="coin")
         coin_value = coin_span.get_text(strip=True) if coin_span else ""
