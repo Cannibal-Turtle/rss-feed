@@ -1,218 +1,229 @@
+"""
+host_utils.py
+
+This module handles **both** free and paid chapter title parsing for Dragonholic.
+
+**DO NOT MODIFY free feed logic**:
+  - `split_title_dragonholic`: Used for free feeds.
+  - `split_paid_chapter_dragonholic`: Used only for paid feeds (to handle <i> tags properly).
+"""
+
 import re
 import datetime
-import asyncio
 import aiohttp
-import PyRSS2Gen
-import xml.dom.minidom
-from xml.sax.saxutils import escape
-from collections import defaultdict
+from bs4 import BeautifulSoup
+from novel_mappings import HOSTING_SITE_DATA
 
-# Import mapping functions and data from novel_mappings.py
-from novel_mappings import (
-    HOSTING_SITE_DATA,
-    get_novel_url,
-    get_featured_image,
-    get_host_translator,
-    get_host_logo,
-    get_novel_details,
-    get_novel_discord_role,
-    get_nsfw_novels,
-    get_pub_date_override  # If you have pub_date overrides
-)
+# ---------------- FREE FEED Split Function (DO NOT TOUCH) ----------------
 
-# Import the dispatcher from host_utils.py
-from host_utils import get_host_utils
+def split_title_dragonholic(full_title):
+    """
+    Splits a Dragonholic chapter title.
+    Expected format: "Main Title - Chapter Name - (Optional Extension)"
+    Returns a tuple: (main_title, chaptername, nameextend)
+    """
+    parts = full_title.split(" - ")
+    if len(parts) == 2:
+        return parts[0].strip(), parts[1].strip(), ""
+    elif len(parts) >= 3:
+        main_title = parts[0].strip()
+        chaptername = parts[1].strip()
+        nameextend = parts[2].strip() if parts[2].strip() else (parts[3].strip() if len(parts) > 3 else "")
+        return main_title, chaptername, nameextend
+    else:
+        return full_title.strip(), "", ""
 
-# ---------------- Concurrency Control ----------------
-semaphore = asyncio.Semaphore(100)
+# ---------------- PAID FEED Split Function (Handles <i> Tags) ----------------
 
-def normalize_date(dt):
-    """Remove microseconds from a datetime."""
-    return dt.replace(microsecond=0)
+def split_paid_chapter_dragonholic(raw_title):
+    """
+    Handles raw paid feed titles like:
+      "Chapter 640 <i class=\"fas fa-lock\"></i> - The Abandoned Supporting Female Role 022"
+    1) Remove <i ...>...</i>.
+    2) Split once on " - " to separate "Chapter 640" from "The Abandoned...".
+    Returns (chaptername, nameextend).
+    """
+    # Remove <i ...>...</i>
+    cleaned = re.sub(r'<i[^>]*>.*?</i>', '', raw_title).strip()
+    parts = cleaned.split(' - ', 1)
+    if len(parts) == 2:
+        chaptername = parts[0].strip()
+        nameextend  = parts[1].strip()
+    else:
+        chaptername = cleaned
+        nameextend  = ""
+    return chaptername, nameextend
 
-async def process_novel(session, host, novel_title):
-    async with semaphore:
-        novel_url = get_novel_url(novel_title, host)
-        print(f"Scraping: {novel_url}")
-        utils = get_host_utils(host)
+# ---------------- CLEANING FUNCTIONS ----------------
 
-        # 1) Check if there's a recent premium update
-        if not await utils["novel_has_paid_update_async"](session, novel_url):
-            print(f"Skipping {novel_title}: no recent premium update found.")
-            return []
+def clean_description(raw_desc):
+    """
+    Cleans up raw HTML descriptions.
+    """
+    soup = BeautifulSoup(raw_desc, "html.parser")
+    for div in soup.find_all("div", class_="c-content-readmore"):
+        div.decompose()
+    return re.sub(r'\s+', ' ', soup.decode_contents()).strip()
 
-        # 2) Scrape paid chapters
-        paid_chapters, main_desc = await utils["scrape_paid_chapters_async"](session, novel_url, host)
-        items = []
-        if paid_chapters:
-            for chap in paid_chapters:
-                # chap["chaptername"] -> e.g. "Chapter 640"
-                # chap["nameextend"]  -> e.g. "The Abandoned Supporting Female Role 022"
-                raw_chaptername = chap["chaptername"].strip()
-                raw_nameextend  = chap["nameextend"].strip()
-                
-                # Build final strings
-                chaptername = raw_chaptername
-                nameextend  = f"***{raw_nameextend}***" if raw_nameextend else ""
-                
-                pub_date = chap["pubDate"]
-                if pub_date.tzinfo is None:
-                    pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
+def extract_pubdate_from_soup(chap):
+    """
+    Extracts the publication date from chapter metadata.
+    """
+    release_span = chap.find("span", class_="chapter-release-date")
+    if release_span:
+        i_tag = release_span.find("i")
+        if i_tag:
+            date_str = i_tag.get_text(strip=True)
+            try:
+                pub_dt = datetime.datetime.strptime(date_str, "%B %d, %Y")
+                return pub_dt.replace(tzinfo=datetime.timezone.utc)
+            except Exception:
+                return datetime.datetime.now(datetime.timezone.utc)
+    return datetime.datetime.now(datetime.timezone.utc)
 
-                # (Optional) override date
-                override = get_pub_date_override(novel_title, host)
-                if override:
-                    pub_date = pub_date.replace(**override)
+async def fetch_page(session, url):
+    """
+    Fetch a webpage asynchronously.
+    """
+    async with session.get(url) as response:
+        return await response.text()
 
-                # Create RSS item
-                item = MyRSSItem(
-                    title=novel_title,
-                    link=chap["link"],
-                    description=chap["description"],
-                    guid=PyRSS2Gen.Guid(chap["guid"], isPermaLink=False),
-                    pubDate=pub_date,
-                    chaptername=chaptername,
-                    nameextend=nameextend,
-                    coin=chap.get("coin", ""),
-                    host=host
-                )
-                items.append(item)
-        return items
+async def novel_has_paid_update_async(session, novel_url):
+    """
+    Checks if a Dragonholic novel has a **recent** premium update (within 7 days).
+    """
+    try:
+        html_text = await fetch_page(session, novel_url)
+    except Exception as e:
+        print(f"Error fetching {novel_url}: {e}")
+        return False
 
-class MyRSSItem(PyRSS2Gen.RSSItem):
-    def __init__(self, *args, chaptername="", nameextend="", coin="", host="", **kwargs):
-        self.chaptername = chaptername
-        self.nameextend  = nameextend
-        self.coin        = coin
-        self.host        = host
-        super().__init__(*args, **kwargs)
+    soup = BeautifulSoup(html_text, "html.parser")
+    chapter_li = soup.find("li", class_="wp-manga-chapter")
+    if chapter_li and "premium" in chapter_li.get("class", []):
+        pub_dt = extract_pubdate_from_soup(chapter_li)
+        if pub_dt >= datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7):
+            return True
+    return False
 
-    def writexml(self, writer, indent="", addindent="", newl=""):
-        writer.write(indent + "  <item>" + newl)
-        writer.write(indent + "    <title>%s</title>" % escape(self.title) + newl)
-        writer.write(indent + "    <chaptername>%s</chaptername>" % escape(self.chaptername) + newl)
+# ---------------- SCRAPING PAID CHAPTERS (Calls split_paid_chapter_dragonholic) ----------------
 
-        formatted_nameextend = self.nameextend.strip()
-        writer.write(indent + "    <nameextend>%s</nameextend>" % escape(formatted_nameextend) + newl)
+import feedparser
 
-        writer.write(indent + "    <link>%s</link>" % escape(self.link) + newl)
-        writer.write(indent + "    <description><![CDATA[%s]]></description>" % self.description + newl)
+async def scrape_paid_chapters_async(session, novel_url, host):
+    """
+    Fetches paid chapters for a novel.
+    - If the host has a `paid_feed_url`, it will parse the feed.
+    - Otherwise, it scrapes the website.
+    """
+    utils = get_host_utils(host)
+    paid_feed_url = HOSTING_SITE_DATA.get(host, {}).get("paid_feed_url")  # Check for a paid feed
 
-        # Category: NSFW or SFW
-        nsfw_list = get_nsfw_novels()
-        category_value = "NSFW" if self.title in nsfw_list else "SFW"
-        writer.write(indent + "    <category>%s</category>" % escape(category_value) + newl)
+    if paid_feed_url:
+        print(f"DEBUG: Fetching paid chapters from feed: {paid_feed_url}")
+        parsed_feed = feedparser.parse(paid_feed_url)
+        paid_chapters = []
 
-        translator = get_host_translator(self.host)
-        writer.write(indent + "    <translator>%s</translator>" % escape(translator) + newl)
+        for entry in parsed_feed.entries:
+            # Use host-specific title splitting
+            chaptername, nameextend = utils["split_paid_title"](entry.title)
 
-        discord_role = get_novel_discord_role(self.title, self.host)
-        writer.write(indent + "    <discord_role_id><![CDATA[%s]]></discord_role_id>" % discord_role + newl)
+            pub_date = datetime.datetime(*entry.published_parsed[:6], tzinfo=datetime.timezone.utc)
+            guid = entry.id if entry.id else chaptername
 
-        writer.write(indent + '    <featuredImage url="%s"/>' % escape(get_featured_image(self.title, self.host)) + newl)
-        if self.coin:
-            writer.write(indent + "    <coin>%s</coin>" % escape(self.coin) + newl)
+            paid_chapters.append({
+                "chaptername": chaptername,
+                "nameextend": nameextend,
+                "link": entry.link,
+                "description": entry.description,
+                "pubDate": pub_date,
+                "guid": guid,
+                "coin": ""  # Some feeds don't provide coin data
+            })
 
-        writer.write(indent + "    <pubDate>%s</pubDate>" %
-                     self.pubDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
+        print(f"DEBUG: {len(paid_chapters)} paid chapters fetched from feed ({host})")
+        return paid_chapters, ""
 
-        writer.write(indent + "    <host>%s</host>" % escape(self.host) + newl)
-        writer.write(indent + '    <hostLogo url="%s"/>' % escape(get_host_logo(self.host)) + newl)
+    # Fallback: Scrape paid chapters from the website
+    print(f"DEBUG: Scraping paid chapters from {novel_url}")
 
-        writer.write(indent + "    <guid isPermaLink=\"%s\">%s</guid>" %
-                     (str(self.guid.isPermaLink).lower(), self.guid.guid) + newl)
-        writer.write(indent + "  </item>" + newl)
+    try:
+        html = await fetch_page(session, novel_url)
+    except Exception as e:
+        print(f"ERROR fetching {novel_url}: {e}")
+        return [], ""
 
-class CustomRSS2(PyRSS2Gen.RSS2):
-    def writexml(self, writer, indent="", addindent="", newl=""):
-        writer.write('<?xml version="1.0" encoding="utf-8"?>' + newl)
-        writer.write(
-            '<rss xmlns:content="http://purl.org/rss/1.0/modules/content/" '
-            'xmlns:wfw="http://wellformedweb.org/CommentAPI/" '
-            'xmlns:dc="http://purl.org/dc/elements/1.1/" '
-            'xmlns:atom="http://www.w3.org/2005/Atom" '
-            'xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" '
-            'xmlns:slash="http://purl.org/rss/1.0/modules/slash/" '
-            'xmlns:webfeeds="http://www.webfeeds.org/rss/1.0" '
-            'xmlns:georss="http://www.georss.org/georss" '
-            'xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" '
-            'version="2.0">' + newl
-        )
-        writer.write(indent + "<channel>" + newl)
-        writer.write(indent + addindent + "<title>%s</title>" % escape(self.title) + newl)
-        writer.write(indent + addindent + "<link>%s</link>" % escape(self.link) + newl)
-        writer.write(indent + addindent + "<description>%s</description>" % escape(self.description) + newl)
-        if hasattr(self, 'language') and self.language:
-            writer.write(indent + addindent + "<language>%s</language>" % escape(self.language) + newl)
-        if hasattr(self, 'lastBuildDate') and self.lastBuildDate:
-            writer.write(indent + addindent + "<lastBuildDate>%s</lastBuildDate>" %
-                         self.lastBuildDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
-        if hasattr(self, 'docs') and self.docs:
-            writer.write(indent + addindent + "<docs>%s</docs>" % escape(self.docs) + newl)
-        if hasattr(self, 'generator') and self.generator:
-            writer.write(indent + addindent + "<generator>%s</generator>" % escape(self.generator) + newl)
-        if hasattr(self, 'ttl') and self.ttl is not None:
-            writer.write(indent + addindent + "<ttl>%s</ttl>" % escape(str(self.ttl)) + newl)
+    soup = BeautifulSoup(html, "html.parser")
+    desc_div = soup.find("div", class_="description-summary")
+    main_desc = clean_description(desc_div.decode_contents()) if desc_div else ""
 
-        for item in self.items:
-            item.writexml(writer, indent + addindent, addindent, newl)
+    # ✅ Fix: Properly selecting all PAID chapters (premium)
+    chapters = soup.select("li.wp-manga-chapter.premium")
+    print(f"DEBUG: Found {len(chapters)} paid chapters on {novel_url}")
 
-        writer.write(indent + "</channel>" + newl)
-        writer.write("</rss>" + newl)
+    paid_chapters = []
+    now = datetime.datetime.now(datetime.timezone.utc)
 
-async def main_async():
-    rss_items = []
-    async with aiohttp.ClientSession() as session:
-        tasks = []
-        # Create a task for each novel under each host
-        for host, data in HOSTING_SITE_DATA.items():
-            for novel_title in data.get("novels", {}).keys():
-                tasks.append(asyncio.create_task(process_novel(session, host, novel_title)))
-        results = await asyncio.gather(*tasks)
-        for items in results:
-            rss_items.extend(items)
+    for chap in chapters:
+        pub_dt = extract_pubdate_from_soup(chap)
+        if pub_dt < now - datetime.timedelta(days=7):
+            print(f"DEBUG: Skipping old chapter ({pub_dt})")
+            break
 
-    # Sort by (normalized pubDate, then chapter_num)
-    rss_items.sort(key=lambda item: (
-        normalize_date(item.pubDate),
-        get_host_utils(item.host)["chapter_num"](item.chaptername)
-    ), reverse=True)
+        a_tag = chap.find("a")
+        if not a_tag:
+            print("DEBUG: Skipping chapter with no <a> tag")
+            continue
 
-    # Debug prints
-    for item in rss_items:
-        nums = get_host_utils(item.host)["chapter_num"](item.chaptername)
-        print(f"{item.title} - {item.chaptername} ({nums}) : {item.pubDate}")
+        raw_title = a_tag.get_text(" ", strip=True)
+        print(f"DEBUG: Processing chapter - {raw_title}")
 
-    new_feed = CustomRSS2(
-        title="Aggregated Paid Chapters Feed",
-        link="https://github.com/cannibal-turtle/",
-        description="Aggregated RSS feed for paid chapters across mapped novels.",
-        lastBuildDate=datetime.datetime.now(datetime.timezone.utc),
-        items=rss_items
-    )
+        # ✅ Fix: Use `split_paid_chapter_dragonholic()`
+        chaptername, nameextend = utils["split_paid_title"](raw_title)
 
-    output_file = "paid_chapters_feed.xml"
-    with open(output_file, "w", encoding="utf-8") as f:
-        new_feed.writexml(f, indent="  ", addindent="  ", newl="\n")
+        href = a_tag.get("href", "").strip()
+        guid = next((cls.replace("data-chapter-", "") for cls in chap.get("class", []) if cls.startswith("data-chapter-")), "unknown")
+        coin_span = chap.find("span", class_="coin")
+        coin_value = coin_span.get_text(strip=True) if coin_span else ""
 
-    # Optional: pretty-print the XML
-    with open(output_file, "r", encoding="utf-8") as f:
-        xml_content = f.read()
-    dom = xml.dom.minidom.parseString(xml_content)
-    pretty_xml = "\n".join([
-        line for line in dom.toprettyxml(indent="  ").splitlines()
-        if line.strip()
-    ])
-    with open(output_file, "w", encoding="utf-8") as f:
-        f.write(pretty_xml)
+        paid_chapters.append({
+            "chaptername": chaptername,
+            "nameextend": nameextend,
+            "link": href,
+            "description": main_desc,
+            "pubDate": pub_dt,
+            "guid": guid,
+            "coin": coin_value
+        })
 
-    # Final debug
-    for item in rss_items:
-        nums = get_host_utils(item.host)["chapter_num"](item.chaptername)
-        print(f"{item.title} - {item.chaptername} ({nums}) : {item.pubDate}")
+    print(f"DEBUG: {len(paid_chapters)} paid chapters processed from {novel_url}")
+    return paid_chapters, main_desc
 
-    print(f"Modified feed generated with {len(rss_items)} items.")
-    print(f"Output written to {output_file}")
+# ---------------- CHAPTER NUMBER EXTRACTION (DO NOT TOUCH) ----------------
 
-if __name__ == "__main__":
-    asyncio.run(main_async())
+def chapter_num_dragonholic(chaptername):
+    """
+    Extracts numeric sequences from chapter names.
+    """
+    numbers = re.findall(r'\d+(?:\.\d+)?', chaptername)
+    return tuple(float(n) if '.' in n else int(n) for n in numbers) if numbers else (0,)
+
+# ---------------- DISPATCHER FOR DRAGONHOLIC ----------------
+
+DRAGONHOLIC_UTILS = {
+    "split_title": split_title_dragonholic,  # Free feed
+    "split_paid_title": split_paid_chapter_dragonholic,  # Paid feed
+    "chapter_num": chapter_num_dragonholic,
+    "clean_description": clean_description,
+    "extract_pubdate": extract_pubdate_from_soup,
+    "novel_has_paid_update_async": novel_has_paid_update_async,
+    "scrape_paid_chapters_async": scrape_paid_chapters_async
+}
+
+def get_host_utils(host):
+    """
+    Returns utility functions for the given host.
+    """
+    if host == "Dragonholic":
+        return DRAGONHOLIC_UTILS
+    return {}
