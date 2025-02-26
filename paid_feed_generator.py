@@ -2,7 +2,6 @@ import re
 import datetime
 import asyncio
 import aiohttp
-from bs4 import BeautifulSoup
 import PyRSS2Gen
 import xml.dom.minidom
 from xml.sax.saxutils import escape
@@ -49,14 +48,13 @@ async def process_novel(session, host, novel_title):
             for chap in paid_chapters:
                 # chap["chaptername"] -> e.g. "Chapter 640"
                 # chap["nameextend"]  -> e.g. "The Abandoned Supporting Female Role 022"
-
                 raw_chaptername = chap["chaptername"].strip()
                 raw_nameextend  = chap["nameextend"].strip()
                 
                 # Build final strings
                 chaptername = raw_chaptername
                 nameextend  = f"***{raw_nameextend}***" if raw_nameextend else ""
-
+                
                 pub_date = chap["pubDate"]
                 if pub_date.tzinfo is None:
                     pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
@@ -168,7 +166,7 @@ async def main_async():
         tasks = []
         # Create a task for each novel under each host
         for host, data in HOSTING_SITE_DATA.items():
-            for novel_title in data["novels"].keys():
+            for novel_title in data.get("novels", {}).keys():
                 tasks.append(asyncio.create_task(process_novel(session, host, novel_title)))
         results = await asyncio.gather(*tasks)
         for items in results:
@@ -197,7 +195,7 @@ async def main_async():
     with open(output_file, "w", encoding="utf-8") as f:
         new_feed.writexml(f, indent="  ", addindent="  ", newl="\n")
 
-    # Optional: pretty-print
+    # Optional: pretty-print the XML
     with open(output_file, "r", encoding="utf-8") as f:
         xml_content = f.read()
     dom = xml.dom.minidom.parseString(xml_content)
@@ -217,5 +215,4 @@ async def main_async():
     print(f"Output written to {output_file}")
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main_async())
