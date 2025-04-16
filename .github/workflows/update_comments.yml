@@ -25,7 +25,7 @@ jobs:
           pip install feedparser PyRSS2Gen aiohttp beautifulsoup4
 
       - name: Run Comments Feed Generator
-        run: python dh_comments.py
+        run: python comments.py
 
       - name: Commit and Push Changes
         env:
