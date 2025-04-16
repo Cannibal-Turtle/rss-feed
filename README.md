@@ -11,6 +11,7 @@ This file contains mapping data for each hosting site. When adding a **new novel
 - **`HOSTING_SITE_DATA`**  
   - `feed_url`: The URL for the feed (e.g., free chapters)
   - `paid_feed_url`: If site has URL for paid feed
+  - `comments_feed_url`: If site has URL for comments.
   - `translator`: Your username on that site  
   - `host_logo`: The URL for the hosting site's logo  
   - `novels`: A dictionary that maps each novel title to:
