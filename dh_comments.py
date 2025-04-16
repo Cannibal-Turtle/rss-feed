@@ -132,7 +132,7 @@ def main():
     
     new_feed = CustomCommentRSS2(
         title="Aggregated Comments Feed",
-        link="https://yourwebsite.example.com/",
+        link="https://github.com/Cannibal-Turtle",
         description="Aggregated RSS feed for comments (with enhanced metadata) across novels.",
         lastBuildDate=datetime.datetime.now(),
         items=rss_items
