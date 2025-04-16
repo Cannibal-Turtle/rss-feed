@@ -53,8 +53,6 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
                      self.pubDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
         writer.write(indent + "    <description><![CDATA[%s]]></description>" % self.description + newl)
         writer.write(indent + "    <content:encoded><![CDATA[%s]]></content:encoded>" % self.description + newl)
-        writer.write(indent + "    <guid isPermaLink=\"%s\">%s</guid>" %
-                     (str(self.guid.isPermaLink).lower(), escape(self.guid.guid)) + newl)
         # Get other metadata using host-specific functions.
         translator = utils.get("get_host_translator", lambda host: "")(self.host)
         writer.write(indent + "    <translator>%s</translator>" % escape(translator) + newl)
@@ -68,6 +66,8 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
         nsfw_list = utils.get("get_nsfw_novels", lambda: [])()
         category_value = "NSFW" if self.novel_title in nsfw_list else "SFW"
         writer.write(indent + "    <category>%s</category>" % escape(category_value) + newl)
+        writer.write(indent + "    <guid isPermaLink=\"%s\">%s</guid>" %
+                     (str(self.guid.isPermaLink).lower(), escape(self.guid.guid)) + newl)
         writer.write(indent + "  </item>" + newl)
 
 class CustomCommentRSS2(PyRSS2Gen.RSS2):
