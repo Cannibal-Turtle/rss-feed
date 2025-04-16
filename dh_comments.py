@@ -40,7 +40,7 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
         # Write the novel title
         writer.write(indent + "    <title>%s</title>" % escape(self.novel_title) + newl)
         # Parse the chapter information from the link.
-        chapter_match = re.search(r'/chapter-(\d+)/', self.link)
+        chapter_match = re.search(r'/chapter-(\d+)(?:-[^/]*)?/', self.link)
         if chapter_match:
             chapter_info = "Chapter " + chapter_match.group(1)
         else:
