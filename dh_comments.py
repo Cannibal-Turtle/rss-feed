@@ -4,6 +4,7 @@ import datetime
 import feedparser
 import PyRSS2Gen
 import xml.dom.minidom
+from urllib.parse import urlparse, unquote
 from xml.sax.saxutils import escape
 
 # Import mapping functions and data from your novel_mappings.py
@@ -27,6 +28,43 @@ def get_novel_discord_role_no_nsfw(novel_title, host="Dragonholic"):
 # This will capture everything between "Comment on" and "by"
 COMMENT_TITLE_REGEX = re.compile(r"Comment on\s*(.*?)\s*by", re.IGNORECASE)
 
+def title_case(text):
+    """
+    Simple title-casing that leaves some common words (articles, prepositions) in lowercase,
+    except for the first word.
+    """
+    exceptions = {'the', 'of', 'and', 'in', 'a', 'an'}
+    words = text.split()
+    if not words:
+        return text
+    title_words = [words[0].capitalize()]
+    for word in words[1:]:
+        if word.lower() in exceptions:
+            title_words.append(word.lower())
+        else:
+            title_words.append(word.capitalize())
+    return ' '.join(title_words)
+
+def extract_chapter_from_link(link):
+    """
+    Extracts the chapter (or episode) text from the URL by taking the last non-empty path segment,
+    decoding percent-encoded characters, replacing hyphens with spaces, and then title-casing it.
+    If there is no such segment, returns "Homepage".
+    """
+    parsed = urlparse(link)
+    segments = [seg for seg in parsed.path.split('/') if seg]
+    if segments:
+        # The last segment is what comes right before "#comment"
+        last_seg = segments[-1]
+        decoded = unquote(last_seg)
+        # Replace hyphens with spaces
+        chapter_raw = decoded.replace('-', ' ')
+        # Apply our custom title-casing; e.g. "☆17 into the depths of darkness ⑥" becomes
+        # "☆17 Into the Depths of Darkness ⑥"
+        return title_case(chapter_raw)
+    else:
+        return "Homepage"
+
 class MyCommentRSSItem(PyRSS2Gen.RSSItem):
     """
     Customized RSS item for comment feed items.
@@ -37,14 +75,11 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
 
     def writexml(self, writer, indent="", addindent="", newl=""):
         writer.write(indent + "  <item>" + newl)
-        # Write the novel title
+        # Write the novel title.
         writer.write(indent + "    <title>%s</title>" % escape(self.novel_title) + newl)
-        # Parse the chapter information from the link.
-        chapter_match = re.search(r'/chapter-(\d+)(?:-[^/]*)?/', self.link)
-        if chapter_match:
-            chapter_info = "Chapter " + chapter_match.group(1)
-        else:
-            chapter_info = "Homepage"
+
+        # Extract the chapter text from the link (the last path segment before the #comment).
+        chapter_info = extract_chapter_from_link(self.link)
         writer.write(indent + "    <chapter>%s</chapter>" % escape(chapter_info) + newl)
         
         writer.write(indent + "    <link>%s</link>" % escape(self.link) + newl)
@@ -55,11 +90,12 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
         # Escape GUID to avoid invalid tokens (e.g. unescaped ampersands)
         writer.write(indent + "    <guid isPermaLink=\"%s\">%s</guid>" %
                      (str(self.guid.isPermaLink).lower(), escape(self.guid.guid)) + newl)
+        
         # Additional fields from the mapping (assuming host is "Dragonholic")
         host = "Dragonholic"
         translator = get_host_translator(host)
         writer.write(indent + "    <translator>%s</translator>" % escape(translator) + newl)
-        # Use the overridden function here to ensure no extra NSFW role is appended.
+        # Use the overridden function to ensure no extra NSFW role is appended.
         discord_role = get_novel_discord_role_no_nsfw(self.novel_title, host)
         writer.write(indent + "    <discord_role_id><![CDATA[%s]]></discord_role_id>" % discord_role + newl)
         featured_image = get_featured_image(self.novel_title, host)
