@@ -1,0 +1,24 @@
+<?xml version="1.0" ?>
+<rss xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" xmlns:georss="http://www.georss.org/georss" xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" version="2.0">
+  <channel>
+    <title>Aggregated Comments Feed</title>
+    <link>https://yourwebsite.example.com/</link>
+    <description>Aggregated RSS feed for comments (with enhanced metadata) across novels.</description>
+    <lastBuildDate>Wed, 16 Apr 2025 05:02:45 +0000</lastBuildDate>
+    <item>
+      <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
+      <link>https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/chapter-247/#comment-3111</link>
+      <dc:creator><![CDATA[sponge]]></dc:creator>
+      <pubDate>Wed, 16 Apr 2025 03:52:24 +0000</pubDate>
+      <description><![CDATA[this girl&#039;s level of delusion is admirable ? can&#039;t wait to see how she deals with the spirit world. though with the previous instances i wonder if anyone else got it too]]></description>
+      <content:encoded><![CDATA[this girl&#039;s level of delusion is admirable ? can&#039;t wait to see how she deals with the spirit world. though with the previous instances i wonder if anyone else got it too]]></content:encoded>
+      <guid isPermaLink="false">https://dragonholic.com/?post_type=wp-manga&amp;p=3493#comment-3111</guid>
+      <translator>Cannibal Turtle</translator>
+      <discord_role_id><![CDATA[<@&1329391480435114005>]]></discord_role_id>
+      <featuredImage url="https://dragonholic.com/wp-content/uploads/2024/08/177838.jpg"/>
+      <host>Dragonholic</host>
+      <hostLogo url="https://dragonholic.com/wp-content/uploads/2025/01/Web-Logo-White.png"/>
+      <category>SFW</category>
+    </item>
+  </channel>
+</rss>
