@@ -4,111 +4,63 @@ import datetime
 import feedparser
 import PyRSS2Gen
 import xml.dom.minidom
-from urllib.parse import urlparse, unquote
 from xml.sax.saxutils import escape
 
-# Import mapping functions and data from your novel_mappings.py
-from novel_mappings import (
-    get_novel_details,
-    get_novel_url,
-    get_featured_image,
-    get_host_translator,
-    get_host_logo,
-    get_novel_discord_role,  # Not used here; we'll override
-    get_nsfw_novels
-)
-
-# Override function: return only the base Discord role (no NSFW extra appended)
-def get_novel_discord_role_no_nsfw(novel_title, host="Dragonholic"):
-    """Returns only the base Discord role without appending the NSFW extra role."""
-    details = get_novel_details(host, novel_title)
-    return details.get("discord_role_id", "")
-
-# Regex to extract the novel title from the comment's title.
-# This will capture everything between "Comment on" and "by"
-COMMENT_TITLE_REGEX = re.compile(r"Comment on\s*(.*?)\s*by", re.IGNORECASE)
-
-def title_case(text):
-    """
-    Simple title-casing that leaves some common words (articles, prepositions) in lowercase,
-    except for the first word.
-    """
-    exceptions = {'the', 'of', 'and', 'in', 'a', 'an'}
-    words = text.split()
-    if not words:
-        return text
-    title_words = [words[0].capitalize()]
-    for word in words[1:]:
-        if word.lower() in exceptions:
-            title_words.append(word.lower())
-        else:
-            title_words.append(word.capitalize())
-    return ' '.join(title_words)
-
-def extract_chapter_from_link(link):
-    """
-    Extracts the chapter (or episode) text from the URL.
-
-    If the URL's path has more than two nonempty segments, it takes the last segment,
-    decodes it, replaces hyphens with spaces, and title-cases the result.
-    If there are only two segments (i.e. a base novel URL), it returns "Homepage".
-    """
-    parsed = urlparse(link)
-    segments = [seg for seg in parsed.path.split('/') if seg]
-    if len(segments) <= 2:
-        return "Homepage"
-    else:
-        last_seg = segments[-1]
-        decoded = unquote(last_seg)
-        chapter_raw = decoded.replace('-', ' ')
-        return title_case(chapter_raw)
+# Import the host utilities dispatcher.
+from host_utils import get_host_utils
 
 class MyCommentRSSItem(PyRSS2Gen.RSSItem):
-    """
-    Customized RSS item for comment feed items.
-    """
-    def __init__(self, *args, novel_title="", **kwargs):
+    def __init__(self, *args, novel_title="", host="Dragonholic", **kwargs):
         self.novel_title = novel_title
+        self.host = host
         super().__init__(*args, **kwargs)
-
     def writexml(self, writer, indent="", addindent="", newl=""):
         writer.write(indent + "  <item>" + newl)
         # Write the novel title.
         writer.write(indent + "    <title>%s</title>" % escape(self.novel_title) + newl)
-
-        # Extract the chapter text from the link.
-        chapter_info = extract_chapter_from_link(self.link)
+        # Get host-specific utilities.
+        utils = get_host_utils(self.host)
+        # Use host-specific chapter extraction if available; fallback to a default.
+        if "extract_chapter" in utils:
+            chapter_info = utils["extract_chapter"](self.link)
+        else:
+            # Default extraction: if fewer than 3 segments, consider it Homepage.
+            from urllib.parse import urlparse, unquote
+            parsed = urlparse(self.link)
+            segments = [seg for seg in parsed.path.split('/') if seg]
+            if len(segments) <= 2:
+                chapter_info = "Homepage"
+            else:
+                chapter_info = unquote(segments[-1]).replace('-', ' ')
         writer.write(indent + "    <chapter>%s</chapter>" % escape(chapter_info) + newl)
-        
         writer.write(indent + "    <link>%s</link>" % escape(self.link) + newl)
         writer.write(indent + "    <dc:creator><![CDATA[%s]]></dc:creator>" % escape(self.author) + newl)
-        writer.write(indent + "    <pubDate>%s</pubDate>" % self.pubDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
+        writer.write(indent + "    <pubDate>%s</pubDate>" %
+                     self.pubDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
         writer.write(indent + "    <description><![CDATA[%s]]></description>" % self.description + newl)
         writer.write(indent + "    <content:encoded><![CDATA[%s]]></content:encoded>" % self.description + newl)
-        # Escape GUID to avoid invalid tokens.
         writer.write(indent + "    <guid isPermaLink=\"%s\">%s</guid>" %
                      (str(self.guid.isPermaLink).lower(), escape(self.guid.guid)) + newl)
-        # Additional fields from the mapping (assuming host is "Dragonholic")
-        host = "Dragonholic"
-        translator = get_host_translator(host)
+        # Host-specific translator.
+        translator = utils.get("get_host_translator", lambda host: "")(self.host)
         writer.write(indent + "    <translator>%s</translator>" % escape(translator) + newl)
-        # Use the overridden function for Discord role.
-        discord_role = get_novel_discord_role_no_nsfw(self.novel_title, host)
+        # Host-specific Discord role.
+        discord_role = utils.get("get_novel_discord_role", lambda nt, host: "")(self.novel_title, self.host)
         writer.write(indent + "    <discord_role_id><![CDATA[%s]]></discord_role_id>" % discord_role + newl)
-        featured_image = get_featured_image(self.novel_title, host)
+        # Host-specific featured image.
+        featured_image = utils.get("get_featured_image", lambda nt, host: "")(self.novel_title, self.host)
         writer.write(indent + '    <featuredImage url="%s"/>' % escape(featured_image) + newl)
-        writer.write(indent + "    <host>%s</host>" % escape(host) + newl)
-        host_logo = get_host_logo(host)
+        writer.write(indent + "    <host>%s</host>" % escape(self.host) + newl)
+        # Host-specific host logo.
+        host_logo = utils.get("get_host_logo", lambda host: "")(self.host)
         writer.write(indent + '    <hostLogo url="%s"/>' % escape(host_logo) + newl)
-        nsfw_list = get_nsfw_novels()
+        # Determine NSFW category.
+        nsfw_list = utils.get("get_nsfw_novels", lambda: [])()
         category_value = "NSFW" if self.novel_title in nsfw_list else "SFW"
         writer.write(indent + "    <category>%s</category>" % escape(category_value) + newl)
         writer.write(indent + "  </item>" + newl)
 
 class CustomCommentRSS2(PyRSS2Gen.RSS2):
-    """
-    Customized RSS feed that uses our MyCommentRSSItem items.
-    """
     def writexml(self, writer, indent="", addindent="", newl=""):
         writer.write('<?xml version="1.0" encoding="utf-8"?>' + newl)
         writer.write(
@@ -132,32 +84,26 @@ class CustomCommentRSS2(PyRSS2Gen.RSS2):
         writer.write(indent + "</channel>" + newl)
         writer.write("</rss>" + newl)
 
-def compact_cdata(xml_str):
-    """
-    Compacts CDATA sections by replacing multiple whitespace characters with a single space.
-    """
-    pattern = re.compile(r'(<description><!\[CDATA\[)(.*?)(\]\]></description>)', re.DOTALL)
-    def repl(match):
-        start, cdata, end = match.groups()
-        compact = re.sub(r'\s+', ' ', cdata.strip())
-        return f"{start}{compact}{end}"
-    return pattern.sub(repl, xml_str)
-
 def main():
+    host = "Dragonholic"  # Set host here (can be changed to another host later).
     comments_feed_url = "https://dragonholic.com/comments/feed/"
     parsed_feed = feedparser.parse(comments_feed_url)
     
+    # Retrieve host-specific utilities.
+    utils = get_host_utils(host)
+    # Get the host-specific function to split comment titles.
+    split_comment_title = utils.get("split_comment_title", lambda title: title)
+    
     rss_items = []
     for entry in parsed_feed.entries:
-        match = COMMENT_TITLE_REGEX.search(entry.title)
-        if match:
-            novel_title = match.group(1).strip()
-        else:
+        # Use the host-specific function to extract the novel title from the comment title.
+        novel_title = split_comment_title(entry.title)
+        if not novel_title:
             print(f"Skipping entry, unable to extract novel title from: {entry.title}")
             continue
 
-        # Check if the novel exists in your mappings.
-        novel_details = get_novel_details("Dragonholic", novel_title)
+        # Retrieve novel details using host-specific function.
+        novel_details = utils.get("get_novel_details", lambda h, nt: {})(host, novel_title)
         if not novel_details:
             print("Skipping item (novel not found in mapping):", novel_title)
             continue
@@ -171,10 +117,12 @@ def main():
             author=entry.get("author", ""),
             description=description,
             guid=PyRSS2Gen.Guid(entry.id, isPermaLink=False),
-            pubDate=pub_date
+            pubDate=pub_date,
+            host=host
         )
         rss_items.append(item)
     
+    # Sort items by publication date descending.
     rss_items.sort(key=lambda i: i.pubDate, reverse=True)
     
     new_feed = CustomCommentRSS2(
@@ -197,9 +145,8 @@ def main():
         print("Error parsing generated XML:", e)
         raise
     pretty_xml = "\n".join([line for line in dom.toprettyxml(indent="  ").splitlines() if line.strip()])
-    compacted_xml = compact_cdata(pretty_xml)
     with open(output_file, "w", encoding="utf-8") as f:
-        f.write(compacted_xml)
+        f.write(pretty_xml)
     
     print("Modified comments feed generated with", len(rss_items), "items.")
     print("Output written to", output_file)
