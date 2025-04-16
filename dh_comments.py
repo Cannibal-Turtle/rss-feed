@@ -37,7 +37,16 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
 
     def writexml(self, writer, indent="", addindent="", newl=""):
         writer.write(indent + "  <item>" + newl)
+        # Write the novel title
         writer.write(indent + "    <title>%s</title>" % escape(self.novel_title) + newl)
+        # Parse the chapter information from the link.
+        chapter_match = re.search(r'/chapter-(\d+)/', self.link)
+        if chapter_match:
+            chapter_info = "Chapter " + chapter_match.group(1)
+        else:
+            chapter_info = "Homepage"
+        writer.write(indent + "    <chapter>%s</chapter>" % escape(chapter_info) + newl)
+        
         writer.write(indent + "    <link>%s</link>" % escape(self.link) + newl)
         writer.write(indent + "    <dc:creator><![CDATA[%s]]></dc:creator>" % escape(self.author) + newl)
         writer.write(indent + "    <pubDate>%s</pubDate>" % self.pubDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
