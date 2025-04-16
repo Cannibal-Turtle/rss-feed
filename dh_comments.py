@@ -13,12 +13,18 @@ from novel_mappings import (
     get_featured_image,
     get_host_translator,
     get_host_logo,
-    get_novel_discord_role,
+    get_novel_discord_role,  # Not used here; we'll override
     get_nsfw_novels
 )
 
-# Regex to extract the novel title from the comment title.
-# This will capture the text between "Comment on" and "by"
+# Override function: return only the base Discord role (no NSFW extra appended)
+def get_novel_discord_role_no_nsfw(novel_title, host="Dragonholic"):
+    """Returns only the base Discord role without appending the NSFW extra role."""
+    details = get_novel_details(host, novel_title)
+    return details.get("discord_role_id", "")
+
+# Regex to extract the novel title from the comment's title.
+# This will capture everything between "Comment on" and "by"
 COMMENT_TITLE_REGEX = re.compile(r"Comment on\s*(.*?)\s*by", re.IGNORECASE)
 
 class MyCommentRSSItem(PyRSS2Gen.RSSItem):
@@ -37,20 +43,22 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
         writer.write(indent + "    <pubDate>%s</pubDate>" % self.pubDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
         writer.write(indent + "    <description><![CDATA[%s]]></description>" % self.description + newl)
         writer.write(indent + "    <content:encoded><![CDATA[%s]]></content:encoded>" % self.description + newl)
-        # Escape the guid value to avoid invalid tokens (like unescaped ampersands)
+        # Escape GUID to avoid invalid tokens (e.g. unescaped ampersands)
         writer.write(indent + "    <guid isPermaLink=\"%s\">%s</guid>" %
                      (str(self.guid.isPermaLink).lower(), escape(self.guid.guid)) + newl)
-        # Additional fields from the mapping – we assume host "Dragonholic" for comments.
+        # Additional fields from the mapping (assuming host is "Dragonholic")
         host = "Dragonholic"
         translator = get_host_translator(host)
         writer.write(indent + "    <translator>%s</translator>" % escape(translator) + newl)
-        discord_role = get_novel_discord_role(self.novel_title, host)
+        # Use the overridden function here to ensure no extra NSFW role is appended.
+        discord_role = get_novel_discord_role_no_nsfw(self.novel_title, host)
         writer.write(indent + "    <discord_role_id><![CDATA[%s]]></discord_role_id>" % discord_role + newl)
         featured_image = get_featured_image(self.novel_title, host)
         writer.write(indent + '    <featuredImage url="%s"/>' % escape(featured_image) + newl)
         writer.write(indent + "    <host>%s</host>" % escape(host) + newl)
         host_logo = get_host_logo(host)
         writer.write(indent + '    <hostLogo url="%s"/>' % escape(host_logo) + newl)
+        # Determine category based on NSFW list (this is still done for categorization)
         nsfw_list = get_nsfw_novels()
         category_value = "NSFW" if self.novel_title in nsfw_list else "SFW"
         writer.write(indent + "    <category>%s</category>" % escape(category_value) + newl)
@@ -114,7 +122,6 @@ def main():
             continue
 
         pub_date = datetime.datetime(*entry.published_parsed[:6])
-        # Use 'content:encoded' if it exists, otherwise fallback to 'description'
         description = entry.get("content:encoded", entry.get("description", ""))
         item = MyCommentRSSItem(
             novel_title=novel_title,
@@ -132,7 +139,7 @@ def main():
     
     new_feed = CustomCommentRSS2(
         title="Aggregated Comments Feed",
-        link="https://github.com/Cannibal-Turtle",
+        link="https://yourwebsite.example.com/",
         description="Aggregated RSS feed for comments (with enhanced metadata) across novels.",
         lastBuildDate=datetime.datetime.now(),
         items=rss_items
@@ -142,7 +149,6 @@ def main():
     with open(output_file, "w", encoding="utf-8") as f:
         new_feed.writexml(f, indent="  ", addindent="  ", newl="\n")
     
-    # Read the file for pretty-printing and compacting
     with open(output_file, "r", encoding="utf-8") as f:
         xml_content = f.read()
     try:
