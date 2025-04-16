@@ -67,8 +67,10 @@ def get_nsfw_novels():
 - **`chapter_num_dragonholic(chaptername)`** → Extracts numeric values from chapter names.  
 - **`clean_description(raw_desc)`** → Cleans raw HTML descriptions by removing unnecessary elements.  
 - **`extract_pubdate_from_soup(chap)`** → Parses chapter publication dates, handling absolute and relative dates.  
-- **`novel_has_paid_update_async(session, novel_url)`** → Checks if a novel has a premium (paid) update within the last 7 days.  
-
+- **`novel_has_paid_update_async(session, novel_url)`** → Checks if a novel has a premium (paid) update within the last 7 days.
+- **`split_comment_title_dragonholic(comment_title)`** → Extracts the novel title from the comment title string.
+- **`extract_chapter_dragonholic(link)`** → Converts the last URL segment (if there are more than two segments) into a human‑readable chapter string (or returns "Homepage" if not).
+  
 ### **Host Utility Dispatcher**  
 To get the appropriate utility functions for a specific host, use:  
 ```python
