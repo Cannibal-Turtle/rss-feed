@@ -12,6 +12,7 @@ import re
 import datetime
 import aiohttp
 from bs4 import BeautifulSoup
+from urllib.parse import urlparse, unquote
 from novel_mappings import HOSTING_SITE_DATA
 
 # ---------------- FREE FEED Split Function (DO NOT TOUCH) ----------------
@@ -261,7 +262,14 @@ DRAGONHOLIC_UTILS = {
     "clean_description": clean_description,
     "extract_pubdate": extract_pubdate_from_soup,
     "novel_has_paid_update_async": novel_has_paid_update_async,
-    "scrape_paid_chapters_async": scrape_paid_chapters_async
+    "scrape_paid_chapters_async": scrape_paid_chapters_async,
+    "split_comment_title": split_comment_title_dragonholic,  # NEW for comment title splitting
+    "extract_chapter": extract_chapter_dragonholic,          # NEW for chapter extraction from link
+    "get_novel_details": lambda host, novel_title: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(novel_title, {}),
+    "get_host_translator": lambda host: HOSTING_SITE_DATA.get(host, {}).get("translator", ""),
+    "get_host_logo": lambda host: HOSTING_SITE_DATA.get(host, {}).get("host_logo", ""),
+    "get_featured_image": lambda novel_title, host: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(novel_title, {}).get("featured_image", ""),
+    "get_nsfw_novels": lambda: []  # Replace with actual NSFW novel list if available.
 }
 
 def get_host_utils(host):
