@@ -217,6 +217,41 @@ def chapter_num_dragonholic(chaptername):
     numbers = re.findall(r'\d+(?:\.\d+)?', chaptername)
     return tuple(float(n) if '.' in n else int(n) for n in numbers) if numbers else (0,)
 
+# ---------------- NEW: HOST-SPECIFIC COMMENT FUNCTIONS ----------------
+
+def split_comment_title_dragonholic(comment_title):
+    """
+    Extracts the novel title from a Dragonholic comment title.
+    Expected format: "Comment on [Novel Title] by [Commenter]"
+    Returns the extracted novel title.
+    """
+    match = re.search(r"Comment on\s*(.*?)\s*by", comment_title, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return ""
+
+def extract_chapter_dragonholic(link):
+    """
+    Extracts the chapter (or equivalent) text from a Dragonholic URL.
+    - If the URL's path has two or fewer nonempty segments, returns "Homepage".
+    - Otherwise, returns a human‑readable version of the last segment.
+    For example:
+      https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/#comment-3111 
+        yields "Homepage"
+      https://dragonholic.com/novel/xyz/chapter-1-the-novice-adventurer/ 
+        yields "Chapter 1 The Novice Adventurer"
+    """
+    parsed = urlparse(link)
+    segments = [seg for seg in parsed.path.split('/') if seg]
+    if len(segments) <= 2:
+        return "Homepage"
+    else:
+        last_seg = segments[-1]
+        decoded = unquote(last_seg)
+        chapter_raw = decoded.replace('-', ' ')
+        # Capitalize each word for readability.
+        return ' '.join(word.capitalize() for word in chapter_raw.split())
+
 # ---------------- DISPATCHER FOR DRAGONHOLIC ----------------
 
 DRAGONHOLIC_UTILS = {
