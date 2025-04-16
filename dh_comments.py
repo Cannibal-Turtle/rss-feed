@@ -47,23 +47,21 @@ def title_case(text):
 
 def extract_chapter_from_link(link):
     """
-    Extracts the chapter (or episode) text from the URL by taking the last non-empty path segment,
-    decoding percent-encoded characters, replacing hyphens with spaces, and then title-casing it.
-    If there is no such segment, returns "Homepage".
+    Extracts the chapter (or episode) text from the URL.
+
+    If the URL's path has more than two nonempty segments, it takes the last segment,
+    decodes it, replaces hyphens with spaces, and title-cases the result.
+    If there are only two segments (i.e. a base novel URL), it returns "Homepage".
     """
     parsed = urlparse(link)
     segments = [seg for seg in parsed.path.split('/') if seg]
-    if segments:
-        # The last segment is what comes right before "#comment"
+    if len(segments) <= 2:
+        return "Homepage"
+    else:
         last_seg = segments[-1]
         decoded = unquote(last_seg)
-        # Replace hyphens with spaces
         chapter_raw = decoded.replace('-', ' ')
-        # Apply our custom title-casing; e.g. "☆17 into the depths of darkness ⑥" becomes
-        # "☆17 Into the Depths of Darkness ⑥"
         return title_case(chapter_raw)
-    else:
-        return "Homepage"
 
 class MyCommentRSSItem(PyRSS2Gen.RSSItem):
     """
@@ -78,7 +76,7 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
         # Write the novel title.
         writer.write(indent + "    <title>%s</title>" % escape(self.novel_title) + newl)
 
-        # Extract the chapter text from the link (the last path segment before the #comment).
+        # Extract the chapter text from the link.
         chapter_info = extract_chapter_from_link(self.link)
         writer.write(indent + "    <chapter>%s</chapter>" % escape(chapter_info) + newl)
         
@@ -87,15 +85,14 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
         writer.write(indent + "    <pubDate>%s</pubDate>" % self.pubDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
         writer.write(indent + "    <description><![CDATA[%s]]></description>" % self.description + newl)
         writer.write(indent + "    <content:encoded><![CDATA[%s]]></content:encoded>" % self.description + newl)
-        # Escape GUID to avoid invalid tokens (e.g. unescaped ampersands)
+        # Escape GUID to avoid invalid tokens.
         writer.write(indent + "    <guid isPermaLink=\"%s\">%s</guid>" %
                      (str(self.guid.isPermaLink).lower(), escape(self.guid.guid)) + newl)
-        
         # Additional fields from the mapping (assuming host is "Dragonholic")
         host = "Dragonholic"
         translator = get_host_translator(host)
         writer.write(indent + "    <translator>%s</translator>" % escape(translator) + newl)
-        # Use the overridden function to ensure no extra NSFW role is appended.
+        # Use the overridden function for Discord role.
         discord_role = get_novel_discord_role_no_nsfw(self.novel_title, host)
         writer.write(indent + "    <discord_role_id><![CDATA[%s]]></discord_role_id>" % discord_role + newl)
         featured_image = get_featured_image(self.novel_title, host)
@@ -103,7 +100,6 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
         writer.write(indent + "    <host>%s</host>" % escape(host) + newl)
         host_logo = get_host_logo(host)
         writer.write(indent + '    <hostLogo url="%s"/>' % escape(host_logo) + newl)
-        # Determine category based on NSFW list (this is still done for categorization)
         nsfw_list = get_nsfw_novels()
         category_value = "NSFW" if self.novel_title in nsfw_list else "SFW"
         writer.write(indent + "    <category>%s</category>" % escape(category_value) + newl)
@@ -179,7 +175,6 @@ def main():
         )
         rss_items.append(item)
     
-    # Sort items by publication date descending.
     rss_items.sort(key=lambda i: i.pubDate, reverse=True)
     
     new_feed = CustomCommentRSS2(
