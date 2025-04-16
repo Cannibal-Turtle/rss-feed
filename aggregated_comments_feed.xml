@@ -2,9 +2,9 @@
 <rss xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" xmlns:georss="http://www.georss.org/georss" xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" version="2.0">
   <channel>
     <title>Aggregated Comments Feed</title>
-    <link>https://yourwebsite.example.com/</link>
+    <link>https://github.com/Cannibal-Turtle</link>
     <description>Aggregated RSS feed for comments (with enhanced metadata) across novels.</description>
-    <lastBuildDate>Wed, 16 Apr 2025 05:15:30 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 16 Apr 2025 05:16:31 +0000</lastBuildDate>
     <item>
       <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
       <link>https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/chapter-247/#comment-3111</link>
