@@ -25,6 +25,7 @@ This file contains mapping data for each hosting site. When adding a **new novel
 HOSTING_SITE_DATA = {
     "Dragonholic": {
         "feed_url": "https://dragonholic.com/feed/manga-chapters/",
+        "comments_feed_url": "https://dragonholic.com/comments/feed/",
         "translator": "Cannibal Turtle",
         "host_logo": "https://dragonholic.com/wp-content/uploads/2025/01/Web-Logo-White.png",
         "novels": {
