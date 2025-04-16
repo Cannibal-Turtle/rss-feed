@@ -2,7 +2,7 @@ name: Update Comments Feed
 
 on:
   schedule:
-    - cron: '0 16 * * *'  # Run every day at 16:00 UTC
+    - cron: "0 * * * *"  # Runs every hour
   workflow_dispatch:
 
 permissions:
