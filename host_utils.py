@@ -221,13 +221,12 @@ def chapter_num_dragonholic(chaptername):
 # ---------------- NEW: HOST-SPECIFIC COMMENT FUNCTIONS ----------------
 
 def split_comment_title_dragonholic(comment_title):
-    """
-    Extracts the novel title from a Dragonholic comment title.
-    Expected format: "Comment on [Novel Title] by [Commenter]"
-    Returns the extracted novel title.
-    """
-    match = re.search(r"Comment on\s*(.*?)\s*by", comment_title, re.IGNORECASE)
+    # Expected format: "Comment on [Novel Title] by [Commenter]"
+    # This pattern uses a greedy match for the novel title.
+    match = re.search(r"Comment on\s*(.+)\s+by\s+(\S+)\s*$", comment_title, re.IGNORECASE)
     if match:
+        # Group 1: novel title (which can include "by")
+        # Group 2: commenter name
         return match.group(1).strip()
     return ""
 
