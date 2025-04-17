@@ -14,7 +14,7 @@ This file contains mapping data for each hosting site. When adding a **new novel
   - `comments_feed_url`: If site has URL for comments.
   - `translator`: Your username on that site  
   - `host_logo`: The URL for the hosting site's logo
-  - `coin_emoji`: currency used for paid chapters like "🔥" or "🪙"  
+  - `coin_emoji`: currency used for paid chapters like 🔥 or 🪙
   - `novels`: A dictionary that maps each novel title to:
     - `discord_role_id`: The Discord role ID  
     - `novel_url`: The manual URL for the novel’s main page  
