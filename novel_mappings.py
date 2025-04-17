@@ -19,6 +19,7 @@ HOSTING_SITE_DATA = {
         "comments_feed_url": "https://dragonholic.com/comments/feed/",
         "translator": "Cannibal Turtle",
         "host_logo": "https://dragonholic.com/wp-content/uploads/2025/01/Web-Logo-White.png",
+        "coin_emoji": "🔥",
         "novels": {
             "Quick Transmigration: The Villain Is Too Pampered and Alluring": {
                 "discord_role_id": "<@&1329391480435114005>",
@@ -95,3 +96,6 @@ def get_pub_date_override(novel_title, host="Dragonholic"):
     """
     details = get_novel_details(host, novel_title)
     return details.get("pub_date_override", None)
+
+def get_coin_emoji(host="Dragonholic"):
+    return HOSTING_SITE_DATA.get(host, {}).get("coin_emoji", "")
