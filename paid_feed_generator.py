@@ -17,7 +17,8 @@ from novel_mappings import (
     get_novel_details,
     get_novel_discord_role,
     get_nsfw_novels,
-    get_pub_date_override  # If you have pub_date overrides
+    get_pub_date_override,  # If you have pub_date overrides
+    get_coin_emoji
 )
 
 # Import the dispatcher from host_utils.py
@@ -111,8 +112,10 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
 
         writer.write(indent + '    <featuredImage url="%s"/>' % escape(get_featured_image(self.title, self.host)) + newl)
         if self.coin:
-            writer.write(indent + "    <coin>%s</coin>" % escape(self.coin) + newl)
-
+            emoji = get_coin_emoji(self.host)
+            # if there’s no emoji configured, this will just be blank
+            writer.write(indent + "    <coin>%s %s</coin>" % (escape(emoji), escape(self.coin)) + newl)
+            
         writer.write(indent + "    <pubDate>%s</pubDate>" %
                      self.pubDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
 
