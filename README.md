@@ -13,7 +13,8 @@ This file contains mapping data for each hosting site. When adding a **new novel
   - `paid_feed_url`: If site has URL for paid feed
   - `comments_feed_url`: If site has URL for comments.
   - `translator`: Your username on that site  
-  - `host_logo`: The URL for the hosting site's logo  
+  - `host_logo`: The URL for the hosting site's logo
+  - `coin_emoji`: currency used for paid chapters like "🔥" or "🪙"  
   - `novels`: A dictionary that maps each novel title to:
     - `discord_role_id`: The Discord role ID  
     - `novel_url`: The manual URL for the novel’s main page  
@@ -29,6 +30,7 @@ HOSTING_SITE_DATA = {
         "comments_feed_url": "https://dragonholic.com/comments/feed/",
         "translator": "Cannibal Turtle",
         "host_logo": "https://dragonholic.com/wp-content/uploads/2025/01/Web-Logo-White.png",
+        "coin_emoji": "🔥",
         "novels": {
             "Quick Transmigration: The Villain Is Too Pampered and Alluring": {
                 "discord_role_id": "<@&1329391480435114005>",
