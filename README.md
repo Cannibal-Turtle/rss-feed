@@ -104,7 +104,7 @@ Each generated .xml feed (free or paid) will contain structured <item> entries e
 ```
 <item>
   <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
-  <volume>Arc 5: The Fake Daughter Will Not Be a Cannon Fodder</volume>
+  <volume>【Arc 5】The Fake Daughter Will Not Be a Cannon Fodder</volume>
   <chaptername>Chapter 250</chaptername>
   <nameextend>***Uglier Than a Monkey***</nameextend>
   <link>https://dragonholic.com/novel/.../chapter-250/</link>
