@@ -29,9 +29,10 @@ def split_title_dragonholic(full_title: str):
     if len(parts) == 2:
         return parts[0].strip(), parts[1].strip(), ""
     if len(parts) >= 3:
-        return parts[0].strip(), parts[1].strip(), parts[2].strip()
+        # Join the remaining parts, ignoring empty and literal hyphens
+        clean_parts = [p.strip() for p in parts[2:] if p.strip() and p.strip() != "-"]
+        return parts[0].strip(), parts[1].strip(), " ".join(clean_parts)
     return full_title.strip(), "", ""
-
 
 # ----------------------------------------------------------------------
 # 2) ─── PAID‑FEED TITLE SPLITTER  (removes <i> lock icon) ─────────────
