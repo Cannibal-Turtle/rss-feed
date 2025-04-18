@@ -94,3 +94,26 @@ get_host_utils("Dragonholic")
    - In `host_utils.py`, create new site‑specific functions and group them in a new dictionary. Update `get_host_utils(host)` to return that dictionary.
 
 Following these steps keeps your feed generator modular and easy to update.
+
+## 📄 Sample Output (What the Final RSS Feed Looks Like)
+Each generated .xml feed (free or paid) will contain structured <item> entries enriched with metadata like volume, chapter name, coin cost, Discord role, and more.
+
+```
+<item>
+  <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
+  <volume>Arc 5: The Fake Daughter Will Not Be a Cannon Fodder</volume>
+  <chaptername>Chapter 250</chaptername>
+  <nameextend>***Uglier Than a Monkey***</nameextend>
+  <link>https://dragonholic.com/novel/.../chapter-250/</link>
+  <description><![CDATA[A deadly twist awaits in the mirror world...]]></description>
+  <category>SFW</category>
+  <translator>Cannibal Turtle</translator>
+  <discord_role_id><![CDATA[<@&1329XXXXXX>]]></discord_role_id>
+  <featuredImage url="https://dragonholic.com/.../cover.jpg"/>
+  <coin>🔥 10</coin>
+  <pubDate>Fri, 18 Apr 2025 12:00:00 +0000</pubDate>
+  <host>Dragonholic</host>
+  <hostLogo url="https://dragonholic.com/.../logo.png"/>
+  <guid isPermaLink="false">chapter-250-guid</guid>
+</item>
+```
