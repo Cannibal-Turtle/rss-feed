@@ -70,10 +70,13 @@ def get_nsfw_novels():
 - **`split_title_dragonholic(full_title)`** → Splits a chapter title into `main_title`, `chaptername`, and `nameextend`.  
 - **`chapter_num_dragonholic(chaptername)`** → Extracts numeric values from chapter names.  
 - **`clean_description(raw_desc)`** → Cleans raw HTML descriptions by removing unnecessary elements.  
-- **`extract_pubdate_from_soup(chap)`** → Parses chapter publication dates, handling absolute and relative dates.  
+- **`extract_pubdate_from_soup(chap)`** → Parses chapter `<li>` elements to extract absolute or relative publication dates.
 - **`novel_has_paid_update_async(session, novel_url)`** → Checks if a novel has a premium (paid) update within the last 7 days.
+- **`scrape_paid_chapters_async(session, novel_url, host)`** → Scrapes the paid chapter list from Dragonholic. ✅ Also extracts the volume name for each chapter if it's grouped by volume on the site (e.g. `"Chapter 2: Phantom Lord Arc"`).
+- **`format_volume_from_url(url, main_title)`** → Utility to infer volume names from URLs.
 - **`split_comment_title_dragonholic(comment_title)`** → Extracts the novel title from the comment title string.
-- **`extract_chapter_dragonholic(link)`** → Converts the last URL segment (if there are more than two segments) into a human‑readable chapter string (or returns "Homepage" if not).
+- **`extract_chapter_dragonholic(link)`** → Extracts a readable chapter label from a URL (e.g., `chapter-250-the-reveal` → `"Chapter 250 The Reveal"`).
+> 💡 Note: For Dragonholic paid chapters, volume names are scraped directly from the DOM (e.g., li.parent.has-child > a.has-child). No need to reconstruct them from URLs.
   
 ### **Host Utility Dispatcher**  
 To get the appropriate utility functions for a specific host, use:  
