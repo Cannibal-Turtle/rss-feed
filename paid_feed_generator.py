@@ -55,6 +55,7 @@ async def process_novel(session, host, novel_title):
                 # Build final strings
                 chaptername = raw_chaptername
                 nameextend  = f"***{raw_nameextend}***" if raw_nameextend else ""
+                volume = chap.get("volume", "")
                 
                 pub_date = chap["pubDate"]
                 if pub_date.tzinfo is None:
@@ -72,6 +73,7 @@ async def process_novel(session, host, novel_title):
                     description=chap["description"],
                     guid=PyRSS2Gen.Guid(chap["guid"], isPermaLink=False),
                     pubDate=pub_date,
+                    volume=volume,
                     chaptername=chaptername,
                     nameextend=nameextend,
                     coin=chap.get("coin", ""),
@@ -81,7 +83,8 @@ async def process_novel(session, host, novel_title):
         return items
 
 class MyRSSItem(PyRSS2Gen.RSSItem):
-    def __init__(self, *args, chaptername="", nameextend="", coin="", host="", **kwargs):
+    def __init__(self, *args, volume="", chaptername="", nameextend="", coin="", host="", **kwargs):
+        self.volume      = volume
         self.chaptername = chaptername
         self.nameextend  = nameextend
         self.coin        = coin
@@ -91,6 +94,7 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
     def writexml(self, writer, indent="", addindent="", newl=""):
         writer.write(indent + "  <item>" + newl)
         writer.write(indent + "    <title>%s</title>" % escape(self.title) + newl)
+        writer.write(indent + "    <volume>%s</volume>" % escape(self.volume) + newl)
         writer.write(indent + "    <chaptername>%s</chaptername>" % escape(self.chaptername) + newl)
 
         formatted_nameextend = self.nameextend.strip()
