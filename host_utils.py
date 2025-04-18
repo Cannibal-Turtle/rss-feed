@@ -112,6 +112,7 @@ async def scrape_paid_chapters_async(session, novel_url: str, host: str):
             chap, ext = split_paid_chapter_dragonholic(e.title)
             chapters.append(
                 dict(
+                    volume=vol_label,
                     chaptername=chap,
                     nameextend=ext,
                     link=e.link,
@@ -171,6 +172,7 @@ async def scrape_paid_chapters_async(session, novel_url: str, host: str):
 
                 chapters.append(
                     dict(
+                        volume=vol_label,
                         chaptername=chap_name,
                         nameextend=nameext,
                         link=href,
