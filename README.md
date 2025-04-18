@@ -75,7 +75,7 @@ def get_nsfw_novels():
 - **`scrape_paid_chapters_async(session, novel_url, host)`** → Scrapes the paid chapter list from Dragonholic.
 - **`format_volume_from_url(url, main_title)`** → Utility to infer volume names from URLs.
 - **`split_comment_title_dragonholic(comment_title)`** → Extracts the novel title from the comment title string.
-- **`extract_chapter_dragonholic(link)`** → Extracts a readable chapter label from a URL (e.g., `chapter-250-the-reveal` → `"Chapter 250 The Reveal"`).
+- **`extract_chapter_dragonholic(link)`** → Extracts a readable chapter label from a URL.
 > 💡 Note: For Dragonholic paid chapters, volume names are scraped directly from the DOM (e.g., li.parent.has-child > a.has-child). No need to reconstruct them from URLs.
   
 ### **Host Utility Dispatcher**  
