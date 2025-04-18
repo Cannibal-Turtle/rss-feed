@@ -34,6 +34,7 @@ def split_title_dragonholic(full_title: str):
         return parts[0].strip(), parts[1].strip(), " ".join(clean_parts)
     return full_title.strip(), "", ""
 
+
 # ----------------------------------------------------------------------
 # 2) ─── PAID‑FEED TITLE SPLITTER  (removes <i> lock icon) ─────────────
 # ----------------------------------------------------------------------
@@ -67,6 +68,50 @@ def extract_pubdate_from_soup(li) -> datetime.datetime:
         # relative (e.g. “3 hours ago”) – fall back to “now”
         return datetime.datetime.now(datetime.timezone.utc)
 
+def format_volume_from_url(url: str, main_title: str) -> str:
+    parsed = urlparse(url)
+    segments = [seg for seg in parsed.path.split("/") if seg]
+    try:
+        slug = main_title.replace(" ", "-").lower()
+        idx = segments.index(slug)
+        post_slug = segments[idx + 1:]
+        if len(post_slug) >= 2:
+            raw_volume = unquote(post_slug[0]).strip("/")
+
+            # Keep original for fallback
+            original = raw_volume
+
+            # Normalize separators
+            raw = raw_volume.replace("_", "-").strip("-")
+            parts = raw.split("-")
+            if not parts:
+                return original
+
+            # Keywords that should trigger colon logic
+            colon_keywords = {"volume", "chapter", "vol", "chap", "arc", "world", "plane", "story", "v"}
+
+            lead = parts[0].lower()
+            if lead in colon_keywords and len(parts) >= 2 and parts[1].isdigit():
+                number = parts[1]
+                rest = parts[2:]
+                label = lead.capitalize() if lead != "v" else "V" + number
+                if lead == "v":
+                    # special V3 case (already handled above)
+                    return f"{label}: {' '.join(p.capitalize() for p in rest)}" if rest else label
+                else:
+                    title = " ".join(p.capitalize() for p in rest)
+                    return f"{label} {number}: {title}" if rest else f"{label} {number}"
+
+            # If lead is a number (e.g. 3-the-dawn)
+            if lead.isdigit() and len(parts) > 1:
+                title = " ".join(p.capitalize() for p in parts[1:])
+                return f"{lead}: {title}"
+
+            # Otherwise just title-case everything, preserve special characters
+            return " ".join(p.capitalize() if p.isascii() else p for p in parts)
+    except Exception:
+        pass
+    return ""
 
 async def fetch_page(session: aiohttp.ClientSession, url: str) -> str:
     try:
