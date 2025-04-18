@@ -6,7 +6,7 @@ import PyRSS2Gen
 import xml.dom.minidom
 from xml.sax.saxutils import escape
 from collections import defaultdict
-from host_utils import get_host_utils
+from host_utils import get_host_utils, format_volume_from_url
 
 # Import mapping functions and data from novel_mappings.py
 from novel_mappings import (
