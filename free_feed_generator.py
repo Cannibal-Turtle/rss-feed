@@ -4,6 +4,8 @@ import PyRSS2Gen
 import xml.dom.minidom
 import re
 from xml.sax.saxutils import escape
+from host_utils import get_host_utils
+from urllib.parse import urlparse, unquote
 
 # Import mapping functions and data from novel_mappings.py
 from novel_mappings import (
@@ -17,9 +19,6 @@ from novel_mappings import (
     get_nsfw_novels
 )
 
-# Import host utilities dispatcher from host_utils.py
-from host_utils import get_host_utils
-
 def compact_cdata(xml_str):
     """
     Finds <description><![CDATA[ ... ]]></description> sections and replaces
@@ -32,8 +31,54 @@ def compact_cdata(xml_str):
         return f"{start}{compact}{end}"
     return pattern.sub(repl, xml_str)
 
+def format_volume_from_url(url: str, main_title: str) -> str:
+    parsed = urlparse(url)
+    segments = [seg for seg in parsed.path.split("/") if seg]
+    try:
+        slug = main_title.replace(" ", "-").lower()
+        idx = segments.index(slug)
+        post_slug = segments[idx + 1:]
+        if len(post_slug) >= 2:
+            raw_volume = unquote(post_slug[0]).strip("/")
+
+            # Keep original for fallback
+            original = raw_volume
+
+            # Normalize separators
+            raw = raw_volume.replace("_", "-").strip("-")
+            parts = raw.split("-")
+            if not parts:
+                return original
+
+            # Keywords that should trigger colon logic
+            colon_keywords = {"volume", "chapter", "vol", "chap", "arc", "world", "plane", "story", "v"}
+
+            lead = parts[0].lower()
+            if lead in colon_keywords and len(parts) >= 2 and parts[1].isdigit():
+                number = parts[1]
+                rest = parts[2:]
+                label = lead.capitalize() if lead != "v" else "V" + number
+                if lead == "v":
+                    # special V3 case (already handled above)
+                    return f"{label}: {' '.join(p.capitalize() for p in rest)}" if rest else label
+                else:
+                    title = " ".join(p.capitalize() for p in rest)
+                    return f"{label} {number}: {title}" if rest else f"{label} {number}"
+
+            # If lead is a number (e.g. 3-the-dawn)
+            if lead.isdigit() and len(parts) > 1:
+                title = " ".join(p.capitalize() for p in parts[1:])
+                return f"{lead}: {title}"
+
+            # Otherwise just title-case everything, preserve special characters
+            return " ".join(p.capitalize() if p.isascii() else p for p in parts)
+    except Exception:
+        pass
+    return ""
+
 class MyRSSItem(PyRSS2Gen.RSSItem):
-    def __init__(self, *args, chaptername="", nameextend="", host="", **kwargs):
+    def __init__(self, *args, volume="", chaptername="", nameextend="", host="", **kwargs):
+        self.volume = volume
         self.chaptername = chaptername
         self.nameextend = nameextend
         self.host = host  # e.g., "Dragonholic", "Foxaholic", etc.
@@ -42,6 +87,7 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
     def writexml(self, writer, indent="", addindent="", newl=""):
         writer.write(indent + "  <item>" + newl)
         writer.write(indent + "    <title>%s</title>" % escape(self.title) + newl)
+        writer.write(indent + "    <volume>%s</volume>" % escape(self.volume) + newl)
         writer.write(indent + "    <chaptername>%s</chaptername>" % escape(self.chaptername) + newl)
         formatted_nameextend = f"***{self.nameextend}***" if self.nameextend.strip() else ""
         writer.write(indent + "    <nameextend>%s</nameextend>" % escape(formatted_nameextend) + newl)
@@ -118,6 +164,8 @@ def main():
         for entry in parsed_feed.entries:
             # Use the host-specific split_title function.
             main_title, chaptername, nameextend = utils["split_title"](entry.title)
+            # --- Volume detection from link ---
+            volume = format_volume_from_url(entry.link, main_title)
             # Retrieve novel details using the host and main title.
             novel_details = get_novel_details(host, main_title)
             if not novel_details:
@@ -130,6 +178,7 @@ def main():
                 description=entry.description,
                 guid=PyRSS2Gen.Guid(entry.id, isPermaLink=False),
                 pubDate=pub_date,
+                volume=volume,
                 chaptername=chaptername,
                 nameextend=nameextend,
                 host=host
