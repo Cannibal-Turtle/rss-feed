@@ -72,7 +72,7 @@ def get_nsfw_novels():
 - **`clean_description(raw_desc)`** → Cleans raw HTML descriptions by removing unnecessary elements.  
 - **`extract_pubdate_from_soup(chap)`** → Parses chapter `<li>` elements to extract absolute or relative publication dates.
 - **`novel_has_paid_update_async(session, novel_url)`** → Checks if a novel has a premium (paid) update within the last 7 days.
-- **`scrape_paid_chapters_async(session, novel_url, host)`** → Scrapes the paid chapter list from Dragonholic. ✅ Also extracts the volume name for each chapter if it's grouped by volume on the site (e.g. `"Chapter 2: Phantom Lord Arc"`).
+- **`scrape_paid_chapters_async(session, novel_url, host)`** → Scrapes the paid chapter list from Dragonholic.
 - **`format_volume_from_url(url, main_title)`** → Utility to infer volume names from URLs.
 - **`split_comment_title_dragonholic(comment_title)`** → Extracts the novel title from the comment title string.
 - **`extract_chapter_dragonholic(link)`** → Extracts a readable chapter label from a URL (e.g., `chapter-250-the-reveal` → `"Chapter 250 The Reveal"`).
