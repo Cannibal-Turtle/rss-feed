@@ -99,7 +99,7 @@ get_host_utils("Dragonholic")
 Following these steps keeps your feed generator modular and easy to update.
 
 ## 📄 Sample Output (What the Final RSS Feed Looks Like)
-Each generated .xml feed (free or paid) will contain structured <item> entries enriched with metadata like volume, chapter name, coin cost, Discord role, and more.
+Each generated .xml feed (free or paid) will contain structured <item> entries enriched with metadata like volume, chapter name, link, description, translator, Discord role, hosting site, and more.
 
 ```
 <item>
