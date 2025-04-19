@@ -306,6 +306,7 @@ DRAGONHOLIC_UTILS = {
     "split_title": split_title_dragonholic,
     # Paid‑feed stuff
     "split_paid_title": split_paid_chapter_dragonholic,
+    "format_volume_from_url": format_volume_from_url,
     "chapter_num": chapter_num_dragonholic,
     "novel_has_paid_update_async": novel_has_paid_update_async,
     "scrape_paid_chapters_async": scrape_paid_chapters_async,
