@@ -68,56 +68,49 @@ def extract_pubdate_from_soup(li) -> datetime.datetime:
         # relative (e.g. “3 hours ago”) – fall back to “now”
         return datetime.datetime.now(datetime.timezone.utc)
 
-def format_volume_from_url(url: str, main_title: str) -> str:
-    parsed = urlparse(url)
-    segments = [seg for seg in parsed.path.split("/") if seg]
-    try:
-        # 1) lowercase
-        clean = main_title.lower()
-        # 2) strip out _all_ ASCII punctuation (keep letters, digits, whitespace, hyphens)
-        clean = re.sub(r"[^\w\s-]", "", clean)
-        # 3) spaces → hyphens
-        slug = re.sub(r"\s+", "-", clean)
-        # 4) collapse any runs of “--” into a single “-”
-        slug = re.sub(r"-{2,}", "-", slug).strip("-")
-        idx = segments.index(slug)
-        post_slug = segments[idx + 1:]
-        if len(post_slug) >= 2:
-            raw_volume = unquote(post_slug[0]).strip("/")
+def format_volume_from_url(url: str) -> str:
+    """
+    Given a Dragonholic chapter URL, pull out the first folder
+    after /novel/<slug>/ as a human‑readable volume/arc label.
+    Returns "" if there is no separate volume segment.
+    """
+    # split out non‑empty path segments
+    segments = [seg for seg in urlparse(url).path.split("/") if seg]
 
-            # Keep original for fallback
-            original = raw_volume
+    # only if we see: ["novel", "<slug>", "<volume‑slug>", "chapter‑xxx", …]
+    if len(segments) >= 4 and segments[0] == "novel":
+        raw = unquote(segments[2]).strip("/")
+        # normalize underscores → hyphens, strip extra hyphens
+        raw = raw.replace("_", "-").strip("-")
+        parts = raw.split("-")
+        if not parts:
+            return raw
 
-            # Normalize separators
-            raw = raw_volume.replace("_", "-").strip("-")
-            parts = raw.split("-")
-            if not parts:
-                return original
+        colon_keywords = {
+            "volume", "chapter", "vol", "chap", "arc",
+            "world", "plane", "story", "v"
+        }
+        lead = parts[0].lower()
 
-            # Keywords that should trigger colon logic
-            colon_keywords = {"volume", "chapter", "vol", "chap", "arc", "world", "plane", "story", "v"}
+        # e.g. “volume-3” or “vol-2-title”
+        if lead in colon_keywords and len(parts) >= 2 and parts[1].isdigit():
+            num  = parts[1]
+            rest = parts[2:]
+            label = lead.capitalize() if lead != "v" else "V" + num
+            if lead == "v":
+                return f"{label}: {' '.join(p.capitalize() for p in rest)}" if rest else label
+            title = " ".join(p.capitalize() for p in rest)
+            return f"{label} {num}: {title}" if rest else f"{label} {num}"
 
-            lead = parts[0].lower()
-            if lead in colon_keywords and len(parts) >= 2 and parts[1].isdigit():
-                number = parts[1]
-                rest = parts[2:]
-                label = lead.capitalize() if lead != "v" else "V" + number
-                if lead == "v":
-                    # special V3 case (already handled above)
-                    return f"{label}: {' '.join(p.capitalize() for p in rest)}" if rest else label
-                else:
-                    title = " ".join(p.capitalize() for p in rest)
-                    return f"{label} {number}: {title}" if rest else f"{label} {number}"
+        # e.g. “3-the-dawn” → “3: The Dawn”
+        if lead.isdigit() and len(parts) > 1:
+            title = " ".join(p.capitalize() for p in parts[1:])
+            return f"{lead}: {title}"
 
-            # If lead is a number (e.g. 3-the-dawn)
-            if lead.isdigit() and len(parts) > 1:
-                title = " ".join(p.capitalize() for p in parts[1:])
-                return f"{lead}: {title}"
+        # otherwise title‑case each ASCII chunk, leave non‑ASCII alone
+        return " ".join(p.capitalize() if p.isascii() else p for p in parts)
 
-            # Otherwise just title-case everything, preserve special characters
-            return " ".join(p.capitalize() if p.isascii() else p for p in parts)
-    except Exception:
-        pass
+    # no distinct volume folder → empty
     return ""
 
 async def fetch_page(session: aiohttp.ClientSession, url: str) -> str:
