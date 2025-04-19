@@ -125,9 +125,14 @@ async def fetch_page(session: aiohttp.ClientSession, url: str) -> str:
         return ""
 
 def slug(text: str) -> str:
-    s = text.lower()
-    s = re.sub(r"[^\w\s-]", "", s)
-    s = re.sub(r"\s+", "-", s)
+    # 1) lowercase + trim
+    s = text.lower().strip()
+    # 2) drop only ASCII punctuation (keep letters, digits, whitespace, hyphens **and** all non‑ASCII)
+    s = re.sub(r"[^\w\s\u0080-\uFFFF-]", "", s)
+    # 3) collapse spaces/underscores into single hyphens
+    s = re.sub(r"[\s_]+", "-", s)
+    # 4) collapse multiple hyphens if any
+    s = re.sub(r"-{2,}", "-", s)
     return s
 
 # ----------------------------------------------------------------------
