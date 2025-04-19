@@ -124,6 +124,11 @@ async def fetch_page(session: aiohttp.ClientSession, url: str) -> str:
         print(f"⚠️  Network error fetching {url}: {e}")
         return ""
 
+def slug(text: str) -> str:
+    s = text.lower()
+    s = re.sub(r"[^\w\s-]", "", s)
+    s = re.sub(r"\s+", "-", s)
+    return s
 
 # ----------------------------------------------------------------------
 # 4) ─── QUICK “HAS PREMIUM UPDATE?” CHECK ─────────────────────────────
@@ -153,24 +158,23 @@ async def scrape_paid_chapters_async(session, novel_url: str, host: str):
     feed_url = HOSTING_SITE_DATA.get(host, {}).get("paid_feed_url")
     if feed_url:                       # -------- use the external feed
         parsed = feedparser.parse(feed_url)
-        chapters = []
+        paid = []                
         for e in parsed.entries:
             chap, ext = split_paid_chapter_dragonholic(e.title)
-            chapters.append(
-                dict(
-                    volume=vol_label,
-                    chaptername=chap,
-                    nameextend=ext,
-                    link=e.link,
-                    description=e.description,
-                    pubDate=datetime.datetime(*e.published_parsed[:6], tzinfo=datetime.timezone.utc),
-                    guid=e.id or chap,
-                    coin="",
-                )
-            )
-        return chapters, ""
+            vol_label = ""
+            paid.append({
+                "volume":      vol_label,
+                "chaptername": chap,
+                "nameextend":  ext,
+                "link":        e.link,
+                "description": e.description,
+                "pubDate":     datetime.datetime(*e.published_parsed[:6], tzinfo=datetime.timezone.utc),
+                "guid":        e.id or chap,
+                "coin":        "",
+            })
+        return paid, ""                 
 
-    # -------------------------------------------------- scrape website
+# -------------------------------------------------- scrape website
     html = await fetch_page(session, novel_url)
     if not html:
         return [], ""
@@ -179,96 +183,97 @@ async def scrape_paid_chapters_async(session, novel_url: str, host: str):
     main_desc_div = soup.select_one("div.description-summary")
     main_desc = clean_description(main_desc_div.decode_contents()) if main_desc_div else ""
 
-    chapters = []
+    paid = []
     now = datetime.datetime.now(datetime.timezone.utc)
 
-    # —— (a) volume blocks -------------------------------------------------
+    # —— (a) volume blocks (Dragonholic‑public style) -----------------------
     vol_ul = soup.select_one("ul.main.version-chap.volumns")
     if vol_ul:
-        for parent in vol_ul.select("li.parent.has-child"):
-            vol_label = parent.select_one("a.has-child").get_text(strip=True)
-            # grab the first number inside the volume label for URL building
-            m_vol = re.search(r"(\d+(?:\.\d+)?)", vol_label)
-            vol_id = m_vol.group(1) if m_vol else vol_label.replace(" ", "-").lower()
+        for vol_parent in vol_ul.select("li.parent.has-child"):
+            vol_label   = vol_parent.select_one("a.has-child").get_text(strip=True)
+            vol_display = vol_label
 
-            for li in parent.select("ul.sub-chap-list li.wp-manga-chapter"):
-                if "free-chap" in li.get("class", []):
-                    continue
-                pub = extract_pubdate_from_soup(li)
-                if pub < now - datetime.timedelta(days=7):
-                    continue
+            for chap_li in vol_parent.select("ul.sub-chap-list li.wp-manga-chapter"):
+                if "free-chap" in chap_li.get("class", []): continue
+                pub = extract_pubdate_from_soup(chap_li)
+                if pub < now - datetime.timedelta(days=7): continue
 
-                a = li.find("a")
-                raw = a.get_text(" ", strip=True)
-                chap_name, nameext = split_paid_chapter_dragonholic(raw)
+                a = chap_li.find("a")
+                raw_html = a.decode_contents()
 
-                # build link
-                href = (a["href"] or "").strip()
-                if not href or href == "#":
-                    num = re.search(r"(\d+(?:\.\d+)?)", chap_name)
-                    chap_id = num.group(1) if num else chap_name.replace(" ", "-").lower()
-                    href = f"{novel_url}{vol_id}/{chap_id}/"
+                # 1) chaptername = everything before the first HTML tag
+                m1 = re.match(r'\s*([^<]+)', raw_html)
+                chap_name = m1.group(1).strip() if m1 else raw_html.strip()
 
-                guid = next(
-                    (c.split("data-chapter-")[1] for c in li.get("class", []) if c.startswith("data-chapter-")),
-                    chap_name,
-                )
-                coin = li.select_one("span.coin")
+                # 2) nameextend = whatever follows the first “</i> – ”
+                m2 = re.search(r'</i>\s*[-–]\s*(.+)', raw_html)
+                nameext = m2.group(1).strip() if m2 else ""
+
+                href = a.get("href", "").strip()
+                if href and href != "#":
+                    link = href
+                else:
+                    # slug both the volume **label** and the chapter **text**
+                    link = f"{novel_url}{slug(vol_display)}/{slug(chap_name)}/"
+
+                guid = next((c.split("data-chapter-")[1]
+                             for c in chap_li.get("class", [])
+                             if c.startswith("data-chapter-")),
+                            slug(chap_name))
+                coin = chap_li.select_one("span.coin")
                 coin = coin.get_text(strip=True) if coin else ""
 
-                chapters.append(
-                    dict(
-                        volume=vol_label,
-                        chaptername=chap_name,
-                        nameextend=nameext,
-                        link=href,
-                        description=main_desc,
-                        pubDate=pub,
-                        guid=guid,
-                        coin=coin,
-                    )
-                )
+                paid.append({
+                    "volume":      vol_display,
+                    "chaptername": chap_name,
+                    "nameextend":  nameext,
+                    "link":        link,
+                    "description": main_desc,
+                    "pubDate":     pub,
+                    "guid":        guid,
+                    "coin":        coin
+                })
 
-    # —— (b) chapters that are not grouped by volume -----------------------
+    # —— (b) no‑volume (same pattern) --------------------------------------
     no_vol_ul = soup.select_one("ul.main.version-chap.no-volumn")
     if no_vol_ul:
-        for li in no_vol_ul.select("li.wp-manga-chapter"):
-            if "free-chap" in li.get("class", []):
-                continue
-            pub = extract_pubdate_from_soup(li)
-            if pub < now - datetime.timedelta(days=7):
-                continue
+        for chap_li in no_vol_ul.select("li.wp-manga-chapter"):
+            if "free-chap" in chap_li.get("class", []): continue
+            pub = extract_pubdate_from_soup(chap_li)
+            if pub < now - datetime.timedelta(days=7): continue
 
-            a = li.find("a")
-            raw = a.get_text(" ", strip=True)
-            chap_name, nameext = split_paid_chapter_dragonholic(raw)
+            a = chap_li.find("a")
+            raw_html = a.decode_contents()
 
-            href = (a["href"] or "").strip()
-            if not href or href == "#":
-                num = re.search(r"(\d+(?:\.\d+)?)", chap_name)
-                chap_id = num.group(1) if num else chap_name.replace(" ", "-").lower()
-                href = f"{novel_url}chapter-{chap_id}/"
+            m1 = re.match(r'\s*([^<]+)', raw_html)
+            chap_name = m1.group(1).strip() if m1 else raw_html.strip()
+            m2 = re.search(r'</i>\s*[-–]\s*(.+)', raw_html)
+            nameext = m2.group(1).strip() if m2 else ""
 
-            guid = next(
-                (c.split("data-chapter-")[1] for c in li.get("class", []) if c.startswith("data-chapter-")),
-                chap_name,
-            )
-            coin = li.select_one("span.coin")
+            href = a.get("href", "").strip()
+            if href and href != "#":
+                link = href
+            else:
+                link = f"{novel_url}{slug(chap_name)}/"
+
+            guid = next((c.split("data-chapter-")[1]
+                         for c in chap_li.get("class", [])
+                         if c.startswith("data-chapter-")),
+                        slug(chap_name))
+            coin = chap_li.select_one("span.coin")
             coin = coin.get_text(strip=True) if coin else ""
 
-            chapters.append(
-                dict(
-                    chaptername=chap_name,
-                    nameextend=nameext,
-                    link=href,
-                    description=main_desc,
-                    pubDate=pub,
-                    guid=guid,
-                    coin=coin,
-                )
-            )
-
-    return chapters, main_desc
+            paid.append({
+                "volume":      "",
+                "chaptername": chap_name,
+                "nameextend":  nameext,
+                "link":        link,
+                "description": main_desc,
+                "pubDate":     pub,
+                "guid":        guid,
+                "coin":        coin
+            })
+    return paid,   main_desc
 
 
 # ----------------------------------------------------------------------
