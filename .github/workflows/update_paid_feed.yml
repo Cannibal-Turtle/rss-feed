@@ -36,6 +36,7 @@ jobs:
           git config --global user.email "action@github.com"
           git add paid_chapters_feed.xml
           git commit -m "Update paid feed XML" || echo "No changes to commit"
+          git pull --rebase
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
           git push
 
