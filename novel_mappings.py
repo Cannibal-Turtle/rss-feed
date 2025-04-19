@@ -38,8 +38,8 @@ HOSTING_SITE_DATA = {
     },
     "Lily on The Valley": {
         "feed_url": "",
-        "comments_feed_url": "",
         "paid_feed_url": "",
+        "comments_feed_url": "",
         "translator": "",
         "host_logo": "",
         "novels": {}
