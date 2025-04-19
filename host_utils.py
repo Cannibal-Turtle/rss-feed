@@ -72,7 +72,9 @@ def format_volume_from_url(url: str, main_title: str) -> str:
     parsed = urlparse(url)
     segments = [seg for seg in parsed.path.split("/") if seg]
     try:
-        slug = main_title.replace(" ", "-").lower()
+        clean = main_title.lower()
+        clean = re.sub(r"[^\w\s-]", "", clean)       # drop punctuation
+        slug = re.sub(r"\s+", "-", clean).strip("-") # spaces → hyphens
         idx = segments.index(slug)
         post_slug = segments[idx + 1:]
         if len(post_slug) >= 2:
