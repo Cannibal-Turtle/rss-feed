@@ -119,7 +119,7 @@ def main():
             # Use the host-specific split_title function.
             main_title, chaptername, nameextend = utils["split_title"](entry.title)
             # --- Volume detection from link ---
-            volume = format_volume_from_url(entry.link, main_title)
+            volume = format_volume_from_url(entry.link)
             # Retrieve novel details using the host and main title.
             novel_details = get_novel_details(host, main_title)
             if not novel_details:
