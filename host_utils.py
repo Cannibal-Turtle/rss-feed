@@ -308,8 +308,11 @@ def split_reply_chain_dragonholic(raw: str) -> tuple[str,str]:
     If raw begins with 'In reply to <a…>NAME</a>. ', strip that off
     and return (f"In reply to NAME", remainder). Otherwise return ("", raw).
     """
-    # collapse whitespace so multiline CDATA doesn’t break us
-    t = " ".join(raw.split())
+    # 1) collapse all whitespace so multiline CDATA doesn’t break us
+    ws_collapsed = " ".join(raw.split())
+    # 2) unescape HTML entities (&lt;, &gt;, &quot;, etc.) into real markup
+    from html import unescape
+    t = unescape(ws_collapsed)
     m = re.match(
         r'\s*In reply to\s*<a [^>]+>([^<]+)</a>\.\s*(.*)$',
         t,
