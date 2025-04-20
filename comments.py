@@ -25,9 +25,10 @@ def compact_cdata(xml_str):
 # ---------------- Comments Feed Item ----------------
 
 class MyCommentRSSItem(PyRSS2Gen.RSSItem):
-    def __init__(self, *args, novel_title="", host="", **kwargs):
+    def __init__(self, *args, novel_title="", host="", reply_chain="", **kwargs):
         self.novel_title = novel_title  # As derived from the comment's title.
         self.host = host
+        self.reply_chain  = reply_chain
         super().__init__(*args, **kwargs)
     def writexml(self, writer, indent="", addindent="", newl=""):
         writer.write(indent + "  <item>" + newl)
@@ -50,6 +51,14 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
         writer.write(indent + "    <link>%s</link>" % escape(self.link) + newl)
         writer.write(indent + "    <dc:creator><![CDATA[%s]]></dc:creator>" % escape(self.author) + newl)
         writer.write(indent + "    <description><![CDATA[%s]]></description>" % self.description + newl)
+        # if there's a reply chain, emit it as its own element
+        if self.reply_chain:
+            writer.write(
+                indent
+                + "    <reply_chain><![CDATA[%s]]></reply_chain>"
+                % escape(self.reply_chain)
+                + newl
+            )
         # Get other metadata using host-specific functions.
         translator = utils.get("get_host_translator", lambda host: "")(self.host)
         writer.write(indent + "    <translator>%s</translator>" % escape(translator) + newl)
@@ -122,13 +131,20 @@ def main():
                 continue
 
             pub_date = datetime.datetime(*entry.published_parsed[:6])
-            description = entry.get("content:encoded", entry.get("description", ""))
+            # 1) grab the raw CDATA (could contain an <a>… tag)
+            raw = entry.get("content:encoded", entry.get("description", ""))
+        
+            # 2) delegate to host_utils to split off any "In reply to…" prefix
+            reply_chain, description = utils["split_reply_chain"](raw)
+        
+            # 3) pass both into your RSS item
             item = MyCommentRSSItem(
                 novel_title=novel_title,
                 title=novel_title,
                 link=entry.link,
                 author=entry.get("author", ""),
                 description=description,
+                reply_chain=reply_chain,
                 guid=PyRSS2Gen.Guid(entry.id, isPermaLink=False),
                 pubDate=pub_date,
                 host=host
