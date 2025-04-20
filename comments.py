@@ -52,7 +52,6 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
         writer.write(indent + "    <pubDate>%s</pubDate>" % 
                      self.pubDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
         writer.write(indent + "    <description><![CDATA[%s]]></description>" % self.description + newl)
-        writer.write(indent + "    <content:encoded><![CDATA[%s]]></content:encoded>" % self.description + newl)
         # Get other metadata using host-specific functions.
         translator = utils.get("get_host_translator", lambda host: "")(self.host)
         writer.write(indent + "    <translator>%s</translator>" % escape(translator) + newl)
@@ -107,7 +106,7 @@ def main():
         parsed_feed = feedparser.parse(comments_feed_url)
         utils = get_host_utils(host)
         # Get the host-specific function to split comment titles.
-        split_comment_title = utils.get("split_comment_title", lambda title: title)
+        split_comment_title = utils.get("split_comment_title", lambda title: re.sub(r'^Comment on (.+?) by .+$', r'\1', title).strip())
         
         for entry in parsed_feed.entries:
             # Use host-specific logic to extract the novel title from the comment title.
