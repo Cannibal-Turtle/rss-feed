@@ -303,6 +303,24 @@ def extract_chapter_dragonholic(link: str):
     nice = unquote(segs[-1]).replace("-", " ")
     return " ".join(word.capitalize() for word in nice.split())
 
+def split_reply_chain_dragonholic(raw: str) -> tuple[str,str]:
+    """
+    If raw begins with 'In reply to <a…>NAME</a>. ', strip that off
+    and return (f"In reply to NAME", remainder). Otherwise return ("", raw).
+    """
+    # collapse whitespace so multiline CDATA doesn’t break us
+    t = " ".join(raw.split())
+    m = re.match(
+        r'\s*In reply to\s*<a [^>]+>([^<]+)</a>\.\s*(.*)$',
+        t,
+        re.IGNORECASE
+    )
+    if m:
+        name, body = m.group(1).strip(), m.group(2).strip()
+        return f"In reply to {name}", body
+    else:
+        return "", raw.strip()
+
 
 # ----------------------------------------------------------------------
 # 8) ─── DISPATCH TABLE & ENTRY POINT ──────────────────────────────────
@@ -321,6 +339,7 @@ DRAGONHOLIC_UTILS = {
     "extract_pubdate": extract_pubdate_from_soup,
     "split_comment_title": split_comment_title_dragonholic,
     "extract_chapter": extract_chapter_dragonholic,
+    "split_reply_chain": split_reply_chain_dragonholic,
     # simple lambdas to re‑expose mapping data
     "get_novel_details": lambda host, title: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}),
     "get_host_translator": lambda host: HOSTING_SITE_DATA.get(host, {}).get("translator", ""),
