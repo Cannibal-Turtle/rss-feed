@@ -285,9 +285,15 @@ def chapter_num_dragonholic(chaptername: str):
 # 7) ─── COMMENT‑HELPERS (unchanged) ───────────────────────────────────
 # ----------------------------------------------------------------------
 def split_comment_title_dragonholic(comment_title):
-    m = re.search(r"Comment on\s*(.+)\s+by\s+(\S+)\s*$", comment_title, re.IGNORECASE)
+    # normalize whitespace (collapse newlines/tabs into spaces)
+    t = " ".join(comment_title.split())
+    # capture everything after "Comment on " up to the last " by "
+    m = re.search(
+        r"^Comment on\s+(.+?)\s+by\s+.+$",
+        t,
+        re.IGNORECASE
+    )
     return m.group(1).strip() if m else ""
-
 
 def extract_chapter_dragonholic(link: str):
     parsed = urlparse(link)
