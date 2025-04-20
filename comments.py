@@ -53,9 +53,10 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
         writer.write(indent + "    <description><![CDATA[%s]]></description>" % self.description + newl)
         # if there's a reply chain, emit it as its own element
         if self.reply_chain:
+            # add the ᯓ✿ prefix before the reply text
             writer.write(
                 indent
-                + "    <reply_chain><![CDATA[%s]]></reply_chain>"
+                + "    <reply_chain><![CDATA[ᯓ✿ %s]]></reply_chain>"
                 % escape(self.reply_chain)
                 + newl
             )
