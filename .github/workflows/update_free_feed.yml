@@ -1,3 +1,4 @@
+# .github/workflows/update_free_feed.yml
 name: Update Free Feed
 
 on:
@@ -40,7 +41,15 @@ jobs:
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add free_chapters_feed.xml
-          git commit -m "Update XML feed" || echo "No changes to commit"
+          git commit -m "Update free feed XML" || echo "No changes to commit"
           git pull --rebase
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
           git push
+
+      - name: Trigger Discord Webhook Workflow
+        run: |
+          curl -X POST \
+               -H "Accept: application/vnd.github.v3+json" \
+               -H "Authorization: Bearer ${{ secrets.PAT_GITHUB }}" \
+               https://api.github.com/repos/Cannibal-Turtle/discord-webhook/dispatches \
+               -d '{"event_type": "trigger-discord-notify"}'
