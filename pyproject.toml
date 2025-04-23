@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cannibal-turtle-rss-feed"
+version = "0.1.0"
+description = "Novel mapping data for Cannibal Turtle RSS feeds"
+authors = [
+  { name = "Cannibal Turtle", email = "" }
+]
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License"
+]
+
+[project.urls]
+Homepage = "https://github.com/Cannibal-Turtle/rss-feed"
