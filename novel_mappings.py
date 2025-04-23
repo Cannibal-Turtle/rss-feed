@@ -25,7 +25,16 @@ HOSTING_SITE_DATA = {
                 "discord_role_id": "<@&1329391480435114005>",
                 "novel_url": "https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/",
                 "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/177838.jpg",
-                "pub_date_override": {"hour": 12, "minute": 0, "second": 0}
+                "pub_date_override": {"hour": 12, "minute": 0, "second": 0},
+                # ─── webhook-only fields ───
+                "chapter_count": "1184 chapters + 8 extras",
+                "last_chapter": "Extra 8",
+                "start_date": "31/8/2024",
+                "free_feed": "https://cannibal-turtle.github.io/rss-feed/free_chapters_feed.xml",
+                "paid_feed": "https://cannibal-turtle.github.io/rss-feed/paid_chapters_feed.xml",
+                "custom_emoji":   ":man_supervillain:",
+                "discord_role_url":"https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
+                "history_file":   "tvitpa_history.json"
             },
             "Second Novel Title Example": {
                 "discord_role_id": "<@&123456789012345678>",  # Replace with the actual Discord role ID.
