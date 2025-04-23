@@ -7,7 +7,7 @@ name = "cannibal-turtle-rss-feed"
 version = "0.1.0"
 description = "Novel mapping data for Cannibal Turtle RSS feeds"
 authors = [
-  { name = "Cannibal Turtle", email = "" }
+  { name = "Cannibal Turtle"}
 ]
 readme = "README.md"
 requires-python = ">=3.7"
