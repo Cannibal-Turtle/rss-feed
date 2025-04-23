@@ -1,20 +1,24 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "cannibal-turtle-rss-feed"
 version = "0.1.0"
-description = "Novel mapping data for Cannibal Turtle RSS feeds"
-authors = [
-  { name = "Cannibal Turtle"}
-]
+description = "Mapping data for Cannibal Turtle RSS feeds"
+authors = [ { name = "Cannibal Turtle" } ]
 readme = "README.md"
 requires-python = ">=3.7"
+license = { text = "MIT" }
 classifiers = [
   "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: MIT License"
 ]
 
 [project.urls]
 Homepage = "https://github.com/Cannibal-Turtle/rss-feed"
+
+[tool.setuptools]
+# explicitly list each standalone .py you want installed
+py-modules = [
+  "novel_mappings",
+]
