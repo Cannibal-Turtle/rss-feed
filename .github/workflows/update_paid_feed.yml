@@ -53,3 +53,11 @@ jobs:
                  "event_type": "trigger-discord-notify",
                  "client_payload": { "feed": "paid" }
                }'
+
+      - name: Deploy updated feed to Railway
+        uses: railwayapp/railway-action@v2
+        with:
+          projectId: ${{ secrets.RAILWAY_PROJECT_ID }} 
+          serviceName: discord-webhook               
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
