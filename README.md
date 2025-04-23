@@ -20,7 +20,9 @@ This file contains mapping data for each hosting site. When adding a **new novel
     - `novel_url`: The manual URL for the novel’s main page  
     - `featured_image`: The URL for the novel’s featured image
     - `pub_date_override`: The override for the system's default time of scraping
-    - `webhook-only fields` Contains information needed for [webhook-discord](https://github.com/Cannibal-Turtle/discord-webhook/tree/main) scripts.
+    - `webhook-only fields`: Contains information needed for [webhook-discord](https://github.com/Cannibal-Turtle/discord-webhook/tree/main) scripts.
+
+  > 📦 `pyproject.toml` lets other projects (like the Discord webhook script) install this repo as a package using pip. It tells Python where to find `novel_mappings.py` so the webhook scripts can always pull the latest novel data straight from here 🔄✨.
 
 ### Example
 
