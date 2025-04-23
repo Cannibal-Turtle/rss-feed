@@ -55,9 +55,9 @@ jobs:
                }'
 
       - name: Deploy updated feed to Railway
-        uses: railwayapp/railway-action@v2
+        uses: bervProject/railway-deploy@main    # or pin to a release like @0.1.2-beta
         with:
-          projectId: ${{ secrets.RAILWAY_PROJECT_ID }} 
-          serviceName: discord-webhook               
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          # your Railway API token (you can also set this via env)
+          railway_token: ${{ secrets.RAILWAY_TOKEN }}
+          # the exact name of the service you want to redeploy
+          service: "discord-webhook"
