@@ -20,6 +20,7 @@ This file contains mapping data for each hosting site. When adding a **new novel
     - `novel_url`: The manual URL for the novel’s main page  
     - `featured_image`: The URL for the novel’s featured image
     - `pub_date_override`: The override for the system's default time of scraping
+    - `webhook-only fields` Contains information needed for [webhook-discord](https://github.com/Cannibal-Turtle/discord-webhook/tree/main) scripts.
 
 ### Example
 
@@ -37,6 +38,15 @@ HOSTING_SITE_DATA = {
                 "novel_url": "https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/",
                 "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/177838.jpg",
                 "pub_date_override": {"hour": 12, "minute": 0, "second": 0}
+                # ─── webhook-only fields ───
+                "chapter_count": "1184 chapters + 8 extras",
+                "last_chapter": "Extra 8",
+                "start_date": "31/8/2024",
+                "free_feed": "https://cannibal-turtle.github.io/rss-feed/free_chapters_feed.xml",
+                "paid_feed": "https://cannibal-turtle.github.io/rss-feed/paid_chapters_feed.xml",
+                "custom_emoji":   ":man_supervillain:",
+                "discord_role_url":"https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
+                "history_file":   "tvitpa_history.json"
 
             },
             # Second novel here
