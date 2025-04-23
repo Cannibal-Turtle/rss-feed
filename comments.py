@@ -5,6 +5,7 @@ import PyRSS2Gen
 import xml.dom.minidom
 import re
 from xml.sax.saxutils import escape
+from bs4 import BeautifulSoup
 
 # Import your host mapping data and utilities.
 from novel_mappings import HOSTING_SITE_DATA
@@ -132,19 +133,23 @@ def main():
                 continue
 
             pub_date = datetime.datetime(*entry.published_parsed[:6])
-            # 1) grab the raw CDATA (could contain an <a>… tag)
-            raw = entry.get("content:encoded", entry.get("description", ""))
+            # 1) grab the raw HTML
+            raw = entry.get("description", entry.get("content:encoded", ""))
+            
+            # 2) split off the “In reply to…” header (reply_chain) and get only the post HTML
+            reply_chain, post_html = utils["split_reply_chain"](raw)
+            
+            # 3) strip all tags from just the post_html
+            soup         = BeautifulSoup(post_html, "html.parser")
+            description_text = soup.get_text(separator=" ").strip()
         
-            # 2) delegate to host_utils to split off any "In reply to…" prefix
-            reply_chain, description = utils["split_reply_chain"](raw)
-        
-            # 3) pass both into your RSS item
+            # 4) pass both into your RSS item
             item = MyCommentRSSItem(
                 novel_title=novel_title,
                 title=novel_title,
                 link=entry.link,
                 author=entry.get("author", ""),
-                description=description,
+                description=description_text,
                 reply_chain=reply_chain,
                 guid=PyRSS2Gen.Guid(entry.id, isPermaLink=False),
                 pubDate=pub_date,
