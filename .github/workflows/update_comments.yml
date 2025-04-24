@@ -52,5 +52,4 @@ jobs:
                https://api.github.com/repos/Cannibal-Turtle/discord-webhook/dispatches \
                -d '{
                  "event_type": "trigger-discord-comments",
-                 "client_payload": { "feed": "comments" }
                }'
