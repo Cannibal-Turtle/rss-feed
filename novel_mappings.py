@@ -30,8 +30,8 @@ HOSTING_SITE_DATA = {
                 "chapter_count": "1184 chapters + 8 extras",
                 "last_chapter": "Extra 8",
                 "start_date": "31/8/2024",
-                "free_feed": "https://cannibal-turtle.github.io/rss-feed/free_chapters_feed.xml",
-                "paid_feed": "https://cannibal-turtle.github.io/rss-feed/paid_chapters_feed.xml",
+                "free_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml",
+                "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
                 "custom_emoji":   ":man_supervillain:",
                 "discord_role_url":"https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
                 "history_file":   "tvitpa_history.json"
