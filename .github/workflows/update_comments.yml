@@ -51,5 +51,5 @@ jobs:
                -H "Authorization: Bearer $PAT_GITHUB" \
                https://api.github.com/repos/Cannibal-Turtle/discord-webhook/dispatches \
                -d '{
-                 "event_type": "trigger-discord-comments",
+                 "event_type": "trigger-discord-comments"
                }'
