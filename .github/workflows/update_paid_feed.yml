@@ -41,6 +41,9 @@ jobs:
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
           git push
 
+      - name: Wait for RSS to update
+        run: sleep 10
+
       - name: Trigger Discord Webhook Workflow
         env:
           PAT_GITHUB: ${{ secrets.PAT_GITHUB }}
@@ -53,9 +56,6 @@ jobs:
                  "event_type": "trigger-discord-notify",
                  "client_payload": { "feed": "paid" }
                }'
-
-      - name: Wait for RSS to update
-        run: sleep 10
 
       - name: Deploy updated feed to Railway
         uses: bervProject/railway-deploy@main
