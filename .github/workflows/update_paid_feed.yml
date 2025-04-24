@@ -56,3 +56,10 @@ jobs:
 
       - name: Wait for RSS to update
         run: sleep 10
+
+      - name: Deploy updated feed to Railway
+        uses: bervProject/railway-deploy@main
+        with:
+          railway_token: ${{ secrets.RAILWAY_TOKEN }}
+          service: "discord-webhook"
+          args: up --detach
