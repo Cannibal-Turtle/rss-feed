@@ -60,10 +60,3 @@ jobs:
                  "event_type": "trigger-discord-notify",
                  "client_payload": { "feed": "free" }
                }'
-
-      - name: Deploy updated feed to Railway
-        uses: bervProject/railway-deploy@main
-        with:
-          railway_token: ${{ secrets.RAILWAY_TOKEN }}
-          service: "discord-webhook"
-          args: up --detach
