@@ -32,7 +32,7 @@ HOSTING_SITE_DATA = {
                 "start_date": "31/8/2024",
                 "free_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml",
                 "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
-                "custom_emoji":   ":emoji_62:",
+                "custom_emoji":   "<:emoji_62:1365400946330435654>",
                 "discord_role_url":"https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
                 "history_file":   "tvitpa_history.json"
             },
