@@ -34,6 +34,10 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
     def writexml(self, writer, indent="", addindent="", newl=""):
         writer.write(indent + "  <item>" + newl)
         writer.write(indent + "    <title>%s</title>" % escape(self.novel_title) + newl)
+        chapter_url = self.link.split('#')[0]
+        comment_id = self.get_comment_id(self.link)  # Assuming this function returns the comment ID from the link
+        full_chapter_url = f"{chapter_url}#comment-{comment_id}"
+        chapter_number = self.extract_chapter_number(self.link)
         # Retrieve host-specific utilities.
         utils = get_host_utils(self.host)
         # Extract chapter info via host-specific function; fallback to default.
