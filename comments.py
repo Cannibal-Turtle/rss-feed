@@ -49,7 +49,13 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
             else:
                 chapter_info = unquote(segments[-1]).replace('-', ' ')
         writer.write(indent + "    <chapter>%s</chapter>" % escape(chapter_info) + newl)
-        writer.write(indent + "    <link>%s</link>" % escape(self.link) + newl)
+        real_link = self.link
+        if self.link.startswith("https://dragonholic.com/comments/feed"):
+            # use the host_utils builder
+            real_link = get_host_utils(self.host)["build_comment_link"](
+                self.novel_title, self.host, self.link
+            )
+        writer.write(indent + "    <link>%s</link>" % escape(real_link) + newl)
         writer.write(indent + "    <dc:creator><![CDATA[%s]]></dc:creator>" % escape(self.author) + newl)
         writer.write(indent + "    <description><![CDATA[%s]]></description>" % self.description + newl)
         # if there's a reply chain, emit it as its own element
