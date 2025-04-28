@@ -6,7 +6,6 @@ import xml.dom.minidom
 import re
 from xml.sax.saxutils import escape
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse, unquote
 
 # Import your host mapping data and utilities.
 from novel_mappings import HOSTING_SITE_DATA
@@ -27,35 +26,28 @@ def compact_cdata(xml_str):
 # ---------------- Comments Feed Item ----------------
 
 class MyCommentRSSItem(PyRSS2Gen.RSSItem):
-    def __init__(self, *args, novel_title="", host="", reply_chain="", original_entry_title="", **kwargs):
-        self.novel_title          = novel_title
-        self.host                 = host
-        self.reply_chain          = reply_chain
-        self.original_entry_title = original_entry_title
+    def __init__(self, *args, novel_title="", host="", reply_chain="", **kwargs):
+        self.novel_title = novel_title  # As derived from the comment's title.
+        self.host = host
+        self.reply_chain  = reply_chain
         super().__init__(*args, **kwargs)
     def writexml(self, writer, indent="", addindent="", newl=""):
         writer.write(indent + "  <item>" + newl)
         writer.write(indent + "    <title>%s</title>" % escape(self.novel_title) + newl)
         # Retrieve host-specific utilities.
         utils = get_host_utils(self.host)
-        # 1) Try extracting chapter info from the raw RSS entry title
-        chapter_info = ""
-        if self.original_entry_title:
-            m = re.search(r'Comment on (.+?) by .+', self.original_entry_title)
-            if m:
-                chapter_info = m.group(1).strip()
-
-        # 2) Fallback to host_utils.extract_chapter or URL parsing
-        if not chapter_info:
-            if "extract_chapter" in utils:
-                chapter_info = utils["extract_chapter"](self.link)
+        # Extract chapter info via host-specific function; fallback to default.
+        if "extract_chapter" in utils:
+            chapter_info = utils["extract_chapter"](self.link)
+        else:
+            # Default: use the last nonempty segment (if >2 segments) or "Homepage"
+            from urllib.parse import urlparse, unquote
+            parsed = urlparse(self.link)
+            segments = [seg for seg in parsed.path.split('/') if seg]
+            if len(segments) <= 2:
+                chapter_info = "Homepage"
             else:
-                parsed   = urlparse(self.link)
-                segments = [seg for seg in parsed.path.split('/') if seg]
-                if len(segments) <= 2:
-                    chapter_info = "Homepage"
-                else:
-                    chapter_info = unquote(segments[-1]).replace('-', ' ')
+                chapter_info = unquote(segments[-1]).replace('-', ' ')
         writer.write(indent + "    <chapter>%s</chapter>" % escape(chapter_info) + newl)
         writer.write(indent + "    <link>%s</link>" % escape(self.link) + newl)
         writer.write(indent + "    <dc:creator><![CDATA[%s]]></dc:creator>" % escape(self.author) + newl)
@@ -161,8 +153,7 @@ def main():
                 reply_chain=reply_chain,
                 guid=PyRSS2Gen.Guid(entry.id, isPermaLink=False),
                 pubDate=pub_date,
-                host=host,
-                original_entry_title=entry.title
+                host=host
             )
             all_rss_items.append(item)
     
