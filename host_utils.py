@@ -330,6 +330,30 @@ def extract_chapter_dragonholic(link: str) -> str:
     # if it’s literally “novel” or “comments” then drop back
     return last if not last.lower().startswith(("novel","comments")) else "Homepage"
 
+def build_comment_link_dragonholic(novel_title: str, host: str, placeholder_link: str) -> str:
+    """
+    Given a placeholder comments/feed URL and a novel_title, 
+    reconstruct the real chapter URL by slugifying the chapter
+    label and appending "#comment-XXX".
+    """
+    # 1) grab the comment ID
+    m = re.search(r"#comment-(\d+)", placeholder_link)
+    if not m:
+        return placeholder_link  # not a placeholder, leave it
+    
+    cid = m.group(1)
+    # 2) get the chapter label (e.g. "Chapter 473")
+    chapter_label = extract_chapter_dragonholic(placeholder_link)
+    # 3) turn that into a slug: "chapter-473"
+    chapter_slug = slug(chapter_label)
+    # 4) get the novel's base URL from your mappings
+    novel_url = HOSTING_SITE_DATA[host]["novels"][novel_title]["novel_url"]
+    # ensure the base URL ends with a slash
+    if not novel_url.endswith("/"):
+        novel_url += "/"
+    # 5) stitch it all together
+    return f"{novel_url}{chapter_slug}/#comment-{cid}"
+
 def split_reply_chain_dragonholic(raw: str) -> tuple[str,str]:
     """
     If raw begins with 'In reply to <a…>NAME</a>. ', strip that off
@@ -369,6 +393,7 @@ DRAGONHOLIC_UTILS = {
     "extract_pubdate": extract_pubdate_from_soup,
     "split_comment_title": split_comment_title_dragonholic,
     "extract_chapter": extract_chapter_dragonholic,
+    "build_comment_link": build_comment_link_dragonholic,
     "split_reply_chain": split_reply_chain_dragonholic,
     # simple lambdas to re‑expose mapping data
     "get_novel_details": lambda host, title: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}),
