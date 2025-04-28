@@ -16,6 +16,7 @@ import feedparser
 
 from novel_mappings import HOSTING_SITE_DATA
 
+APPROVED_COMMENTS_FEED = "https://script.google.com/macros/s/AKfycbxx6YrbuG1WVqc5uRmmQBw3Z8s8k29RS0sgK9ivhbaTUYTp-8t76mzLo0IlL1LlqinY/exec"
 
 # ----------------------------------------------------------------------
 # 1) ─── FREE‑FEED SPLITTER  (unchanged – do NOT modify) ───────────────
@@ -303,13 +304,31 @@ def split_comment_title_dragonholic(comment_title):
     )
     return m.group(1).strip() if m else ""
 
-def extract_chapter_dragonholic(link: str):
-    parsed = urlparse(link)
-    segs = [s for s in parsed.path.split("/") if s]
-    if len(segs) <= 2:
+def extract_chapter_dragonholic(link: str) -> str:
+    """
+    If the comment link is the placeholder (no chapter in its path),
+    grab the comment ID, fetch the approved-comments feed, and return
+    its <chapter> element. Otherwise fall back to URL parsing.
+    """
+    # 1) look for “#comment-1234”
+    m = re.search(r"#comment-(\d+)", link)
+    if m:
+        cid = m.group(1)
+        approved = feedparser.parse(APPROVED_COMMENTS_FEED)
+        for entry in approved.entries:
+            # feedparser maps your <approve_url> tag to entry.approve_url
+            if hasattr(entry, "approve_url") and f"c={cid}" in entry.approve_url:
+                # feedparser maps <chapter> to entry.chapter
+                return entry.chapter
+
+    # 2) fallback: extract from the URL path
+    parsed   = urlparse(link)
+    segments = [s for s in parsed.path.split("/") if s]
+    if len(segments) <= 2:
         return "Homepage"
-    nice = unquote(segs[-1]).replace("-", " ")
-    return " ".join(word.capitalize() for word in nice.split())
+    last = unquote(segments[-1]).replace("-", " ")
+    # if it’s literally “novel” or “comments” then drop back
+    return last if not last.lower().startswith(("novel","comments")) else "Homepage"
 
 def split_reply_chain_dragonholic(raw: str) -> tuple[str,str]:
     """
@@ -358,7 +377,9 @@ DRAGONHOLIC_UTILS = {
     "get_featured_image": lambda title, host: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}).get("featured_image", ""),
     "get_novel_discord_role": lambda title, host: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}).get("discord_role_id", ""),
     "get_comments_feed_url": lambda host: HOSTING_SITE_DATA.get(host, {}).get("comments_feed_url", ""),
-    "get_nsfw_novels": lambda: [],  # customise if you have NSFW titles
+    "get_nsfw_novels": lambda: [],  # customise if you have NSFW titles,
+    #for comment feed
+    "extract_chapter": extract_chapter_dragonholic
 }
 
 
