@@ -377,9 +377,7 @@ DRAGONHOLIC_UTILS = {
     "get_featured_image": lambda title, host: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}).get("featured_image", ""),
     "get_novel_discord_role": lambda title, host: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}).get("discord_role_id", ""),
     "get_comments_feed_url": lambda host: HOSTING_SITE_DATA.get(host, {}).get("comments_feed_url", ""),
-    "get_nsfw_novels": lambda: [],  # customise if you have NSFW titles,
-    #for comment feed
-    "extract_chapter": extract_chapter_dragonholic
+    "get_nsfw_novels": lambda: [],  # customise if you have NSFW titles
 }
 
 
