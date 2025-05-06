@@ -4,6 +4,7 @@ import feedparser
 import PyRSS2Gen
 import xml.dom.minidom
 import re
+import html
 from xml.sax.saxutils import escape
 from bs4 import BeautifulSoup
 
@@ -139,14 +140,17 @@ def main():
                 continue
 
             pub_date = datetime.datetime(*entry.published_parsed[:6])
-            # 1) grab the raw HTML
-            raw = entry.get("description", entry.get("content:encoded", ""))
+            # 1) prefer the real HTML block if it exists
+            raw_html = entry.get("content:encoded")
+            if raw_html is None:
+                # fallback: un-escape the escaped <description> CDATA
+                raw_html = html.unescape(entry.get("description", ""))
             
-            # 2) split off the “In reply to…” header (reply_chain) and get only the post HTML
-            reply_chain, post_html = utils["split_reply_chain"](raw)
+            # 2) split off the “In reply to…” header, but keep your existing reply_chain logic
+            reply_chain, post_html = utils["split_reply_chain"](raw_html)
             
-            # 3) strip all tags from just the post_html
-            soup         = BeautifulSoup(post_html, "html.parser")
+            # 3) strip *all* HTML tags (including both real <p> and ones that were &lt;p&gt;)
+            soup = BeautifulSoup(post_html, "html.parser")
             description_text = soup.get_text(separator=" ").strip()
         
             # 4) pass both into your RSS item
