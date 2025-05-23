@@ -54,20 +54,39 @@ def clean_description(raw_desc: str) -> str:
         div.decompose()
     return re.sub(r"\s+", " ", soup.decode_contents()).strip()
 
-
 def extract_pubdate_from_soup(li) -> datetime.datetime:
+    """
+    Returns a proper UTC datetime for a chapter <li>:
+    - if the page shows "May 22, 2025", parses that exactly.
+    - if it shows "3 hours ago" or "1 day ago", subtracts correctly.
+    - otherwise falls back to now.
+    """
+    now = datetime.datetime.now(datetime.timezone.utc)
+
     span = li.select_one("span.chapter-release-date i")
     if not span:
-        return datetime.datetime.now(datetime.timezone.utc)
+        return now
 
     datestr = span.get_text(strip=True)
-    try:  # absolute date e.g.  April 19, 2025
-        return datetime.datetime.strptime(datestr, "%B %d, %Y").replace(
-            tzinfo=datetime.timezone.utc
-        )
-    except Exception:
-        # relative (e.g. “3 hours ago”) – fall back to “now”
-        return datetime.datetime.now(datetime.timezone.utc)
+    # 1) Try absolute "Month DD, YYYY"
+    try:
+        return datetime.datetime.strptime(datestr, "%B %d, %Y") \
+                   .replace(tzinfo=datetime.timezone.utc)
+    except ValueError:
+        # 2) Fallback: relative "N units ago"
+        parts = datestr.lower().split()
+        if parts and parts[0].isdigit():
+            n, unit = int(parts[0]), parts[1]
+            if "minute" in unit:
+                return now - datetime.timedelta(minutes=n)
+            if "hour"   in unit:
+                return now - datetime.timedelta(hours=n)
+            if "day"    in unit:
+                return now - datetime.timedelta(days=n)
+            if "week"   in unit:
+                return now - datetime.timedelta(weeks=n)
+        # 3) ultimate fallback
+        return now
 
 def smart_title(parts: list[str]) -> str:
     small = {"a","an","the","and","but","or","nor","for","so","yet",
