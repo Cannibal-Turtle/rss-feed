@@ -35,10 +35,10 @@ async def process_novel(session, host, novel_title):
         print(f"Scraping: {novel_url}")
         utils = get_host_utils(host)
     
-       # 1) Check if there's a recent premium update
-       if not await utils["novel_has_paid_update_async"](session, novel_url):
-           print(f"Skipping {novel_title}: no recent premium update found.")
-           return []
+        # 1) Check if there's a recent premium update (chapter or extra) in the last 7 days
+        if not await utils["novel_has_paid_update_async"](session, novel_url):
+            print(f"Skipping {novel_title}: no recent paid update found.")
+            return []
 
         # 2) Scrape paid chapters
         paid_chapters, main_desc = await utils["scrape_paid_chapters_async"](session, novel_url, host)
