@@ -2,8 +2,8 @@ name: Update Free Feed
 
 on:
   schedule:
-    - cron: '0 16 * * *'
-    - cron: '15 16 * * *'
+    - cron: '0 12 * * *'
+    - cron: '15 12 * * *'
   workflow_dispatch:
 
 permissions:
