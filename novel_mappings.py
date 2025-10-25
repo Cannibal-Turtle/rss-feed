@@ -33,7 +33,7 @@ HOSTING_SITE_DATA = {
                 "free_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml",
                 "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
                 "custom_emoji":   "<:emoji_62:1365400946330435654>",
-                "extra_ping_roles": "<@&1329500516304158901> <@&1329427832077684736> <@&1330469014895595620>" # for new novel checker
+                "extra_ping_roles": "<@&1329500516304158901> <@&1329427832077684736> <@&1330469014895595620>", # for new novel checker
                 "discord_role_url":"https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
                 "history_file":   "tvitpa_history.json"
             },
