@@ -140,7 +140,14 @@ def main():
             rss_items.append(item)
     
     # Sort items by publication date, title, and chapter number (using host's chapter_num)
-    rss_items.sort(key=lambda item: (item.pubDate, item.title, utils["chapter_num"](item.chaptername)), reverse=True)
+    rss_items.sort(
+        key=lambda item: (
+            item.pubDate,
+            item.title,
+            get_host_utils(item.host)["chapter_num"](item.chaptername),
+        ),
+        reverse=True
+    )
     
     # Define generic feed properties for aggregated free chapters.    
     new_feed = CustomRSS2(
