@@ -2,8 +2,8 @@ name: Update Paid Feed
 
 on:
   schedule:
-    *- cron: '0 12 * * *'   # Runs daily at 12:00 UTC
-    *- cron: '15 12 * * *'  # Runs daily at 12:15 UTC
+    #- cron: '0 12 * * *'   # Runs daily at 12:00 UTC
+    #- cron: '15 12 * * *'  # Runs daily at 12:15 UTC
   workflow_dispatch:
 
 permissions:
