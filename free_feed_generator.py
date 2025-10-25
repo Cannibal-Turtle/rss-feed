@@ -161,7 +161,7 @@ def main():
     pretty_xml = "\n".join([line for line in dom.toprettyxml(indent="  ").splitlines() if line.strip()])
     compacted_xml = compact_cdata(pretty_xml)
     with open(output_file, "w", encoding="utf-8") as f:
-        f.write(compacted_xml)
+        f.write(pretty_xml)
     
     print("Modified feed generated with", len(rss_items), "items.")
     print("Output written to", output_file)
