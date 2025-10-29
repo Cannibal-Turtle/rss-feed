@@ -44,7 +44,7 @@ MISTMINT_ARCS = [
     {"arc_num": 17, "title": "Supreme AI Gong × Physically Weak Cyborg Shou",               "start": 595, "end": 628},
     {"arc_num": 18, "title": "Cold CEO Gong × Honest Married Wife Shou",                    "start": 629, "end": 666},
     {"arc_num": 19, "title": "Top Musician Gong × Autistic Little Pitiful Shou",            "start": 667, "end": 700},
-    {"arc_num": 20, "title": "Tentacled Alien Gong × Passerby Doctor Shou",                 "start": 701, "end": 734},
+    {"arc_num": 20, "title": "Tentacled Alien Gong × Passerby Doctor Shou",                 "start": 701, "end": 733},
 ]
 
 
