@@ -127,10 +127,24 @@ def main():
                 print("Skipping item (novel not found in mapping):", main_title)
                 continue
             pub_date = datetime.datetime(*entry.published_parsed[:6])
+            # Get per-novel details from mapping
+            novel_details = get_novel_details(host, main_title)
+            if not novel_details:
+                print("Skipping item (novel not found in mapping):", main_title)
+                continue
+            
+            # pick description:
+            # 1. if you set custom_description in novel_mappings, use that
+            # 2. else use whatever the site’s RSS gave us
+            desc_override = novel_details.get("custom_description")
+            final_description = desc_override if desc_override else entry.description
+            
+            pub_date = datetime.datetime(*entry.published_parsed[:6])
+            
             item = MyRSSItem(
                 title=main_title,
-                link=entry.link,  # Alternatively, use get_novel_url(main_title, host)
-                description=entry.description,
+                link=entry.link,              # or get_novel_url(main_title, host) if you prefer canonical series URL
+                description=final_description,
                 guid=PyRSS2Gen.Guid(entry.id, isPermaLink=False),
                 pubDate=pub_date,
                 volume=volume,
