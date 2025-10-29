@@ -1,165 +1,554 @@
 import re
+import os
+import json
 import datetime
 from urllib.parse import urlparse, unquote
 
 import aiohttp
-from bs4 import BeautifulSoup
 import feedparser
+from bs4 import BeautifulSoup
 
 from novel_mappings import HOSTING_SITE_DATA
 
-APPROVED_COMMENTS_FEED = "https://script.google.com/macros/s/AKfycbxx6YrbuG1WVqc5uRmmQBw3Z8s8k29RS0sgK9ivhbaTUYTp-8t76mzLo0IlL1LlqinY/exec"
 
-# ----------------------------------------------------------------------
-# 1) ─── FREE-FEED SPLITTERS ───────────────────────────────────────────
-# ----------------------------------------------------------------------
-def split_title_dragonholic(full_title: str):
+# =============================================================================
+# GLOBAL CONSTANTS
+# =============================================================================
+
+APPROVED_COMMENTS_FEED = (
+    "https://script.google.com/macros/s/"
+    "AKfycbxx6YrbuG1WVqc5uRmmQBw3Z8s8k29RS0sgK9ivhbaTUYTp-8t76mzLo0IlL1LlqinY/exec"
+)
+
+MISTMINT_STATE_PATH = "mistmint_state.json"
+
+# All arcs for [Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught
+# Used to figure out volume/arc info for any global chapter number.
+MISTMINT_ARCS = [
+    {"arc_num": 1,  "title": "Tycoon Boss Gong × Pure Little Male Servant Shou",            "start": 1,   "end": 42},
+    {"arc_num": 2,  "title": "Sea Serpent Chief Gong × Cute Little Merman Shou",            "start": 43,  "end": 79},
+    {"arc_num": 3,  "title": "Brutal Evil Dragon Gong × Crossdressing Princess Shou",       "start": 80,  "end": 109},
+    {"arc_num": 4,  "title": "Reborn Villain Gong × Powerless Noble Young Master Shou",     "start": 110, "end": 148},
+    {"arc_num": 5,  "title": "Demon Lord Gong × Spiritual Medicine Shou",                   "start": 149, "end": 186},
+    {"arc_num": 6,  "title": "Ruthless Daoist Exorcist Gong × Timid Fierce Ghost Shou",     "start": 187, "end": 224},
+    {"arc_num": 7,  "title": "Broken Giant Wolf Gong × Soft Sweet White Rabbit Shou",       "start": 225, "end": 260},
+    {"arc_num": 8,  "title": "Dominant Military Officer Gong × Fallen Young Master Shou",   "start": 261, "end": 295},
+    {"arc_num": 9,  "title": "Bloodthirsty Zombie Gong × Sweet Researcher Shou",            "start": 296, "end": 331},
+    {"arc_num": 10, "title": "Lowly Slave Gong × Imperial Prince Shou",                     "start": 332, "end": 369},
+    {"arc_num": 11, "title": "War-Scarred Demon King Gong × Low-Rank Succubus Shou",        "start": 370, "end": 407},
+    {"arc_num": 12, "title": "Street Bully Gong × Campus Male God Shou",                    "start": 408, "end": 444},
+    {"arc_num": 13, "title": "Evil Magician Gong × Aloof Elf Shou",                         "start": 445, "end": 479},
+    {"arc_num": 14, "title": "Mute Merman Gong × Cannon Fodder Caretaker Shou",             "start": 480, "end": 517},
+    {"arc_num": 15, "title": "Game Boss Gong × Simple-Minded Player Shou",                  "start": 518, "end": 556},
+    {"arc_num": 16, "title": "Gentle Film Emperor Gong × Little Nobody Assistant Shou",     "start": 557, "end": 594},
+    {"arc_num": 17, "title": "Supreme AI Gong × Physically Weak Cyborg Shou",               "start": 595, "end": 628},
+    {"arc_num": 18, "title": "Cold CEO Gong × Honest Married Wife Shou",                    "start": 629, "end": 666},
+    {"arc_num": 19, "title": "Top Musician Gong × Autistic Little Pitiful Shou",            "start": 667, "end": 700},
+    {"arc_num": 20, "title": "Tentacled Alien Gong × Passerby Doctor Shou",                 "start": 701, "end": 734},
+]
+
+
+# =============================================================================
+# MISTMINT STATE HELPERS (multi-novel, keyed by short_code)
+# =============================================================================
+
+def _load_mistmint_state():
     """
-    For the free/public feed.
-    "Main Title - Chapter Name - (Optional)" → (main, chapter, extension)
+    mistmint_state.json looks like:
+    {
+      "tdlbkgc": {
+        "last_posted_chapter": 0,
+        "latest_available_chapter": 1
+      },
+      "another_short": {
+        "last_posted_chapter": 12,
+        "latest_available_chapter": 40
+      }
+    }
     """
-    parts = full_title.split(" - ")
-    if len(parts) == 2:
-        return parts[0].strip(), parts[1].strip(), ""
-    if len(parts) >= 3:
-        clean_parts = [p.strip() for p in parts[2:] if p.strip() and p.strip() != "-"]
-        return parts[0].strip(), parts[1].strip(), " ".join(clean_parts)
-    return full_title.strip(), "", ""
+    try:
+        with open(MISTMINT_STATE_PATH, "r", encoding="utf-8") as f:
+            state = json.load(f)
+    except FileNotFoundError:
+        state = {}
 
-def split_title_mistmint(full_title: str):
+    # normalize any partial entries
+    for scode, entry in state.items():
+        entry.setdefault("last_posted_chapter", 0)
+        entry.setdefault("latest_available_chapter", entry["last_posted_chapter"])
+    return state
+
+
+def _save_mistmint_state(state):
+    with open(MISTMINT_STATE_PATH, "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2, ensure_ascii=False)
+
+
+def _get_arc_for_ch(ch_num: int):
     """
-    Mistmint format examples:
-    1) "Miss Priest... — Volume 1: Dream’s Beginning, Chapter 30 — Card Master"
-    2) "My Ex-Wife Went Straight To The Crematorium [Rebirth] — Chapter 13 — The Ring"
-
-    Returns (novel_title, chaptername, nameextend)
-    so free_feed_generator.py can unpack it.
+    Given a global chapter number (e.g. 50),
+    return the arc dict containing it.
     """
-    parts = [p.strip() for p in full_title.split(" — ")]
+    for arc in MISTMINT_ARCS:
+        if arc["start"] <= ch_num <= arc["end"]:
+            return arc
+    return None
 
-    # parts[0] : novel title
-    # parts[1] : "Volume 1: X, Chapter NN"  OR "Chapter NN"
-    # parts[2] : subtitle ("Card Master", "The Ring", etc.)
-    novel_title = parts[0] if len(parts) > 0 else full_title.strip()
-    middle      = parts[1] if len(parts) > 1 else ""
-    chapter_sub = parts[2] if len(parts) > 2 else ""
 
-    if ", Chapter " in middle:
-        # "Volume 1: Dream’s Beginning, Chapter 30"
-        before, after = middle.split(", Chapter ", 1)
-        chaptername = f"Chapter {after.strip()}"
-    else:
-        # "Chapter 13"
-        chaptername = middle.strip()
-
-    # We don't return volume here because free_feed_generator will ask
-    # utils["extract_volume"](title, link) for it per host.
-    return novel_title, chaptername, chapter_sub
-
-def extract_volume_dragonholic(full_title: str, link: str) -> str:
+def _slug_arc(arc_num: int, arc_title: str) -> str:
     """
-    Dragonholic chapters usually don't include volume text in the feed title,
-    so we fall back to the URL-based parser you already had.
+    "Arc 1 Tycoon Boss Gong × Pure Little Male Servant Shou"
+    -> "arc-1-tycoon-boss-gong-pure-little-male-servant-shou"
     """
-    return format_volume_from_url(link)
+    base = f"arc {arc_num} {arc_title}"
+    s = base.lower().strip()
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    s = re.sub(r"-{2,}", "-", s)
+    return s.strip("-")
 
 
-def extract_volume_mistmint(full_title: str, link: str) -> str:
+# =============================================================================
+# MISTMINT PAID FEED (synthetic)
+# =============================================================================
+
+async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str):
     """
-    Mistmint feed titles look like:
-    "Miss Priest, ... — Volume 1: Dream’s Beginning, Chapter 30 — Card Master"
-    or
-    "My Ex-Wife ... — Chapter 13 — The Ring"
+    Generate synthetic "paid chapters" for ALL Mistmint novels in mapping.
 
-    We only want the part before ", Chapter NN" if it exists.
-    Example:
-      middle = "Volume 1: Dream’s Beginning, Chapter 30"
-      => "Volume 1: Dream’s Beginning"
-    If there's no volume (just "Chapter 13"), return "".
+    For each Mistmint novel:
+    - Look up its short_code in novel_mappings.
+    - Check mistmint_state.json[short_code].
+      * last_posted_chapter
+      * latest_available_chapter
+    - For any new chapters in (last_posted+1 ... latest_available):
+        build an RSS-style item:
+          volume       -> "Arc X: <arc_title>"
+          chaptername  -> "Chapter 50"
+          nameextend   -> "1.7"  (arcNum.localIndexInArc)
+          link         -> predictable URL based on arc slug + global chapter num
+          guid         -> "<short_code>-<global_chapter_num>"
+
+    After generating, bump last_posted_chapter = latest_available_chapter
+    and save back to mistmint_state.json.
+
+    Returns (all_items, "") where all_items is a list[dict] for feed builder.
     """
-    # Split on em dash blocks like we did in split_title_mistmint
-    parts = [p.strip() for p in full_title.split(" — ")]
+    all_items = []
+    state = _load_mistmint_state()
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
 
-    if len(parts) < 2:
-        # unexpected format, just give up
-        return ""
+    mistmint_block = HOSTING_SITE_DATA.get(host, {}).get("novels", {})
 
-    middle = parts[1]
+    for novel_title, details in mistmint_block.items():
+        short_code = details.get("short_code")
+        if not short_code:
+            # if a Mistmint novel in mapping doesn't define short_code,
+            # we can't track it. skip silently.
+            continue
 
-    if ", Chapter " in middle:
-        before, _after = middle.split(", Chapter ", 1)
-        # before = "Volume 1: Dream’s Beginning"
-        return before.strip()
+        # get (or init) per-novel state
+        novel_state = state.get(short_code, {
+            "last_posted_chapter": 0,
+            "latest_available_chapter": 0
+        })
+        last_posted = int(novel_state.get("last_posted_chapter", 0))
+        latest_avail = int(novel_state.get("latest_available_chapter", 0))
 
-    # Example of no volume: middle == "Chapter 13"
-    return ""
+        if latest_avail <= last_posted:
+            # nothing new to export for this novel
+            continue
+
+        novel_slug = details["novel_url"].rstrip("/").split("/")[-1]
+        desc_html  = details.get("custom_description", "")
+        override   = details.get("pub_date_override", None)
+
+        # build each missing chapter
+        for ch in range(last_posted + 1, latest_avail + 1):
+            arc = _get_arc_for_ch(ch)
+            if not arc:
+                # if you ever go beyond arc 20 and forget to extend MISTMINT_ARCS,
+                # we'll just skip unknown ranges instead of crashing.
+                continue
+
+            arc_num   = arc["arc_num"]
+            arc_title = arc["title"]
+            arc_local_index = ch - arc["start"] + 1  # chapter index inside that arc
+
+            volume      = f"Arc {arc_num}: {arc_title}"
+            chaptername = f"Chapter {ch}"
+            nameextend  = f"{arc_num}.{arc_local_index}"
+
+            arc_slug = _slug_arc(arc_num, arc_title)
+            link = (
+                "https://www.mistminthaven.com/novels/"
+                f"{novel_slug}/{arc_slug}-chapter-{ch}"
+            )
+
+            pub_dt = now_utc
+            if override:
+                pub_dt = pub_dt.replace(**override)
+
+            guid_val = f"{short_code}-{ch}"
+
+            all_items.append({
+                "volume":      volume,
+                "chaptername": chaptername,
+                "nameextend":  nameextend,
+                "link":        link,
+                "description": desc_html,
+                "pubDate":     pub_dt,
+                "guid":        guid_val,
+                "coin":        "",          # Mistmint has no visible coin price
+                "novel_title": novel_title  # nice to have for Discord pings
+            })
+
+        # advance pointer for THIS novel
+        novel_state["last_posted_chapter"] = latest_avail
+        state[short_code] = novel_state
+
+    # persist updated state for next run
+    _save_mistmint_state(state)
+
+    return all_items, ""
 
 
-# ----------------------------------------------------------------------
-# 2) ─── PAID-FEED TITLE SPLITTERS ─────────────────────────────────────
-# ----------------------------------------------------------------------
-def split_paid_chapter_dragonholic(raw_title: str):
-    cleaned = re.sub(r"<i[^>]*>.*?</i>", "", raw_title).strip()
-    parts = cleaned.split(" - ", 1)
-    return (parts[0].strip(), parts[1].strip()) if len(parts) == 2 else (cleaned, "")
+async def novel_has_paid_update_mistmint_async(session, novel_url: str) -> bool:
+    """
+    Return True if *any* Mistmint novel in mapping has new premium chapters
+    we haven't exported yet.
+    """
+    state = _load_mistmint_state()
+    mistmint_block = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("novels", {})
+
+    for _title, details in mistmint_block.items():
+        short_code = details.get("short_code")
+        if not short_code:
+            continue
+        novel_state = state.get(short_code, {
+            "last_posted_chapter": 0,
+            "latest_available_chapter": 0
+        })
+        if int(novel_state.get("latest_available_chapter", 0)) > int(novel_state.get("last_posted_chapter", 0)):
+            return True
+    return False
+
 
 def split_paid_chapter_mistmint(raw_title: str):
     """
-    Stub for Mistmint paid titles.
+    Kept for API compatibility with Dragonholic, but Mistmint premium
+    chapters are synthetic, so there's nothing real to parse.
     """
-    return split_title_mistmint(raw_title)
+    return ("", "")
 
 
-# ----------------------------------------------------------------------
-# 3) ─── GENERIC HELPERS ───────────────────────────────────────────────
-# ----------------------------------------------------------------------
+# =============================================================================
+# DRAGONHOLIC PAID UPDATE CHECK / SCRAPE
+# =============================================================================
+
+async def fetch_page(session: aiohttp.ClientSession, url: str) -> str:
+    try:
+        async with session.get(url) as resp:
+            if resp.status != 200:
+                print(f"⚠️  {url} returned HTTP {resp.status}")
+                return ""
+            return await resp.text()
+    except Exception as e:
+        print(f"⚠️  Network error fetching {url}: {e}")
+        return ""
+
+
 def clean_description(raw_desc: str) -> str:
     soup = BeautifulSoup(raw_desc, "html.parser")
     for div in soup.select("div.c-content-readmore"):
         div.decompose()
-    return re.sub(r"\s+", " ", soup.decode_contents()).strip()
+    text_html = soup.decode_contents()
+    return re.sub(r"\s+", " ", text_html).strip()
+
 
 def extract_pubdate_from_soup(li) -> datetime.datetime:
-    """
-    Returns a proper UTC datetime for a chapter <li>.
-    Handles:
-    - "May 22, 2025"
-    - "3 hours ago"
-    - "1 day ago"
-    """
     now = datetime.datetime.now(datetime.timezone.utc)
-
     span = li.select_one("span.chapter-release-date i")
     if not span:
         return now
 
     datestr = span.get_text(strip=True)
 
-    # 1) Try absolute "Month DD, YYYY"
+    # absolute form: "May 22, 2025"
     try:
-        return (
-            datetime.datetime.strptime(datestr, "%B %d, %Y")
-            .replace(tzinfo=datetime.timezone.utc)
-        )
+        dt_naive = datetime.datetime.strptime(datestr, "%B %d, %Y")
+        return dt_naive.replace(tzinfo=datetime.timezone.utc)
     except ValueError:
-        # 2) Relative "N units ago"
-        parts = datestr.lower().split()
-        if parts and parts[0].isdigit():
-            n, unit = int(parts[0]), parts[1]
-            if "minute" in unit:
-                return now - datetime.timedelta(minutes=n)
-            if "hour" in unit:
-                return now - datetime.timedelta(hours=n)
-            if "day" in unit:
-                return now - datetime.timedelta(days=n)
-            if "week" in unit:
-                return now - datetime.timedelta(weeks=n)
-        # 3) fallback
-        return now
+        pass
 
-def smart_title(parts: list[str]) -> str:
-    small = {"a","an","the","and","but","or","nor","for","so","yet",
-             "at","by","in","of","on","to","up","via"}
+    # relative "3 hours ago", "1 day ago"
+    parts = datestr.lower().split()
+    if parts and parts[0].isdigit():
+        n = int(parts[0])
+        unit = parts[1]
+        if "minute" in unit:
+            return now - datetime.timedelta(minutes=n)
+        if "hour" in unit:
+            return now - datetime.timedelta(hours=n)
+        if "day" in unit:
+            return now - datetime.timedelta(days=n)
+        if "week" in unit:
+            return now - datetime.timedelta(weeks=n)
+
+    return now
+
+
+async def novel_has_paid_update_async(session, novel_url: str) -> bool:
+    """
+    Dragonholic: True if there's a premium (not free) chapter in last 7 days.
+    """
+    html = await fetch_page(session, novel_url)
+    if not html:
+        return False
+
+    soup = BeautifulSoup(html, "html.parser")
+    li = soup.find("li", class_="wp-manga-chapter")
+    if not li:
+        return False
+
+    classes = li.get("class", [])
+    if "premium" not in classes or "free-chap" in classes:
+        return False
+
+    pub = extract_pubdate_from_soup(li)
+    seven_days_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
+    return pub >= seven_days_ago
+
+
+def slug(text: str) -> str:
+    s = text.lower().strip()
+    s = re.sub(r"[^\w\s\u0080-\uFFFF-]", "", s)  # keep unicode
+    s = re.sub(r"[\s_]+", "-", s)
+    s = re.sub(r"-{2,}", "-", s)
+    return s.strip("-")
+
+
+async def scrape_paid_chapters_async(session, novel_url: str, host: str):
+    """
+    Dragonholic premium chapters.
+    Try host_data['paid_feed_url'] if it exists,
+    else scrape the live HTML.
+    """
+    host_data = HOSTING_SITE_DATA.get(host, {})
+    feed_url = host_data.get("paid_feed_url")
+
+    # Branch A: direct paid RSS if you ever define it in mapping
+    if feed_url:
+        parsed = feedparser.parse(feed_url)
+        paid = []
+        for e in parsed.entries:
+            chap, ext = split_paid_chapter_dragonholic(e.title)
+            pub_dt = datetime.datetime(*e.published_parsed[:6], tzinfo=datetime.timezone.utc)
+            paid.append({
+                "volume":      "",
+                "chaptername": chap,
+                "nameextend":  ext,
+                "link":        e.link,
+                "description": e.description,
+                "pubDate":     pub_dt,
+                "guid":        e.id or chap,
+                "coin":        "",
+            })
+        return paid, ""
+
+    # Branch B: scrape site HTML
+    html = await fetch_page(session, novel_url)
+    if not html:
+        return [], ""
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    # summary for <description>
+    main_desc_div = soup.select_one("div.description-summary")
+    main_desc = clean_description(main_desc_div.decode_contents()) if main_desc_div else ""
+
+    paid_items = []
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    cutoff = now_utc - datetime.timedelta(days=7)
+
+    def handle_chapter_li(li, vol_label: str):
+        classes = li.get("class", [])
+
+        # skip if it's free or not premium
+        if "free-chap" in classes:
+            return None
+        if "premium" not in classes:
+            return None
+
+        pub_dt = extract_pubdate_from_soup(li)
+        if pub_dt < cutoff:
+            return None
+
+        a = li.find("a")
+        if not a:
+            return None
+
+        raw_html = a.decode_contents()
+
+        # the first text before any tags is usually "Chapter X"
+        m1 = re.match(r"\s*([^<]+)", raw_html)
+        chap_name = m1.group(1).strip() if m1 else raw_html.strip()
+
+        # anything after </i> - ... is the subtitle
+        m2 = re.search(r"</i>\s*[-–]\s*(.+)", raw_html)
+        nameext = m2.group(1).strip() if m2 else ""
+
+        href = a.get("href", "").strip()
+        if href and href != "#":
+            link = href
+        else:
+            if vol_label:
+                link = f"{novel_url}{slug(vol_label)}/{slug(chap_name)}/"
+            else:
+                link = f"{novel_url}{slug(chap_name)}/"
+
+        guid = None
+        for c in classes:
+            if c.startswith("data-chapter-"):
+                guid = c.split("data-chapter-")[1]
+                break
+        if not guid:
+            guid = slug(chap_name)
+
+        coin_el = li.select_one("span.coin")
+        coin_val = coin_el.get_text(strip=True) if coin_el else ""
+
+        return {
+            "volume":      vol_label,
+            "chaptername": chap_name,
+            "nameextend":  nameext,
+            "link":        link,
+            "description": main_desc,
+            "pubDate":     pub_dt,
+            "guid":        guid,
+            "coin":        coin_val
+        }
+
+    # with-volume structure
+    vol_ul = soup.select_one("ul.main.version-chap.volumns")
+    if vol_ul:
+        for vol_parent in vol_ul.select("li.parent.has-child"):
+            vol_label_el = vol_parent.select_one("a.has-child")
+            vol_label = vol_label_el.get_text(strip=True) if vol_label_el else ""
+            for chap_li in vol_parent.select("ul.sub-chap-list li.wp-manga-chapter"):
+                item = handle_chapter_li(chap_li, vol_label)
+                if item:
+                    paid_items.append(item)
+
+    # flat list structure
+    no_vol_ul = soup.select_one("ul.main.version-chap.no-volumn")
+    if no_vol_ul:
+        for chap_li in no_vol_ul.select("li.wp-manga-chapter"):
+            item = handle_chapter_li(chap_li, vol_label="")
+            if item:
+                paid_items.append(item)
+
+    return paid_items, main_desc
+
+
+# =============================================================================
+# FREE FEED PARSING HELPERS
+# =============================================================================
+
+def split_title_dragonholic(full_title: str):
+    parts = full_title.split(" - ")
+    if len(parts) == 2:
+        return parts[0].strip(), parts[1].strip(), ""
+    if len(parts) >= 3:
+        clean_parts = [
+            p.strip()
+            for p in parts[2:]
+            if p.strip() and p.strip() != "-"
+        ]
+        return parts[0].strip(), parts[1].strip(), " ".join(clean_parts)
+    return full_title.strip(), "", ""
+
+
+def split_title_mistmint(full_title: str):
+    """
+    "Miss Priest ... — Volume 1: Dream’s Beginning, Chapter 30 — Card Master"
+    "My Ex-Wife ... — Chapter 13 — The Ring"
+
+    Returns (novel_title, 'Chapter NN', subtitle).
+    """
+    parts = [p.strip() for p in full_title.split(" — ")]
+
+    novel_title = parts[0] if len(parts) > 0 else full_title.strip()
+    middle      = parts[1] if len(parts) > 1 else ""
+    subtitle    = parts[2] if len(parts) > 2 else ""
+
+    if ", Chapter " in middle:
+        # "Volume 1: Dream’s Beginning, Chapter 30"
+        _before, after = middle.split(", Chapter ", 1)
+        chaptername = f"Chapter {after.strip()}"
+    else:
+        # "Chapter 13"
+        chaptername = middle.strip()
+
+    return novel_title, chaptername, subtitle
+
+
+def extract_volume_dragonholic(full_title: str, link: str) -> str:
+    return format_volume_from_url(link)
+
+
+def extract_volume_mistmint(full_title: str, link: str) -> str:
+    """
+    From "Volume 1: Dream’s Beginning, Chapter 30"
+    we return "Volume 1: Dream’s Beginning".
+    If it's just "Chapter NN", return "".
+    """
+    parts = [p.strip() for p in full_title.split(" — ")]
+    if len(parts) < 2:
+        return ""
+
+    middle = parts[1]
+    if ", Chapter " in middle:
+        before, _after = middle.split(", Chapter ", 1)
+        return before.strip()
+
+    return ""
+
+
+# =============================================================================
+# DRAGONHOLIC PAID TITLE PARSER
+# =============================================================================
+
+def split_paid_chapter_dragonholic(raw_title: str):
+    cleaned = re.sub(r"<i[^>]*>.*?</i>", "", raw_title, flags=re.DOTALL).strip()
+    parts = cleaned.split(" - ", 1)
+    if len(parts) == 2:
+        return parts[0].strip(), parts[1].strip()
+    return cleaned, ""
+
+
+# =============================================================================
+# OTHER SHARED HELPERS
+# =============================================================================
+
+def chapter_num(chaptername: str):
+    """
+    Turn "Chapter 640" / "Chapter 12.5" / "1.1"
+    into a tuple of numbers so sorting is numeric.
+    """
+    nums = re.findall(r"\d+(?:\.\d+)?", chaptername)
+    if not nums:
+        return (0,)
+    out = []
+    for n in nums:
+        out.append(float(n) if "." in n else int(n))
+    return tuple(out)
+
+
+def smart_title(parts):
+    small = {
+        "a","an","the","and","but","or","nor","for","so","yet",
+        "at","by","in","of","on","to","up","via"
+    }
     out = []
     last = len(parts) - 1
     for i, w in enumerate(parts):
@@ -170,24 +559,26 @@ def smart_title(parts: list[str]) -> str:
             out.append(wl)
     return " ".join(out)
 
+
 def format_volume_from_url(url: str) -> str:
     """
-    Currently: Dragonholic-style /novel/... parsing.
-    TODO: extend for mistminthaven.com slugs like
-    volume-1-dream-s-beginning-chapter-30 → "Volume 1: Dream's Beginning"
+    Mainly Dragonholic-style URLs:
+    /novel/<slug>/<volume-1-the-beginning>/<chapter-1-some-name>/
     """
     segs = [s for s in urlparse(url).path.split("/") if s]
     if len(segs) >= 4 and segs[0] == "novel":
-        raw   = unquote(segs[2]).replace("_","-").strip("-")
+        raw = unquote(segs[2]).replace("_", "-").strip("-")
         parts = raw.split("-")
         if not parts:
             return ""
 
-        colon_keywords = {"volume","chapter","vol","chap","arc","world","plane","story","v"}
+        colon_keywords = {
+            "volume", "chapter", "vol", "chap", "arc", "world", "plane", "story", "v"
+        }
         lead = parts[0].lower()
 
         if lead in colon_keywords and len(parts) >= 2 and parts[1].isdigit():
-            num  = parts[1]
+            num = parts[1]
             rest = parts[2:]
             if lead == "v":
                 if rest:
@@ -204,213 +595,12 @@ def format_volume_from_url(url: str) -> str:
 
     return ""
 
-async def fetch_page(session: aiohttp.ClientSession, url: str) -> str:
-    try:
-        async with session.get(url) as resp:
-            if resp.status != 200:
-                print(f"⚠️  {url} returned HTTP {resp.status}")
-                return ""
-            return await resp.text()
-    except Exception as e:
-        print(f"⚠️  Network error fetching {url}: {e}")
-        return ""
 
-def slug(text: str) -> str:
-    s = text.lower().strip()
-    s = re.sub(r"[^\w\s\u0080-\uFFFF-]", "", s)  # keep unicode
-    s = re.sub(r"[\s_]+", "-", s)
-    s = re.sub(r"-{2,}", "-", s)
-    return s
-
-
-# ----------------------------------------------------------------------
-# 4) ─── QUICK “HAS PREMIUM UPDATE?” CHECK ─────────────────────────────
-# ----------------------------------------------------------------------
-async def novel_has_paid_update_async(session, novel_url: str) -> bool:
-    """
-    Dragonholic: check if there was a premium chapter in the last 7 days.
-    """
-    html = await fetch_page(session, novel_url)
-    if not html:
-        return False
-
-    li = BeautifulSoup(html, "html.parser").find("li", class_="wp-manga-chapter")
-    if not li or "premium" not in li.get("class", []) or "free-chap" in li.get("class", []):
-        return False
-
-    pub = extract_pubdate_from_soup(li)
-    return pub >= datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
-
-async def novel_has_paid_update_mistmint_async(session, novel_url: str) -> bool:
-    """
-    Mistmint Haven: no premium tier (yet), so always False.
-    """
-    return False
-
-
-# ----------------------------------------------------------------------
-# 5) ─── PAID-CHAPTER SCRAPERS ─────────────────────────────────────────
-# ----------------------------------------------------------------------
-async def scrape_paid_chapters_async(session, novel_url: str, host: str):
-    """
-    Dragonholic version.
-
-    1. If HOSTING_SITE_DATA[host]["paid_feed_url"] exists, parse it.
-    2. Otherwise scrape the novel page and build recent paid chapters.
-    """
-    feed_url = HOSTING_SITE_DATA.get(host, {}).get("paid_feed_url")
-    if feed_url:
-        parsed = feedparser.parse(feed_url)
-        paid = []
-        for e in parsed.entries:
-            chap, ext = split_paid_chapter_dragonholic(e.title)
-            paid.append({
-                "volume":      "",
-                "chaptername": chap,
-                "nameextend":  ext,
-                "link":        e.link,
-                "description": e.description,
-                "pubDate":     datetime.datetime(*e.published_parsed[:6], tzinfo=datetime.timezone.utc),
-                "guid":        e.id or chap,
-                "coin":        "",
-            })
-        return paid, ""
-
-    # Fallback: scrape live page
-    html = await fetch_page(session, novel_url)
-    if not html:
-        return [], ""
-
-    soup = BeautifulSoup(html, "html.parser")
-    main_desc_div = soup.select_one("div.description-summary")
-    main_desc = clean_description(main_desc_div.decode_contents()) if main_desc_div else ""
-
-    paid = []
-    now = datetime.datetime.now(datetime.timezone.utc)
-
-    # (a) volume blocks
-    vol_ul = soup.select_one("ul.main.version-chap.volumns")
-    if vol_ul:
-        for vol_parent in vol_ul.select("li.parent.has-child"):
-            vol_label   = vol_parent.select_one("a.has-child").get_text(strip=True)
-            vol_display = vol_label
-
-            for chap_li in vol_parent.select("ul.sub-chap-list li.wp-manga-chapter"):
-                if "free-chap" in chap_li.get("class", []):
-                    continue
-                pub = extract_pubdate_from_soup(chap_li)
-                if pub < now - datetime.timedelta(days=7):
-                    continue
-
-                a = chap_li.find("a")
-                raw_html = a.decode_contents()
-
-                m1 = re.match(r'\s*([^<]+)', raw_html)
-                chap_name = m1.group(1).strip() if m1 else raw_html.strip()
-
-                m2 = re.search(r'</i>\s*[-–]\s*(.+)', raw_html)
-                nameext = m2.group(1).strip() if m2 else ""
-
-                href = a.get("href", "").strip()
-                if href and href != "#":
-                    link = href
-                else:
-                    link = f"{novel_url}{slug(vol_display)}/{slug(chap_name)}/"
-
-                guid = next(
-                    (c.split("data-chapter-")[1]
-                     for c in chap_li.get("class", [])
-                     if c.startswith("data-chapter-")),
-                    slug(chap_name)
-                )
-
-                coin = chap_li.select_one("span.coin")
-                coin = coin.get_text(strip=True) if coin else ""
-
-                paid.append({
-                    "volume":      vol_display,
-                    "chaptername": chap_name,
-                    "nameextend":  nameext,
-                    "link":        link,
-                    "description": main_desc,
-                    "pubDate":     pub,
-                    "guid":        guid,
-                    "coin":        coin
-                })
-
-    # (b) no-volume blocks
-    no_vol_ul = soup.select_one("ul.main.version-chap.no-volumn")
-    if no_vol_ul:
-        for chap_li in no_vol_ul.select("li.wp-manga-chapter"):
-            if "free-chap" in chap_li.get("class", []):
-                continue
-
-            pub = extract_pubdate_from_soup(chap_li)
-            if pub < now - datetime.timedelta(days=7):
-                continue
-
-            a = chap_li.find("a")
-            raw_html = a.decode_contents()
-
-            m1 = re.match(r'\s*([^<]+)', raw_html)
-            chap_name = m1.group(1).strip() if m1 else raw_html.strip()
-
-            m2 = re.search(r'</i>\s*[-–]\s*(.+)', raw_html)
-            nameext = m2.group(1).strip() if m2 else ""
-
-            href = a.get("href", "").strip()
-            if href and href != "#":
-                link = href
-            else:
-                link = f"{novel_url}{slug(chap_name)}/"
-
-            guid = next(
-                (c.split("data-chapter-")[1]
-                 for c in chap_li.get("class", [])
-                 if c.startswith("data-chapter-")),
-                slug(chap_name)
-            )
-
-            coin = chap_li.select_one("span.coin")
-            coin = coin.get_text(strip=True) if coin else ""
-
-            paid.append({
-                "volume":      "",
-                "chaptername": chap_name,
-                "nameextend":  nameext,
-                "link":        link,
-                "description": main_desc,
-                "pubDate":     pub,
-                "guid":        guid,
-                "coin":        coin
-            })
-
-    return paid, main_desc
-
-
-async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str):
-    """
-    Mistmint Haven: no premium layer.
-    Always return nothing so paid_feed_generator.py won't blow up.
-    """
-    return [], ""
-
-
-# ----------------------------------------------------------------------
-# 6) ─── CHAPTER-NUMBER TUPLE (for sorting) ────────────────────────────
-# ----------------------------------------------------------------------
-def chapter_num_dragonholic(chaptername: str):
-    nums = re.findall(r"\d+(?:\.\d+)?", chaptername)
-    return tuple(float(n) if "." in n else int(n) for n in nums) if nums else (0,)
-
-
-# ----------------------------------------------------------------------
-# 7) ─── COMMENT-HELPERS ───────────────────────────────────────────────
-# ----------------------------------------------------------------------
-def split_comment_title_dragonholic(comment_title):
-    t = " ".join(comment_title.split())
-    m = re.search(r"^Comment on\s+(.+?)\s+by\s+.+$", t, re.IGNORECASE)
+def split_comment_title_dragonholic(comment_title: str) -> str:
+    collapsed = " ".join(comment_title.split())
+    m = re.search(r"^Comment on\s+(.+?)\s+by\s+.+$", collapsed, re.IGNORECASE)
     return m.group(1).strip() if m else ""
+
 
 def extract_chapter_dragonholic(link: str) -> str:
     m = re.search(r"#comment-(\d+)", link)
@@ -421,12 +611,17 @@ def extract_chapter_dragonholic(link: str) -> str:
             if hasattr(entry, "approve_url") and f"c={cid}" in entry.approve_url:
                 return entry.chapter
 
-    parsed   = urlparse(link)
+    parsed = urlparse(link)
     segments = [s for s in parsed.path.split("/") if s]
     if len(segments) <= 2:
         return "Homepage"
+
     last = unquote(segments[-1]).replace("-", " ")
-    return last if not last.lower().startswith(("novel","comments")) else "Homepage"
+    lower = last.lower()
+    if lower.startswith("novel") or lower.startswith("comments"):
+        return "Homepage"
+    return last
+
 
 def build_comment_link_dragonholic(novel_title: str, host: str, placeholder_link: str) -> str:
     m = re.search(r"#comment-(\d+)", placeholder_link)
@@ -435,46 +630,50 @@ def build_comment_link_dragonholic(novel_title: str, host: str, placeholder_link
 
     cid = m.group(1)
     chapter_label = extract_chapter_dragonholic(placeholder_link)
-    chapter_slug  = slug(chapter_label)
+    chapter_slug = slug(chapter_label)
 
-    novel_url = HOSTING_SITE_DATA[host]["novels"][novel_title]["novel_url"]
-    if not novel_url.endswith("/"):
-        novel_url += "/"
+    base_url = HOSTING_SITE_DATA[host]["novels"][novel_title]["novel_url"]
+    if not base_url.endswith("/"):
+        base_url += "/"
 
-    return f"{novel_url}{chapter_slug}/#comment-{cid}"
+    return f"{base_url}{chapter_slug}/#comment-{cid}"
 
-def split_reply_chain_dragonholic(raw: str) -> tuple[str,str]:
+
+def split_reply_chain_dragonholic(raw: str) -> tuple:
     from html import unescape
     ws_collapsed = " ".join(raw.split())
     t = unescape(ws_collapsed)
+
     m = re.match(
         r'\s*In reply to\s*<a [^>]+>([^<]+)</a>\.\s*(.*)$',
         t,
         re.IGNORECASE
     )
     if m:
-        name, body = m.group(1).strip(), m.group(2).strip()
+        name = m.group(1).strip()
+        body = m.group(2).strip()
         return f"In reply to {name}", body
-    else:
-        return "", raw.strip()
+
+    return "", raw.strip()
 
 
-# ----------------------------------------------------------------------
-# 8) ─── DISPATCH TABLES & ENTRY POINT ─────────────────────────────────
-# ----------------------------------------------------------------------
+# =============================================================================
+# DISPATCH TABLE
+# =============================================================================
+
 DRAGONHOLIC_UTILS = {
-    # Free-feed stuff
+    # Free/public feed
     "split_title": split_title_dragonholic,
-    "extract_volume": extract_volume_dragonholic,  # <-- ADD THIS
+    "extract_volume": extract_volume_dragonholic,
 
-    # Paid-feed stuff
+    # Paid feed
     "split_paid_title": split_paid_chapter_dragonholic,
     "format_volume_from_url": format_volume_from_url,
-    "chapter_num": chapter_num_dragonholic,
+    "chapter_num": chapter_num,
     "novel_has_paid_update_async": novel_has_paid_update_async,
     "scrape_paid_chapters_async": scrape_paid_chapters_async,
 
-    # Shared helpers
+    # Comments / misc
     "clean_description": clean_description,
     "extract_pubdate": extract_pubdate_from_soup,
     "split_comment_title": split_comment_title_dragonholic,
@@ -482,29 +681,36 @@ DRAGONHOLIC_UTILS = {
     "build_comment_link": build_comment_link_dragonholic,
     "split_reply_chain": split_reply_chain_dragonholic,
 
-    # passthroughs for mapping
-    "get_novel_details": lambda host, title: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}),
-    "get_host_translator": lambda host: HOSTING_SITE_DATA.get(host, {}).get("translator", ""),
-    "get_host_logo": lambda host: HOSTING_SITE_DATA.get(host, {}).get("host_logo", ""),
-    "get_featured_image": lambda title, host: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}).get("featured_image", ""),
-    "get_novel_discord_role": lambda title, host: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}).get("discord_role_id", ""),
-    "get_comments_feed_url": lambda host: HOSTING_SITE_DATA.get(host, {}).get("comments_feed_url", ""),
-    "get_nsfw_novels": lambda: [],
+    # passthroughs to novel_mappings
+    "get_novel_details":
+        lambda host, title: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}),
+    "get_host_translator":
+        lambda host: HOSTING_SITE_DATA.get(host, {}).get("translator", ""),
+    "get_host_logo":
+        lambda host: HOSTING_SITE_DATA.get(host, {}).get("host_logo", ""),
+    "get_featured_image":
+        lambda title, host: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}).get("featured_image", ""),
+    "get_novel_discord_role":
+        lambda title, host: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}).get("discord_role_id", ""),
+    "get_comments_feed_url":
+        lambda host: HOSTING_SITE_DATA.get(host, {}).get("comments_feed_url", ""),
+    "get_nsfw_novels":
+        lambda: [],
 }
 
 MISTMINT_UTILS = {
-    # Free-feed stuff
+    # Free/public feed
     "split_title": split_title_mistmint,
-    "extract_volume": extract_volume_mistmint,  # <-- ADD THIS
+    "extract_volume": extract_volume_mistmint,
 
-    # Paid-feed stuff (stubbed)
+    # Paid feed (synthetic)
     "split_paid_title": split_paid_chapter_mistmint,
-    "format_volume_from_url": format_volume_from_url,  # still harmless
-    "chapter_num": chapter_num_dragonholic,
+    "format_volume_from_url": format_volume_from_url,
+    "chapter_num": chapter_num,
     "novel_has_paid_update_async": novel_has_paid_update_mistmint_async,
     "scrape_paid_chapters_async": scrape_paid_chapters_mistmint_async,
 
-    # shared helpers / mirrors
+    # Comments/etc. (reuse Dragonholic logic for now)
     "clean_description": clean_description,
     "extract_pubdate": extract_pubdate_from_soup,
     "split_comment_title": split_comment_title_dragonholic,
@@ -512,15 +718,23 @@ MISTMINT_UTILS = {
     "build_comment_link": build_comment_link_dragonholic,
     "split_reply_chain": split_reply_chain_dragonholic,
 
-    # passthroughs for mapping
-    "get_novel_details": lambda host, title: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}),
-    "get_host_translator": lambda host: HOSTING_SITE_DATA.get(host, {}).get("translator", ""),
-    "get_host_logo": lambda host: HOSTING_SITE_DATA.get(host, {}).get("host_logo", ""),
-    "get_featured_image": lambda title, host: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}).get("featured_image", ""),
-    "get_novel_discord_role": lambda title, host: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}).get("discord_role_id", ""),
-    "get_comments_feed_url": lambda host: HOSTING_SITE_DATA.get(host, {}).get("comments_feed_url", ""),
-    "get_nsfw_novels": lambda: [],
+    # passthroughs to novel_mappings
+    "get_novel_details":
+        lambda host, title: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}),
+    "get_host_translator":
+        lambda host: HOSTING_SITE_DATA.get(host, {}).get("translator", ""),
+    "get_host_logo":
+        lambda host: HOSTING_SITE_DATA.get(host, {}).get("host_logo", ""),
+    "get_featured_image":
+        lambda title, host: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}).get("featured_image", ""),
+    "get_novel_discord_role":
+        lambda title, host: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}).get("discord_role_id", ""),
+    "get_comments_feed_url":
+        lambda host: HOSTING_SITE_DATA.get(host, {}).get("comments_feed_url", ""),
+    "get_nsfw_novels":
+        lambda: [],
 }
+
 
 def get_host_utils(host: str):
     if host == "Dragonholic":
