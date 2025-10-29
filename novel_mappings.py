@@ -59,6 +59,7 @@ HOSTING_SITE_DATA = {
                 "pub_date_override": {"hour": 12, "minute": 0, "second": 0},
                 # for manually updated paid feed
                 "short_code": "tdlbkgc",
+                "coin_price": 5,
 
                 # ─── webhook-only fields ───
                 "chapter_count": "734 chapters + 3 extras",
