@@ -21,4 +21,5 @@ Homepage = "https://github.com/Cannibal-Turtle/rss-feed"
 # explicitly list each standalone .py you want installed
 py-modules = [
   "novel_mappings",
+  "host_utils",
 ]
