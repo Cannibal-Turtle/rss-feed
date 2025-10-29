@@ -189,7 +189,10 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
                 pub_dt = pub_dt.replace(**override)
 
             guid_val = f"{short_code}-{ch}"
-
+    
+            # pull the per-novel fixed price (default "5" just in case)
+            coin_amt = str(details.get("coin_price", "5"))
+    
             all_items.append({
                 "volume":      volume,
                 "chaptername": chaptername,
@@ -198,10 +201,10 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
                 "description": desc_html,
                 "pubDate":     pub_dt,
                 "guid":        guid_val,
-                "coin":        "",          # Mistmint has no visible coin price
-                "novel_title": novel_title  # nice to have for Discord pings
+                "coin":        coin_amt,
+                "novel_title": novel_title
             })
-
+            
         # advance pointer for THIS novel
         novel_state["last_posted_chapter"] = latest_avail
         state[short_code] = novel_state
