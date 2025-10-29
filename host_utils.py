@@ -52,8 +52,8 @@ def split_title_mistmint(full_title: str):
         # "Chapter 13"
         chaptername = middle.strip()
 
-    # We don't return volume here because free_feed_generator calculates
-    # <volume> separately via format_volume_from_url(entry.link).
+    # We don't return volume here because free_feed_generator will ask
+    # utils["extract_volume"](title, link) for it per host.
     return novel_title, chaptername, chapter_sub
 
 def extract_volume_dragonholic(full_title: str, link: str) -> str:
