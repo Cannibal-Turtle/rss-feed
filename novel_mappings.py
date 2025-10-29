@@ -5,12 +5,15 @@ Mapping file for your own novel feed.
 For each hosting site, we store:
   - translator: your username on that site.
   - host_logo: the URL for the site's logo.
+  - coin_emoji: optional emoji for coin display in paid feed
   - novels: a dictionary mapping novel titles to their details:
       - discord_role_id: the Discord role ID for the novel.
-      - novel_url: the manual URL for the novel.
-      - featured_image: the URL for the novel's featured image.
-      
-Also included is a list (via get_nsfw_novels) for NSFW novels.
+      - novel_url: canonical/series URL.
+      - featured_image: cover URL.
+      - pub_date_override: optional dict for forcing hh:mm:ss in output.
+      - custom_description: (optional) override for <description> in free feed.
+
+Also included are helper getters at the bottom.
 """
 
 HOSTING_SITE_DATA = {
@@ -26,20 +29,22 @@ HOSTING_SITE_DATA = {
                 "novel_url": "https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/",
                 "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/177838.jpg",
                 "pub_date_override": {"hour": 12, "minute": 0, "second": 0},
+
                 # ─── webhook-only fields ───
                 "chapter_count": "1184 chapters + 8 extras",
                 "last_chapter": "Extra 8",
                 "start_date": "31/8/2024",
                 "free_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml",
                 "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
-                "custom_emoji":   "<:emoji_62:1365400946330435654>",
-                "extra_ping_roles": "<@&1329500516304158901> <@&1329427832077684736> <@&1330469014895595620>", # for new novel checker
-                "discord_role_url":"https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
-                "history_file":   "tvitpa_history.json"
+                "custom_emoji": "<:emoji_62:1365400946330435654>",
+                "extra_ping_roles": "<@&1329500516304158901> <@&1329427832077684736> <@&1330469014895595620>",
+                "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
+                "history_file": "tvitpa_history.json",
             },
-            # Add more novels here if needed.
+            # Add more Dragonholic novels here if needed.
         },
     },
+
     "Mistmint Haven": {
         "feed_url": "https://www.mistminthaven.com/feed",
         "comments_feed_url": "",
@@ -60,22 +65,23 @@ HOSTING_SITE_DATA = {
                 "free_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml",
                 "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
                 "custom_emoji": "<:468087cutebunny:1431678613002125313>",
-                "extra_ping_roles": "<@&1329500516304158901> <@&1329427832077684736> <@&1330469077784727562>",  # for new novel checker
+                "extra_ping_roles": "<@&1329500516304158901> <@&1329427832077684736> <@&1330469077784727562>",
                 "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
                 "history_file": "tdlbkgc_history.json",
                 "custom_description": """【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
-                Dark room, forced confinement, obsessive pampering.
-                Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
-                He’s been completing the missions beautifully, except… the process seems a bit off—
-                A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
-                A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
-                The sound of metal chains clatters—
-                The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
-                It’s 1v1. Sweet, sweet, sweet."""
-                        },
-                    },
-                },
-            }
+Dark room, forced confinement, obsessive pampering.
+Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
+He’s been completing the missions beautifully, except… the process seems a bit off—
+A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
+A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
+The sound of metal chains clatters—
+The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
+It’s 1v1. Sweet, sweet, sweet."""
+            },
+            # Add more Mistmint novels you translate, if any.
+        },
+    },
+}
 
 # ---------------- Utility Functions ----------------
 
@@ -102,7 +108,7 @@ def get_novel_discord_role(novel_title, host):
     if novel_title in get_nsfw_novels():
         base_role += " | <@&1343352825811439616>"
     return base_role
-  
+
 def get_novel_url(novel_title, host):
     """Returns the URL for the given novel on the specified hosting site."""
     details = get_novel_details(host, novel_title)
@@ -116,17 +122,17 @@ def get_featured_image(novel_title, host):
 def get_nsfw_novels():
     """Returns the list of NSFW novel titles."""
     return [
-        # Add NSFW novel titles here, e.g.:
-        # "Some NSFW Novel Title"
+        # e.g. "Some NSFW Novel Title"
     ]
 
 def get_pub_date_override(novel_title, host):
     """
-    Returns a dictionary of pub_date override values (e.g. {"hour": 12, "minute": 0, "second": 0})
-    for the given novel. If no override is defined, returns None.
+    Returns a dict like {"hour": 12, "minute": 0, "second": 0}
+    or None if not set.
     """
     details = get_novel_details(host, novel_title)
     return details.get("pub_date_override", None)
 
 def get_coin_emoji(host):
+    """Emoji string used in <coin> for paid feed."""
     return HOSTING_SITE_DATA.get(host, {}).get("coin_emoji", "")
