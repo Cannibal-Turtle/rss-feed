@@ -57,6 +57,8 @@ HOSTING_SITE_DATA = {
                 "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught",
                 "featured_image": "https://i.imgur.com/pTdXfWc.jpeg",
                 "pub_date_override": {"hour": 12, "minute": 0, "second": 0},
+                # for manually updated paid feed
+                "short_code": "tdlbkgc",
 
                 # ─── webhook-only fields ───
                 "chapter_count": "734 chapters + 3 extras",
