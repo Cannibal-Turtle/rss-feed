@@ -2,7 +2,6 @@ name: Update Paid Feed
 
 on:
   workflow_dispatch:
-  # you can re-enable cron later if you want:
   #schedule:
   #  - cron: '0 12 * * *'
   #  - cron: '15 12 * * *'
@@ -18,7 +17,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # so pull --rebase works cleanly
+          fetch-depth: 0  # so pull --rebase works without shallow clone problems
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -39,18 +38,21 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # 1. make sure we’re in sync with remote main *before* committing
+          # 1. sync with remote first so we don't hit "cannot pull with rebase" later
           git pull --rebase origin main || echo "nothing to rebase"
 
-          # 2. stage all generated/updated files
+          # 2. stage generated/updated files
           git add paid_chapters_feed.xml mistmint_state.json || true
 
-          # 3. create a commit if there are changes
+          # 3. commit if there are changes
           git commit -m "ci: update paid feed & mistmint state" || echo "No changes to commit"
 
-          # 4. push using the token
+          # 4. push back up using token auth
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
           git push origin main
+
+      - name: Wait for RSS to update
+        run: sleep 10
 
       - name: Trigger Discord Webhook Workflow
         env:
@@ -64,3 +66,7 @@ jobs:
                  "event_type": "trigger-discord-notify",
                  "client_payload": { "feed": "paid" }
                }'
+
+
+
+
