@@ -118,8 +118,9 @@ def main():
         for entry in parsed_feed.entries:
             # Use the host-specific split_title function.
             main_title, chaptername, nameextend = utils["split_title"](entry.title)
-            # --- Volume detection from link ---
-            volume = format_volume_from_url(entry.link)
+            
+            # host-specific volume extraction
+            volume = utils.get("extract_volume", lambda t, l: "")(entry.title, entry.link)
             # Retrieve novel details using the host and main title.
             novel_details = get_novel_details(host, main_title)
             if not novel_details:
