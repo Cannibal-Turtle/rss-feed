@@ -37,23 +37,35 @@ HOSTING_SITE_DATA = {
                 "discord_role_url":"https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
                 "history_file":   "tvitpa_history.json"
             },
-            "Second Novel Title Example": {
-                "discord_role_id": "<@&123456789012345678>",  # Replace with the actual Discord role ID.
-                "novel_url": "https://dragonholic.com/second-novel",  # Replace with the actual URL.
-                "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/second-novel.jpg",
-                "pub_date_override": {"hour": 12, "minute": 0, "second": 0}
-            }
             # Add more novels here if needed.
-        }
+        },
     },
-    "Lily on The Valley": {
-        "feed_url": "",
-        "paid_feed_url": "",
+    "Mistmint Haven": {
+        "feed_url": "https://www.mistminthaven.com/feed",
         "comments_feed_url": "",
-        "translator": "",
-        "host_logo": "",
-        "novels": {}
-    }
+        "translator": "Cannibal Turtle",
+        "host_logo": "https://i.imgur.com/oLT0jCN.png",
+        "coin_emoji": "<:mistmint_currency:1433046707121422487>",
+        "novels": {
+            "[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught": {
+                "discord_role_id": "<@&1431675643078250646>",
+                "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught",
+                "featured_image": "https://i.imgur.com/pTdXfWc.jpeg",
+                "pub_date_override": {"hour": 12, "minute": 0, "second": 0},
+
+                # ─── webhook-only fields ───
+                "chapter_count": "734 chapters + 3 extras",
+                "last_chapter": "Extra 3",
+                "start_date": "1/11/2025",
+                "free_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml",
+                "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
+                "custom_emoji": "<:468087cutebunny:1431678613002125313>",
+                "extra_ping_roles": "<@&1329500516304158901> <@&1329427832077684736> <@&1330469077784727562>",  # for new novel checker
+                "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
+                "history_file": "tdlbkgc_history.json",
+            },
+        },
+    },
 }
 
 # ---------------- Utility Functions ----------------
@@ -70,7 +82,7 @@ def get_novel_details(host, novel_title):
     """Returns the details of a novel (as a dict) from the specified hosting site."""
     return HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(novel_title, {})
 
-def get_novel_discord_role(novel_title, host="Dragonholic"):
+def get_novel_discord_role(novel_title, host):
     """
     Returns the Discord role ID for the given novel.
     If the novel title appears in the NSFW list (via get_nsfw_novels()),
@@ -82,12 +94,12 @@ def get_novel_discord_role(novel_title, host="Dragonholic"):
         base_role += " | <@&1343352825811439616>"
     return base_role
   
-def get_novel_url(novel_title, host="Dragonholic"):
+def get_novel_url(novel_title, host):
     """Returns the URL for the given novel on the specified hosting site."""
     details = get_novel_details(host, novel_title)
     return details.get("novel_url", "")
 
-def get_featured_image(novel_title, host="Dragonholic"):
+def get_featured_image(novel_title, host):
     """Returns the featured image URL for the given novel on the specified hosting site."""
     details = get_novel_details(host, novel_title)
     return details.get("featured_image", "")
@@ -99,7 +111,7 @@ def get_nsfw_novels():
         # "Some NSFW Novel Title"
     ]
 
-def get_pub_date_override(novel_title, host="Dragonholic"):
+def get_pub_date_override(novel_title, host):
     """
     Returns a dictionary of pub_date override values (e.g. {"hour": 12, "minute": 0, "second": 0})
     for the given novel. If no override is defined, returns None.
@@ -107,5 +119,5 @@ def get_pub_date_override(novel_title, host="Dragonholic"):
     details = get_novel_details(host, novel_title)
     return details.get("pub_date_override", None)
 
-def get_coin_emoji(host="Dragonholic"):
+def get_coin_emoji(host):
     return HOSTING_SITE_DATA.get(host, {}).get("coin_emoji", "")
