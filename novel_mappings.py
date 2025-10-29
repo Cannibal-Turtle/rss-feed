@@ -63,10 +63,19 @@ HOSTING_SITE_DATA = {
                 "extra_ping_roles": "<@&1329500516304158901> <@&1329427832077684736> <@&1330469077784727562>",  # for new novel checker
                 "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
                 "history_file": "tdlbkgc_history.json",
-            },
-        },
-    },
-}
+                "custom_description": """【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
+                Dark room, forced confinement, obsessive pampering.
+                Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
+                He’s been completing the missions beautifully, except… the process seems a bit off—
+                A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
+                A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
+                The sound of metal chains clatters—
+                The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
+                It’s 1v1. Sweet, sweet, sweet."""
+                        },
+                    },
+                },
+            }
 
 # ---------------- Utility Functions ----------------
 
