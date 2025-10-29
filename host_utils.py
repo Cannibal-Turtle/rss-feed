@@ -56,6 +56,44 @@ def split_title_mistmint(full_title: str):
     # <volume> separately via format_volume_from_url(entry.link).
     return novel_title, chaptername, chapter_sub
 
+def extract_volume_dragonholic(full_title: str, link: str) -> str:
+    """
+    Dragonholic chapters usually don't include volume text in the feed title,
+    so we fall back to the URL-based parser you already had.
+    """
+    return format_volume_from_url(link)
+
+
+def extract_volume_mistmint(full_title: str, link: str) -> str:
+    """
+    Mistmint feed titles look like:
+    "Miss Priest, ... — Volume 1: Dream’s Beginning, Chapter 30 — Card Master"
+    or
+    "My Ex-Wife ... — Chapter 13 — The Ring"
+
+    We only want the part before ", Chapter NN" if it exists.
+    Example:
+      middle = "Volume 1: Dream’s Beginning, Chapter 30"
+      => "Volume 1: Dream’s Beginning"
+    If there's no volume (just "Chapter 13"), return "".
+    """
+    # Split on em dash blocks like we did in split_title_mistmint
+    parts = [p.strip() for p in full_title.split(" — ")]
+
+    if len(parts) < 2:
+        # unexpected format, just give up
+        return ""
+
+    middle = parts[1]
+
+    if ", Chapter " in middle:
+        before, _after = middle.split(", Chapter ", 1)
+        # before = "Volume 1: Dream’s Beginning"
+        return before.strip()
+
+    # Example of no volume: middle == "Chapter 13"
+    return ""
+
 
 # ----------------------------------------------------------------------
 # 2) ─── PAID-FEED TITLE SPLITTERS ─────────────────────────────────────
@@ -427,6 +465,7 @@ def split_reply_chain_dragonholic(raw: str) -> tuple[str,str]:
 DRAGONHOLIC_UTILS = {
     # Free-feed stuff
     "split_title": split_title_dragonholic,
+    "extract_volume": extract_volume_dragonholic,  # <-- ADD THIS
 
     # Paid-feed stuff
     "split_paid_title": split_paid_chapter_dragonholic,
@@ -443,7 +482,7 @@ DRAGONHOLIC_UTILS = {
     "build_comment_link": build_comment_link_dragonholic,
     "split_reply_chain": split_reply_chain_dragonholic,
 
-    # Mapping passthroughs
+    # passthroughs for mapping
     "get_novel_details": lambda host, title: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}),
     "get_host_translator": lambda host: HOSTING_SITE_DATA.get(host, {}).get("translator", ""),
     "get_host_logo": lambda host: HOSTING_SITE_DATA.get(host, {}).get("host_logo", ""),
@@ -456,15 +495,16 @@ DRAGONHOLIC_UTILS = {
 MISTMINT_UTILS = {
     # Free-feed stuff
     "split_title": split_title_mistmint,
+    "extract_volume": extract_volume_mistmint,  # <-- ADD THIS
 
     # Paid-feed stuff (stubbed)
     "split_paid_title": split_paid_chapter_mistmint,
-    "format_volume_from_url": format_volume_from_url,  # TODO: extend for Mistmint slugs
+    "format_volume_from_url": format_volume_from_url,  # still harmless
     "chapter_num": chapter_num_dragonholic,
     "novel_has_paid_update_async": novel_has_paid_update_mistmint_async,
     "scrape_paid_chapters_async": scrape_paid_chapters_mistmint_async,
 
-    # Shared helpers
+    # shared helpers / mirrors
     "clean_description": clean_description,
     "extract_pubdate": extract_pubdate_from_soup,
     "split_comment_title": split_comment_title_dragonholic,
@@ -472,7 +512,7 @@ MISTMINT_UTILS = {
     "build_comment_link": build_comment_link_dragonholic,
     "split_reply_chain": split_reply_chain_dragonholic,
 
-    # Mapping passthroughs
+    # passthroughs for mapping
     "get_novel_details": lambda host, title: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}),
     "get_host_translator": lambda host: HOSTING_SITE_DATA.get(host, {}).get("translator", ""),
     "get_host_logo": lambda host: HOSTING_SITE_DATA.get(host, {}).get("host_logo", ""),
