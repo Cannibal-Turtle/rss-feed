@@ -24,7 +24,7 @@ MISTMINT_STATE_PATH = "mistmint_state.json"
 
 # All arcs for [Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught
 # Used to figure out volume/arc info for any global chapter number.
-MISTMINT_ARCS = [
+TDLBKGC_ARCS = [
     {"arc_num": 1,  "title": "Tycoon Boss Gong × Pure Little Male Servant Shou",            "start": 1,   "end": 42},
     {"arc_num": 2,  "title": "Sea Serpent Chief Gong × Cute Little Merman Shou",            "start": 43,  "end": 79},
     {"arc_num": 3,  "title": "Brutal Evil Dragon Gong × Crossdressing Princess Shou",       "start": 80,  "end": 109},
@@ -89,7 +89,7 @@ def _get_arc_for_ch(ch_num: int):
     Given a global chapter number (e.g. 50),
     return the arc dict containing it.
     """
-    for arc in MISTMINT_ARCS:
+    for arc in TDLBKGC_ARCS:
         if arc["start"] <= ch_num <= arc["end"]:
             return arc
     return None
@@ -166,7 +166,7 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
         for ch in range(last_posted + 1, latest_avail + 1):
             arc = _get_arc_for_ch(ch)
             if not arc:
-                # if you ever go beyond arc 20 and forget to extend MISTMINT_ARCS,
+                # if you ever go beyond arc 20 and forget to extend TDLBKGC_ARCS,
                 # we'll just skip unknown ranges instead of crashing.
                 continue
 
