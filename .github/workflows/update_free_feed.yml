@@ -4,6 +4,8 @@ on:
   schedule:
     - cron: '0 12 * * *'
     - cron: '15 12 * * *'
+    - cron: '0 4 * * *'   # 12:00 UTC+8 (MYT)
+    - cron: '15 4 * * *'  # 12:15 UTC+8 (MYT)
   workflow_dispatch:
 
 permissions:
