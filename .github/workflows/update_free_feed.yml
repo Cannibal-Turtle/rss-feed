@@ -14,7 +14,7 @@ permissions:
 # Share this same group in BOTH free and paid workflows:
 concurrency:
   group: feeds-main
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   update_feed:
