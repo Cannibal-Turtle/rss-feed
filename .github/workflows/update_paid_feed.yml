@@ -39,7 +39,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
       
           # Stage & (maybe) commit first
-          git add paid_chapters_feed.xml mistmint_state.json || true
+          git add paid_chapters_feed.xml paid_history.json mistmint_state.json || true
           git commit -m "ci: update paid feed & mistmint state" || echo "No changes to commit"
       
           # Rebase safely even if the generator touched files
