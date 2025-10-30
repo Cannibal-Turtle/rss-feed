@@ -4,8 +4,9 @@ import asyncio
 import aiohttp
 import PyRSS2Gen
 import xml.dom.minidom
+import json
+import os
 from xml.sax.saxutils import escape
-from collections import defaultdict
 from host_utils import get_host_utils
 
 # Import mapping functions and data from novel_mappings.py
@@ -22,11 +23,61 @@ from novel_mappings import (
     get_coin_emoji
 )
 
+# ---------------- History Control ----------------
+HISTORY_PATH = "paid_history.json"
+
+def _dt_to_iso(dt: datetime.datetime) -> str:
+    return dt.astimezone(datetime.timezone.utc).isoformat()
+
+def _iso_to_dt(s: str) -> datetime.datetime:
+    return datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+
+def load_history():
+    if not os.path.exists(HISTORY_PATH):
+        return []
+    try:
+        with open(HISTORY_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def save_history(items):
+    with open(HISTORY_PATH, "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2)
+
+def item_to_dict(item: PyRSS2Gen.RSSItem):
+    return {
+        "title": item.title,
+        "link": item.link,
+        "description": item.description,
+        "guid": getattr(item.guid, "guid", None) if isinstance(item.guid, PyRSS2Gen.Guid) else item.guid,
+        "isPermaLink": getattr(item.guid, "isPermaLink", False) if isinstance(item.guid, PyRSS2Gen.Guid) else False,
+        "pubDate": _dt_to_iso(item.pubDate),
+        "volume": getattr(item, "volume", ""),
+        "chaptername": getattr(item, "chaptername", ""),
+        "nameextend": getattr(item, "nameextend", ""),
+        "coin": getattr(item, "coin", ""),
+        "host": getattr(item, "host", ""),
+    }
+
+def dict_to_item(d):
+    return MyRSSItem(
+        title=d["title"],
+        link=d["link"],
+        description=d["description"],
+        guid=PyRSS2Gen.Guid(d.get("guid") or d["link"], isPermaLink=d.get("isPermaLink", False)),
+        pubDate=_iso_to_dt(d["pubDate"]),
+        volume=d.get("volume",""),
+        chaptername=d.get("chaptername",""),
+        nameextend=d.get("nameextend",""),
+        coin=d.get("coin",""),
+        host=d.get("host",""),
+    )
+
 # ---------------- Concurrency Control ----------------
 semaphore = asyncio.Semaphore(100)
 
 def normalize_date(dt):
-    """Remove microseconds from a datetime."""
     return dt.replace(microsecond=0)
 
 async def process_novel(session, host, novel_title):
@@ -34,37 +85,31 @@ async def process_novel(session, host, novel_title):
         novel_url = get_novel_url(novel_title, host)
         print(f"Scraping: {novel_url}")
         utils = get_host_utils(host)
-    
-        # 1) Check if there's a recent premium update (chapter or extra) in the last 7 days
+
+        # Only scrape if the host says there was a paid update recently
         if not await utils["novel_has_paid_update_async"](session, novel_url):
             print(f"Skipping {novel_title}: no recent paid update found.")
             return []
 
-        # 2) Scrape paid chapters
-        paid_chapters, main_desc = await utils["scrape_paid_chapters_async"](session, novel_url, host)
+        paid_chapters, _main_desc = await utils["scrape_paid_chapters_async"](session, novel_url, host)
         items = []
         if paid_chapters:
             for chap in paid_chapters:
-                # chap["chaptername"] -> e.g. "Chapter 640"
-                # chap["nameextend"]  -> e.g. "The Abandoned Supporting Female Role 022"
                 raw_chaptername = chap["chaptername"].strip()
                 raw_nameextend  = chap["nameextend"].strip()
-                
-                # Build final strings
+
                 chaptername = raw_chaptername
                 nameextend  = f"***{raw_nameextend}***" if raw_nameextend else ""
                 volume = chap.get("volume", "")
-                
+
                 pub_date = chap["pubDate"]
                 if pub_date.tzinfo is None:
                     pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
 
-                # (Optional) override date
                 override = get_pub_date_override(novel_title, host)
                 if override:
                     pub_date = pub_date.replace(**override)
 
-                # Create RSS item
                 item = MyRSSItem(
                     title=novel_title,
                     link=chap["link"],
@@ -101,7 +146,6 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         writer.write(indent + "    <link>%s</link>" % escape(self.link) + newl)
         writer.write(indent + "    <description><![CDATA[%s]]></description>" % self.description + newl)
 
-        # Category: NSFW or SFW
         nsfw_list = get_nsfw_novels()
         category_value = "NSFW" if self.title in nsfw_list else "SFW"
         writer.write(indent + "    <category>%s</category>" % escape(category_value) + newl)
@@ -115,9 +159,8 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         writer.write(indent + '    <featuredImage url="%s"/>' % escape(get_featured_image(self.title, self.host)) + newl)
         if self.coin:
             emoji = get_coin_emoji(self.host)
-            # if there’s no emoji configured, this will just be blank
-            writer.write(indent + "    <coin>%s %s</coin>" % (escape(emoji), escape(self.coin)) + newl)
-            
+            writer.write(indent + "    <coin>%s %s</coin>" % (escape(emoji), escape(self.coin)) + newl)
+
         writer.write(indent + "    <pubDate>%s</pubDate>" %
                      self.pubDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
 
@@ -166,57 +209,65 @@ class CustomRSS2(PyRSS2Gen.RSS2):
         writer.write("</rss>" + newl)
 
 async def main_async():
-    rss_items = []
+    # 1) scrape fresh items
+    scraped = []
     async with aiohttp.ClientSession() as session:
         tasks = []
-        # Create a task for each novel under each host
         for host, data in HOSTING_SITE_DATA.items():
             for novel_title in data.get("novels", {}).keys():
                 tasks.append(asyncio.create_task(process_novel(session, host, novel_title)))
         results = await asyncio.gather(*tasks)
         for items in results:
-            rss_items.extend(items)
+            scraped.extend(items)
 
-    # Sort by (normalized pubDate, then chapter_num)
-    rss_items.sort(key=lambda item: (
-        normalize_date(item.pubDate),
-        get_host_utils(item.host)["chapter_num"](item.chaptername)
+    # 2) load previous history
+    old_items = [dict_to_item(x) for x in load_history()]
+
+    # 3) merge & de-dupe by GUID (new wins)
+    merged = {}
+    def key_for(it):
+        return getattr(it.guid, "guid", None) if isinstance(it.guid, PyRSS2Gen.Guid) else it.guid or it.link
+
+    for it in old_items:
+        merged[key_for(it)] = it
+    for it in scraped:
+        merged[key_for(it)] = it
+
+    # 4) keep last 7 days, sort, cap
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    seven_days_ago = now_utc - datetime.timedelta(days=7)
+    kept = [it for it in merged.values() if it.pubDate >= seven_days_ago]
+
+    kept.sort(key=lambda it: (
+        normalize_date(it.pubDate),
+        get_host_utils(getattr(it, "host", "")).get("chapter_num", lambda s:(0,))(getattr(it, "chaptername",""))
     ), reverse=True)
+    kept = kept[:200]
 
-    # Debug prints
-    for item in rss_items:
-        nums = get_host_utils(item.host)["chapter_num"](item.chaptername)
-        print(f"{item.title} - {item.chaptername} ({nums}) : {item.pubDate}")
+    # 5) save history back
+    save_history([item_to_dict(it) for it in kept])
 
-    new_feed = CustomRSS2(
+    # 6) publish RSS
+    feed = CustomRSS2(
         title="Aggregated Paid Chapters Feed",
         link="https://github.com/cannibal-turtle/",
         description="Aggregated RSS feed for paid chapters across mapped novels.",
-        lastBuildDate=datetime.datetime.now(datetime.timezone.utc),
-        items=rss_items
+        lastBuildDate=now_utc,
+        items=kept
     )
 
     output_file = "paid_chapters_feed.xml"
     with open(output_file, "w", encoding="utf-8") as f:
-        new_feed.writexml(f, indent="  ", addindent="  ", newl="\n")
+        feed.writexml(f, indent="  ", addindent="  ", newl="\n")
 
-    # Optional: pretty-print the XML
     with open(output_file, "r", encoding="utf-8") as f:
         xml_content = f.read()
     dom = xml.dom.minidom.parseString(xml_content)
-    pretty_xml = "\n".join([
-        line for line in dom.toprettyxml(indent="  ").splitlines()
-        if line.strip()
-    ])
+    pretty = "\n".join([line for line in dom.toprettyxml(indent="  ").splitlines() if line.strip()])
     with open(output_file, "w", encoding="utf-8") as f:
-        f.write(pretty_xml)
+        f.write(pretty)
 
-    # Final debug
-    for item in rss_items:
-        nums = get_host_utils(item.host)["chapter_num"](item.chaptername)
-        print(f"{item.title} - {item.chaptername} ({nums}) : {item.pubDate}")
-
-    print(f"Modified feed generated with {len(rss_items)} items.")
+    print(f"Modified feed generated with {len(kept)} items.")
     print(f"Output written to {output_file}")
 
 if __name__ == "__main__":
