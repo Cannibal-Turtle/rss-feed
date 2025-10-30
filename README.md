@@ -132,3 +132,11 @@ Each generated .xml feed (free or paid) will contain structured <item> entries e
   <guid isPermaLink="false">chapter-250-guid</guid>
 </item>
 ```
+
+## mistmint_state.json
+
+- A file to manually update all premium chapters of the novels in Mistmint Haven, as the site cannot be scraped nor does it have a paid feed.
+
+
+
+
