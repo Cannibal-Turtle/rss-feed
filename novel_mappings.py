@@ -10,7 +10,7 @@ For each hosting site, we store:
       - discord_role_id: the Discord role ID for the novel.
       - novel_url: canonical/series URL.
       - featured_image: cover URL.
-      - pub_date_override: optional dict for forcing hh:mm:ss in output.
+      - pub_date_override: optional dict for forcing hh:mm:ss in output. only affects paid chapters.
       - custom_description: (optional) override for <description> in free feed.
 
 Also included are helper getters at the bottom.
