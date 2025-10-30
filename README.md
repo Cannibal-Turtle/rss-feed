@@ -133,9 +133,10 @@ Each generated .xml feed (free or paid) will contain structured <item> entries e
 </item>
 ```
 
-## mistmint_state.json
+## NEW: mistmint_state.json & paid_history.json
 
-- A file to manually update all premium chapters of the novels in Mistmint Haven, as the site cannot be scraped nor does it have a paid feed.
+- `mistmint_state` is a file to manually update all premium chapters of the novels in Mistmint Haven, as the site cannot be scraped nor does it have a paid feed.
+- `paid_history.json` is a premature file that keeps track of the last 7-day feed before it merges with the final feed. Necessary due to mistmint's volatile feed log.
 
 
 
