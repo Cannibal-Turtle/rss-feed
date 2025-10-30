@@ -52,11 +52,15 @@ jobs:
         env:
           PAT_GITHUB: ${{ secrets.PAT_GITHUB }}
         run: |
-          curl -X POST \
-               -H "Accept: application/vnd.github.v3+json" \
-               -H "Authorization: Bearer $PAT_GITHUB" \
-               https://api.github.com/repos/Cannibal-Turtle/discord-webhook/dispatches \
-               -d '{
-                 "event_type": "trigger-discord-notify",
-                 "client_payload": { "feed": "free" }
-               }'
+          curl -sS --fail-with-body \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $PAT_GITHUB" \
+            https://api.github.com/repos/Cannibal-Turtle/discord-webhook/dispatches \
+            -d '{"event_type":"trigger-discord-notify","client_payload":{"feed":"free"}}'
+      
+          curl -sS --fail-with-body \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $PAT_GITHUB" \
+            https://api.github.com/repos/Cannibal-Turtle/mistmint-discord/dispatches \
+            -d '{"event_type":"trigger-discord-notify","client_payload":{"feed":"free"}}'
+
