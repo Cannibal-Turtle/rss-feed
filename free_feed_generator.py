@@ -16,7 +16,6 @@ from novel_mappings import (
     get_novel_details,
     get_novel_discord_role,
     get_nsfw_novels,
-    get_pub_date_override,
 )
 
 def compact_cdata(xml_str):
@@ -162,17 +161,14 @@ def main():
             desc_override = novel_details.get("custom_description")
             final_description = desc_override if desc_override else entry.description
 
-            # pubDate handling
-            pub_date = datetime.datetime(
-                *entry.published_parsed[:6],
-                tzinfo=datetime.timezone.utc
-            )
-
-            # Standardize hh:mm:ss if you defined pub_date_override in mapping
-            override = get_pub_date_override(main_title, host)
-            if override:
-                pub_date = pub_date.replace(**override)
-
+            # pubDate: take it exactly from the RSS entry (no overrides here)
+            tt = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
+            if tt:
+                pub_date = datetime.datetime(*tt[:6], tzinfo=datetime.timezone.utc)
+            else:
+                # very rare: some feeds omit dates — fall back to "now" so we don't crash
+                pub_date = datetime.datetime.now(datetime.timezone.utc)
+            
             # Build RSS item object
             item = MyRSSItem(
                 title=main_title,
