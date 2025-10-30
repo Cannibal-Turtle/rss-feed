@@ -20,8 +20,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # NEW: allow diffs/rebase reliably
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -35,16 +33,6 @@ jobs:
       - name: Run Feed Generator
         run: python free_feed_generator.py
 
-      # NEW: detect if the feed file changed (working tree vs last commit)
-      - name: Detect change
-        id: changed
-        run: |
-          if git diff --quiet -- free_chapters_feed.xml; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-          else
-            echo "changed=true" >> $GITHUB_OUTPUT
-          fi
-
       - name: Commit and Push Changes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -53,17 +41,14 @@ jobs:
           git config --global user.email "action@github.com"
           git add free_chapters_feed.xml
           git commit -m "Update free feed XML" || echo "No changes to commit"
-          # CHANGED: safer pull to avoid unstaged-change errors
-          git pull --rebase --autostash origin main || echo "nothing to rebase"
+          git pull --rebase
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
-          git push || echo "nothing to push"
+          git push
 
       - name: Wait for RSS to update
         run: sleep 10
         
-      # NEW: only trigger downstream repos when the XML actually changed
       - name: Trigger Discord Webhook Workflow
-        if: steps.changed.outputs.changed == 'true'
         env:
           PAT_GITHUB: ${{ secrets.PAT_GITHUB }}
         run: |
@@ -78,3 +63,4 @@ jobs:
             -H "Authorization: Bearer $PAT_GITHUB" \
             https://api.github.com/repos/Cannibal-Turtle/mistmint-discord/dispatches \
             -d '{"event_type":"trigger-discord-notify","client_payload":{"feed":"free"}}'
+
