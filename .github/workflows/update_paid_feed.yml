@@ -12,7 +12,7 @@ permissions:
 # Match the free job so only one feed job pushes at a time
 concurrency:
   group: feeds-main
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   update_paid_feed:
