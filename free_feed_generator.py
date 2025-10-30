@@ -156,10 +156,12 @@ def main():
             # volume (Dragonholic = from URL fallback, Mistmint = from title pre ", Chapter")
             volume = utils.get("extract_volume", lambda _t, _l: "")(entry.title, entry.link)
 
-            # choose description:
-            # prefer your mapping's custom_description if present
+            # description (prefer custom, else cleaned RSS)
+            raw_desc = getattr(entry, "description", "") or ""
+            cleaner = utils.get("clean_description", lambda s: s)
+            cleaned_desc = cleaner(raw_desc)
             desc_override = novel_details.get("custom_description")
-            final_description = desc_override if desc_override else entry.description
+            final_description = desc_override if desc_override else cleaned_desc
 
             # pubDate: take it exactly from the RSS entry (no overrides here)
             tt = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
