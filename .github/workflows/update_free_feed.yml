@@ -2,17 +2,18 @@ name: Update Free Feed
 
 on:
   schedule:
-    - cron: '0 12 * * *'  # 20:00 UTC+8 (MYT)
-    - cron: '15 12 * * *' # 20:15 UTC+8 (MYT)
-    - cron: '0 4 * * *'   # 12:00 UTC+8 (MYT)
-    - cron: '15 4 * * *'  # 12:15 UTC+8 (MYT)
+    - cron: '0 12 * * *'   # 20:00 MYT
+    - cron: '15 12 * * *'  # 20:15 MYT
+    - cron: '0 4 * * *'    # 12:00 MYT
+    - cron: '15 4 * * *'   # 12:15 MYT
   workflow_dispatch:
 
 permissions:
   contents: write
 
+# Share this same group in BOTH free and paid workflows:
 concurrency:
-  group: update-feed
+  group: feeds-main
   cancel-in-progress: true
 
 jobs:
@@ -21,10 +22,13 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false   # we'll set the remote URL with token manually
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
@@ -39,17 +43,25 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config --global user.name "GitHub Action"
-          git config --global user.email "action@github.com"
-          git add free_chapters_feed.xml
-          git commit -m "Update free feed XML" || echo "No changes to commit"
-          git pull --rebase
+          set -e
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+          git add free_chapters_feed.xml || true
+          git commit -m "ci: update free feed XML" || echo "No changes to commit"
+
+          # Use tokenized remote and rebase onto the latest main
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
-          git push
+          git fetch origin main
+          git rebase origin/main || git pull --rebase origin main
+
+          # Safe force so bot overwrites only its own last commit
+          git push --force-with-lease origin HEAD:main
 
       - name: Wait for RSS to update
         run: sleep 10
-        
+
       - name: Trigger Discord Webhook Workflow
         env:
           PAT_GITHUB: ${{ secrets.PAT_GITHUB }}
@@ -59,10 +71,12 @@ jobs:
             -H "Authorization: Bearer $PAT_GITHUB" \
             https://api.github.com/repos/Cannibal-Turtle/discord-webhook/dispatches \
             -d '{"event_type":"trigger-discord-notify","client_payload":{"feed":"free"}}'
-      
+
           curl -sS --fail-with-body \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $PAT_GITHUB" \
             https://api.github.com/repos/Cannibal-Turtle/mistmint-discord/dispatches \
             -d '{"event_type":"trigger-discord-notify","client_payload":{"feed":"free"}}'
+
+
 
