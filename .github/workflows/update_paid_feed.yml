@@ -37,19 +37,15 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # 1. sync with remote first so we don't hit "cannot pull with rebase" later
-          git pull --rebase origin main || echo "nothing to rebase"
-
-          # 2. stage generated/updated files
+      
+          # Stage & (maybe) commit first
           git add paid_chapters_feed.xml mistmint_state.json || true
-
-          # 3. commit if there are changes
           git commit -m "ci: update paid feed & mistmint state" || echo "No changes to commit"
-
-          # 4. push back up using token auth
-          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
-          git push origin main
+      
+          # Rebase safely even if the generator touched files
+          git pull --rebase --autostash origin main || echo "nothing to rebase"
+      
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git HEAD:main
 
       - name: Wait for RSS to update
         run: sleep 10
