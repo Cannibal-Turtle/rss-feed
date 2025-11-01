@@ -4,6 +4,7 @@ import json
 import datetime
 from datetime import timezone
 from urllib.parse import urlparse, unquote
+import requests
 
 import aiohttp
 import feedparser
@@ -162,9 +163,36 @@ def load_comments_mistmint(comments_feed_url: str):
     Returns list[dict] with keys:
       novel_title, chapter, author, description, reply_to, posted_at
     """
-    import requests
     out = []
-    r = requests.get(comments_feed_url, timeout=20)
+    
+    token = os.getenv("MISTMINT_TOKEN", "").strip()
+    headers = {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari",
+        "Accept": "application/json",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    r = requests.get(comments_feed_url, timeout=20, headers=headers)
+    ctype = r.headers.get("content-type", "?")
+    print(f"[mistmint] status={r.status_code} ctype={ctype} auth={'yes' if token else 'no'} bytes={len(r.text)}")
+
+    # If we got blocked or the API prefers X-API-Key, try a quick fallback once.
+    if r.status_code in (401, 403) and token:
+        alt_headers = dict(headers)
+        alt_headers.pop("Authorization", None)
+        alt_headers["X-API-Key"] = token
+        r = requests.get(comments_feed_url, timeout=20, headers=alt_headers)
+        ctype = r.headers.get("content-type", "?")
+        print(f"[mistmint] retry with X-API-Key → status={r.status_code} ctype={ctype} bytes={len(r.text)}")
+
+    # Detect stealth HTML/anti-bot pages returned with 200 OK
+    first400 = (r.text or "")[:400].lower()
+    if "<html" in first400 or "cloudflare" in first400 or "captcha" in first400:
+        print("[mistmint] HTML/challenge detected instead of JSON. First 200 chars:")
+        print((r.text or "")[:200])
+        return out
+
     r.raise_for_status()
     raw = r.text
 
