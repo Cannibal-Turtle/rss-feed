@@ -555,9 +555,11 @@ def load_comments_mistmint(comments_feed_url: str):
             close_in_time = (t_cur and t_prev and abs((t_cur - t_prev).total_seconds()) <= 120)
             if prev_author and author and prev_author != author and same_novel and close_in_time:
                 reply_to = prev_author
-
-        # 5) never show self-replies
-        if reply_to and reply_to == author:
+                
+        # 5) optionally suppress self-replies
+        if (not ALLOW_SELF_REPLIES
+            and reply_to
+            and reply_to.strip().casefold() == (author or "").strip().casefold()):
             reply_to = ""
 
         body = f"In reply to {reply_to}. {body_raw}" if reply_to else body_raw
