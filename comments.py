@@ -12,12 +12,13 @@ import xml.dom.minidom
 from pathlib import Path
 from xml.sax.saxutils import escape
 from bs4 import BeautifulSoup
+import hashlib
+import requests
 
 from novel_mappings import HOSTING_SITE_DATA
 from host_utils import get_host_utils
 
 # --- token expiry → repository_dispatch (no Discord creds here) ---
-import requests
 
 ALERT_STATE_FILE = ".token_alert_state.json"
 
@@ -95,7 +96,14 @@ def maybe_dispatch_token_alerts(threshold_days: int = 1):
         except Exception as e:
             print(f"[warn] repository_dispatch failed for {host}: {e}")
 
-
+# --- Construct Guid ---
+def _guid_from(parts):  # local helper for deterministic IDs
+    h = hashlib.sha1()
+    for p in parts:
+        h.update(str(p).encode("utf-8", "ignore"))
+        h.update(b"\x1f")
+    return h.hexdigest()
+    
 # --- Compact Description ---
 def compact_cdata(xml_str):
     """
@@ -117,42 +125,36 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
         self.host = host
         self.reply_chain  = reply_chain
         super().__init__(*args, **kwargs)
+        
     def writexml(self, writer, indent="", addindent="", newl=""):
         writer.write(indent + "  <item>" + newl)
         writer.write(indent + "    <title>%s</title>" % escape(self.novel_title) + newl)
-        # Retrieve host-specific utilities.
+        
         utils = get_host_utils(self.host)
-        # Extract chapter info via host-specific function; fallback to default.
+
+        # <chapter> via host-specific extractor
         if "extract_chapter" in utils:
             chapter_info = utils["extract_chapter"](self.link)
         else:
-            # Default: use the last nonempty segment (if >2 segments) or "Homepage"
             from urllib.parse import urlparse, unquote
             parsed = urlparse(self.link)
             segments = [seg for seg in parsed.path.split('/') if seg]
-            if len(segments) <= 2:
-                chapter_info = "Homepage"
-            else:
-                chapter_info = unquote(segments[-1]).replace('-', ' ')
+            chapter_info = "Homepage" if len(segments) <= 2 else unquote(segments[-1]).replace('-', ' ')
         writer.write(indent + "    <chapter>%s</chapter>" % escape(chapter_info) + newl)
+    
+        # Build a proper permalink
         real_link = self.link
-        if self.link.startswith("https://dragonholic.com/comments/feed"):
-            # use the host_utils builder
-            real_link = get_host_utils(self.host)["build_comment_link"](
-                self.novel_title, self.host, self.link
-            )
+        builder = utils.get("build_comment_link")
+        if builder:
+            real_link = builder(self.novel_title, self.host, self.link)
+            
         writer.write(indent + "    <link>%s</link>" % escape(real_link) + newl)
         writer.write(indent + "    <dc:creator><![CDATA[%s]]></dc:creator>" % escape(self.author) + newl)
         writer.write(indent + "    <description><![CDATA[%s]]></description>" % self.description + newl)
-        # if there's a reply chain, emit it as its own element
+    
         if self.reply_chain:
-            # add the ᯓ✿ prefix before the reply text
-            writer.write(
-                indent
-                + "    <reply_chain><![CDATA[ᯓ✿ %s]]></reply_chain>"
-                % escape(self.reply_chain)
-                + newl
-            )
+            writer.write(indent + "    <reply_chain><![CDATA[ᯓ✿ %s]]></reply_chain>" % escape(self.reply_chain) + newl)
+
         # Get other metadata using host-specific functions.
         translator = utils.get("get_host_translator", lambda host: "")(self.host)
         writer.write(indent + "    <translator>%s</translator>" % escape(translator) + newl)
@@ -208,8 +210,58 @@ def main():
             print(f"No comments feed URL defined for host: {host}")
             continue
         print(f"Fetching comments for host: {host} from {comments_feed_url}")
-        parsed_feed = feedparser.parse(comments_feed_url)
+
         utils = get_host_utils(host)
+        
+        def _parse_iso_utc_local(s: str):
+            try:
+                return datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+            except Exception:
+                return datetime.datetime.now(datetime.timezone.utc)
+        
+        # If host provides a custom comments loader (e.g., Mistmint JSON), use it.
+        loader = utils.get("load_comments")
+        if loader:
+            try:
+                norm_items = loader(comments_feed_url)
+                for obj in norm_items:
+                    novel_title   = obj.get("novel_title", "").strip()
+                    if not novel_title:
+                        continue
+                    # known mapping?
+                    novel_details = utils.get("get_novel_details", lambda h, nt: {})(host, novel_title)
+                    if not novel_details:
+                        print("Skipping item (novel not found in mapping):", novel_title)
+                        continue
+        
+                    chapter_label = obj.get("chapter", "")            # may be "" for homepage
+                    author_name   = obj.get("author", "")
+                    body          = obj.get("description", "").strip()
+                    posted_at     = obj.get("posted_at", "")
+                    reply_to      = obj.get("reply_to", "")
+        
+                    guid_val = _guid_from([novel_title, chapter_label, author_name, posted_at, body])
+        
+                    item = MyCommentRSSItem(
+                        novel_title=novel_title,
+                        title=novel_title,
+                        link=chapter_label,  # label or URL; writexml will fix it per-host
+                        author=author_name,
+                        description=body,
+                        reply_chain=reply_to,
+                        guid=PyRSS2Gen.Guid(guid_val, isPermaLink=False),
+                        pubDate=_parse_iso_utc_local(posted_at).astimezone(datetime.timezone.utc) if posted_at
+                                else datetime.datetime.now(datetime.timezone.utc),
+                        host=host
+                    )
+                    all_rss_items.append(item)
+                # go to next host
+                continue
+            except Exception as e:
+                print(f"[{host}] load_comments failed, falling back to generic: {e}")
+
+        parsed_feed = feedparser.parse(comments_feed_url)
+
         # Get the host-specific function to split comment titles.
         split_comment_title = utils.get("split_comment_title", lambda title: re.sub(r'^Comment on (.+?) by .+$', r'\1', title).strip())
         
@@ -226,7 +278,12 @@ def main():
                 print("Skipping item (novel not found in mapping):", novel_title)
                 continue
 
-            pub_date = datetime.datetime(*entry.published_parsed[:6])
+            pp = getattr(entry, "published_parsed", None)
+            pub_date = (
+                datetime.datetime(*pp[:6], tzinfo=datetime.timezone.utc)
+                if pp else datetime.datetime.now(datetime.timezone.utc)
+            )
+            
             # 1) prefer the real HTML block if it exists
             raw_html = None
             content = entry.get("content")
