@@ -156,6 +156,74 @@ def extract_chapter_mistmint(chapter_or_url: str) -> str:
     return "Homepage"
 
 
+# --- Mistmint comments loader (JSON recent-comments endpoint) ---------------
+def load_comments_mistmint(comments_feed_url: str):
+    """
+    Returns list[dict] with keys:
+      novel_title, chapter, author, description, reply_to, posted_at
+    """
+    import requests
+    out = []
+    r = requests.get(comments_feed_url, timeout=20)
+    r.raise_for_status()
+    raw = r.text
+
+    # quick debug once (kept concise)
+    try:
+        payload = json.loads(raw)
+    except Exception as e:
+        print(f"[mistmint] JSON parse error: {e}")
+        return out
+
+    # tolerate "data" vs "items" vs "results"
+    items = (
+        payload.get("data")
+        or payload.get("items")
+        or payload.get("results")
+        or []
+    )
+    if not isinstance(items, list):
+        print(f"[mistmint] unexpected payload shape; top-level keys = {list(payload.keys())[:6]}")
+        return out
+
+    # detect reply adjacency off the original raw (still works)
+    flags = _mistmint_reply_flags_from_raw(raw)
+
+    def pick(d, *candidates, default=""):
+        for k in candidates:
+            v = d.get(k)
+            if v not in (None, ""):
+                return v
+        return default
+
+    for i, obj in enumerate(items):
+        reply_to = items[i-1].get("user", "") if i > 0 and i-1 < len(flags) and flags[i-1] else ""
+
+        novel_title = pick(obj, "novel", "novelTitle", "title")
+        chapter     = pick(obj, "chapter", "chapterLabel", "chapterTitle")
+        author      = pick(obj, "user", "author", "username", "name", "displayName")
+        body_raw    = pick(obj, "content", "body", "text", "message").strip()
+        posted_at   = pick(obj, "postedAt", "createdAt", "created_at", "date", "timestamp")
+
+        body = f"In reply to {reply_to}. {body_raw}" if reply_to else body_raw
+
+        out.append({
+            "novel_title": (novel_title or "").strip(),
+            "chapter": chapter or "",
+            "author": author or "",
+            "description": body,
+            "reply_to": reply_to,
+            "posted_at": posted_at or "",
+        })
+
+    print(f"[mistmint] loaded {len(out)} raw comment(s)")
+    # peek first item keys to help future debugging
+    if out:
+        print(f"[mistmint] sample fields -> novel_title='{out[0]['novel_title']}', chapter='{out[0]['chapter']}', author='{out[0]['author']}'")
+
+    return out
+
+
 # =============================================================================
 # MISTMINT STATE HELPERS (multi-novel, keyed by short_code)
 # =============================================================================
@@ -825,6 +893,7 @@ MISTMINT_UTILS = {
     "build_comment_link": build_comment_link_mistmint,
     "extract_chapter":    extract_chapter_mistmint,
     "reply_flags_from_raw": _mistmint_reply_flags_from_raw,
+    "load_comments": load_comments_mistmint,
 
     # passthroughs to novel_mappings
     "get_novel_details":
