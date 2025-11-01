@@ -2,12 +2,14 @@ import re
 import os
 import json
 import datetime
+import time
 from urllib.parse import urlparse, unquote
 import requests
 from html import unescape
 import aiohttp
 import feedparser
 from bs4 import BeautifulSoup
+from typing import Dict, Any, List, Optional, Tuple
 
 import hashlib
 
@@ -52,7 +54,173 @@ TDLBKGC_ARCS = [
     {"arc_num": 20, "title": "Tentacled Alien Gong × Passerby Doctor Shou",                 "start": 701, "end": 734},
 ]
 
+# =============================================================================
+# MISTMINT PRO SCRAPER (URL TO CHAPTERID)
+# =============================================================================
 
+BASE_APP = "https://www.mistminthaven.com"
+BASE_API = "https://api.mistminthaven.com/api"
+ALL_COMMENTS_URL = f"{BASE_API}/comments/trans/all-comments"
+UA = {"User-Agent": "mistmint-comments-bot/1.0 (+github.com/Cannibal-Turtle)"}
+
+CHAPTERID_RE = re.compile(r'"type":"chapter","chapterId":"([0-9a-f-]{36})"')
+
+class MistmintClient:
+    def __init__(self, translator_cookie: Optional[str] = None, timeout: int = 20):
+        self.s = requests.Session()
+        self.s.headers.update(UA)
+        self.timeout = timeout
+        self.cookie = translator_cookie
+        # cache to avoid re-fetching the same page
+        self._chapter_id_cache: Dict[Tuple[str, str], Optional[str]] = {}
+
+    def _get(self, url: str, use_cookie: bool = False) -> requests.Response:
+        headers = {}
+        if use_cookie and self.cookie:
+            headers["Cookie"] = self.cookie
+        return self.s.get(url, headers=headers, timeout=self.timeout, allow_redirects=True)
+
+    def fetch_all_comments(self) -> Dict[str, Any]:
+        r = self._get(ALL_COMMENTS_URL)
+        r.raise_for_status()
+        return r.json()  # keys: data[], paging{}
+
+    @staticmethod
+    def build_url(novel_slug: str, chapter_slug: str) -> str:
+        if chapter_slug:
+            return f"{BASE_APP}/novels/{novel_slug}/{chapter_slug}"
+        return f"{BASE_APP}/novels/{novel_slug}"
+
+    def get_chapter_id(self, novel_slug: str, chapter_slug: str) -> Tuple[Optional[str], bool]:
+        """
+        Returns (chapter_id, gated)
+        gated=True if we couldn't extract chapterId anonymously (and also failed with cookie if provided)
+        """
+        if not chapter_slug:
+            return None, False
+
+        key = (novel_slug, chapter_slug)
+        if key in self._chapter_id_cache:
+            cid = self._chapter_id_cache[key]
+            return cid, cid is None  # if None, treat as gated/unknown
+
+        url = self.build_url(novel_slug, chapter_slug)
+
+        # 1) try anonymous
+        r = self._get(url, use_cookie=False)
+        html = r.text or ""
+        m = CHAPTERID_RE.search(html)
+        if m:
+            cid = m.group(1)
+            self._chapter_id_cache[key] = cid
+            return cid, False
+
+        # 2) try with cookie once if available
+        if self.cookie:
+            r2 = self._get(url, use_cookie=True)
+            m2 = CHAPTERID_RE.search(r2.text or "")
+            if m2:
+                cid = m2.group(1)
+                self._chapter_id_cache[key] = cid
+                return cid, False
+
+        # gated or not found
+        self._chapter_id_cache[key] = None
+        return None, True
+
+    def fetch_chapter_comments(self, chapter_id: str, skip_page: int = 0, limit: int = 100) -> Dict[str, Any]:
+        u = f"{BASE_API}/comments/chapter/{chapter_id}?skipPage={skip_page}&limit={limit}"
+        r = self._get(u, use_cookie=bool(self.cookie))  # cookie not strictly required for public
+        r.raise_for_status()
+        return r.json()  # keys: data[], paging{}
+
+def match_comment_in_thread(thread_json: Dict[str, Any], username: str, created_at_iso: str) -> Optional[Dict[str, Any]]:
+    """
+    Find the comment with the same (username, createdAt) in the chapter thread.
+    Returns the comment dict if found.
+    """
+    for c in thread_json.get("data", []):
+        u = (c.get("user") or {}).get("username")
+        if u == username and c.get("createdAt") == created_at_iso:
+            return c
+        # also scan replies just in case the API nests them
+        for rc in c.get("replies", []):
+            ru = (rc.get("user") or {}).get("username")
+            if ru == username and rc.get("createdAt") == created_at_iso:
+                return rc
+    return None
+
+def enrich_all_comments(
+    client: MistmintClient,
+    records: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """
+    For each record from /trans/all-comments, attach:
+      - "url": canonical web URL
+      - "chapterId": if chapter comment and resolvable
+      - "gated": bool (True if chapterId could not be resolved anon or with cookie)
+      - "is_reply": True/False/None
+      - "parentId": str|None
+      - "commentId": str|None
+    """
+    out = []
+    for rec in records:
+        novel_slug = rec.get("novelSlug") or ""
+        chapter_slug = rec.get("chapterSlug") or ""
+        username = rec.get("user") or ""
+        created_at = rec.get("createdAt") or ""
+        url = client.build_url(novel_slug, chapter_slug)
+
+        item = dict(rec)
+        item["url"] = url
+        item["chapterId"] = None
+        item["gated"] = False
+        item["is_reply"] = None
+        item["parentId"] = None
+        item["commentId"] = None
+
+        if chapter_slug:
+            chapter_id, gated = client.get_chapter_id(novel_slug, chapter_slug)
+            item["chapterId"] = chapter_id
+            item["gated"] = gated
+
+            if chapter_id:  # only if we can see the thread
+                # light backoff in case you’re looping a lot
+                time.sleep(0.2)
+                thread = client.fetch_chapter_comments(chapter_id, skip_page=0, limit=100)
+                hit = match_comment_in_thread(thread, username=username, created_at_iso=created_at)
+                if hit:
+                    item["commentId"] = hit.get("id")
+                    item["parentId"] = hit.get("parentId")
+                    item["is_reply"] = bool(hit.get("parentId"))
+                else:
+                    # not found in first page; optionally iterate more pages using thread["paging"]
+                    pass
+
+        # Novel-level comments: URL present, but reply detection unavailable without a novel-comments API
+        out.append(item)
+    return out
+
+if __name__ == "__main__":
+    # If you want to try with a translator cookie for gated chapters, set it here:
+    COOKIE = None  # e.g., "mm_session=abcd; other=xyz"
+    client = MistmintClient(translator_cookie=COOKIE)
+
+    blob = client.fetch_all_comments()
+    enriched = enrich_all_comments(client, blob.get("data", []))
+
+    # Example of how you might format for Discord logs
+    for e in enriched:
+        tag = "reply" if e["is_reply"] else ("top" if e["is_reply"] is False else "unknown")
+        print(f"[{e['createdAt']}] {e['user']} → {e['novel']}  [{tag}]")
+        print(f"   {e['content']}")
+        print(f"   {e['url']}")
+        if e["chapterId"]:
+            print(f"   chapterId={e['chapterId']}  commentId={e['commentId']} parentId={e['parentId']}")
+        if e["gated"]:
+            print("   gated: true (needed cookie or skip)")
+        print()
+        
 # --- Mistmint comment helpers -----------------------------------------------
 
 def _guid_from(parts):
@@ -1291,7 +1459,7 @@ MISTMINT_UTILS = {
     "novel_has_paid_update_async": novel_has_paid_update_mistmint_async,
     "scrape_paid_chapters_async": scrape_paid_chapters_mistmint_async,
 
-    # Comments/etc. (reuse Dragonholic logic for now)
+    # Comments/etc.
     "build_comment_link": build_comment_link_mistmint,
     "extract_chapter":    extract_chapter_mistmint,
     "reply_flags_from_raw": _mistmint_reply_flags_from_raw,
