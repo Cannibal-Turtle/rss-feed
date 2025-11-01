@@ -4,7 +4,7 @@ import json
 import datetime
 from urllib.parse import urlparse, unquote
 import requests
-
+from html import unescape
 import aiohttp
 import feedparser
 from bs4 import BeautifulSoup
@@ -1201,27 +1201,26 @@ def build_comment_link_dragonholic(novel_title: str, host: str, placeholder_link
 
     return f"{base_url}{chapter_slug}/#comment-{cid}"
 
-
 def split_reply_chain_dragonholic(raw: str) -> tuple[str, str]:
-    import re
     from html import unescape
+    import re
+    s = unescape(raw or "")
+    s = re.sub(r"\s+", " ", s).strip()
 
-    # collapse whitespace and unescape in case the feed ships &lt;a ...&gt;
-    s = " ".join(unescape(raw or "").split())
-
-    # 1) HTML-anchor form; tolerate optional whitespace and optional period
-    m = re.match(r'^\s*In\s+reply\s+to\s*<a[^>]*>([^<]+)</a>\s*\.?\s*(.*)$',
-                 s, re.I | re.S)
+    # 1) HTML-tagged name (<a>…</a> or any tag), optional whitespace + punctuation
+    m = re.match(r'(?is)^\s*in\s+reply\s+to\s*<[^>]*>([^<]+)</[^>]*>\s*[.,:;!?]?\s*(.*)$', s)
     if m:
-        return f"In reply to {m.group(1).strip()}", m.group(2).strip()
+        name, body = m.group(1).strip(), m.group(2).strip()
+        body = re.sub(r'\s+([.,!?;:])', r'\1', body)
+        return f"In reply to {name}", body
 
-    # 2) Plain-text fallback (some feeds already strip tags)
-    m = re.match(r'^\s*In\s+reply\s+to\s+([^.:\n]+)\s*\.?\s*(.*)$',
-                 s, re.I | re.S)
+    # 2) Plain-text variant (feeds that already stripped the anchor)
+    m = re.match(r'(?is)^\s*in\s+reply\s+to\s+([^.:\n]+?)\s*[.,:;!?]?\s*(.*)$', s)
     if m:
-        return f"In reply to {m.group(1).strip()}", m.group(2).strip()
+        name, body = m.group(1).strip(), m.group(2).strip()
+        body = re.sub(r'\s+([.,!?;:])', r'\1', body)
+        return f"In reply to {name}", body
 
-    # 3) No match → keep original
     return "", (raw or "").strip()
 
 
