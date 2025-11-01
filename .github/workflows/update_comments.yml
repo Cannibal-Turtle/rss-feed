@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  update_feed:
+  update_comments:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
