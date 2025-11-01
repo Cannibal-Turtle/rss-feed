@@ -48,7 +48,7 @@ HOSTING_SITE_DATA = {
 
     "Mistmint Haven": {
         "feed_url": "https://www.mistminthaven.com/feed",
-        "comments_feed_url": "https://api.mistminthaven.com/api/trans/metrics/recent-comments",
+        "comments_feed_url": "https://api.mistminthaven.com/api/comments/trans/all-comments",
         "translator": "CannibalTurtle",
         "host_logo": "https://www.mistminthaven.com/images/mascot_mistmint.png",
         "coin_emoji": "<:mistmint_currency:1433046707121422487>",
