@@ -2,7 +2,6 @@ import re
 import os
 import json
 import datetime
-from datetime import timezone
 from urllib.parse import urlparse, unquote
 import requests
 
@@ -25,6 +24,8 @@ APPROVED_COMMENTS_FEED = (
 )
 
 MISTMINT_STATE_PATH = "mistmint_state.json"
+
+_MISTMINT_HOME_CACHE: dict[str, dict] = {}
 
 # All arcs for [Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught
 # Used to figure out volume/arc info for any global chapter number.
@@ -89,6 +90,73 @@ def _extract_data_array_segment(raw: str) -> str | None:
         i += 1
     return None
 
+def _mistmint_headers():
+    token  = os.getenv("MISTMINT_TOKEN", "").strip()   # optional
+    cookie = os.getenv("MISTMINT_COOKIE", "").strip()  # ← you have this
+    h = {
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Origin": "https://mistminthaven.com",
+        "Referer": "https://mistminthaven.com/",
+    }
+    if token:
+        h["Authorization"] = f"Bearer {token}"
+    if cookie:
+        # e.g. "mistmint_token=eyJ...; other_cookie=val"
+        h["Cookie"] = cookie
+    return h
+
+def _http_get_json(url: str, headers: dict | None = None):
+    try:
+        r = requests.get(url, headers=headers or _mistmint_headers(), timeout=20)
+        if not r.ok:
+            print(f"[mistmint] GET {url} → HTTP {r.status_code}")
+            return None
+        return r.json()
+    except Exception as e:
+        print(f"[mistmint] GET {url} failed: {e}")
+        return None
+
+def _norm(s: str) -> str:
+    return re.sub(r"\s+", " ", (s or "").strip())
+
+def _iso_dt(s: str):
+    try:
+        return datetime.datetime.fromisoformat((s or "").replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+def resolve_reply_to_on_homepage_by_id(novel_id: str, author: str, body_raw: str, posted_at: str) -> str:
+    """
+    Given a Mistmint novel_id and this comment's author/body/time,
+    return the parent's username if this is a nested reply; else "".
+    """
+    if not novel_id:
+        return ""
+    if novel_id in _MISTMINT_HOME_CACHE:
+        payload = _MISTMINT_HOME_CACHE[novel_id]
+    else:
+        url = f"https://api.mistminthaven.com/api/comments/novel/{novel_id}?skipPage=0&limit=50"
+        payload = _http_get_json(url) or {}
+        _MISTMINT_HOME_CACHE[novel_id] = payload
+
+    want_author = (author or "").strip()
+    want_body   = _norm(body_raw)
+    want_dt     = _iso_dt(posted_at)
+
+    for top in (payload.get("data") or []):
+        parent_user = (((top.get("user") or {}).get("username")) or "").strip()
+        for rep in (top.get("replies") or []):
+            rep_user = (((rep.get("user") or {}).get("username")) or "").strip()
+            rep_body = _norm(rep.get("content", ""))
+            rep_dt   = _iso_dt(rep.get("createdAt", ""))
+
+            if rep_user == want_author and rep_body == want_body:
+                # small tolerance for clock skew
+                if (want_dt and rep_dt and abs((want_dt - rep_dt).total_seconds()) <= 5) or (not want_dt or not rep_dt):
+                    return parent_user
+    return ""
+    
 def _mistmint_reply_flags_from_raw(raw_text: str) -> list[bool]:
     """
     Return a list of booleans with length == (#items - 1).
@@ -108,10 +176,6 @@ def _mistmint_reply_flags_from_raw(raw_text: str) -> list[bool]:
     # Disable adjacency if minification makes everything look like a reply.
     return [] if flags and all(flags) else flags
 
-def _parse_iso_utc(s: str) -> datetime.datetime:
-    return datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
-
-
 def _mistmint_parse_chapter_label(ch: str):
     """
     'Chapter 1: 1.1' -> ('Chapter 1', 1)
@@ -128,12 +192,13 @@ def _mistmint_parse_chapter_label(ch: str):
     return (f"Chapter {n}", n)
 
 def build_comment_link_mistmint(novel_title: str, host: str, chapter_label_or_empty: str) -> str:
-    details = HOSTING_SITE_DATA[host]["novels"][novel_title]
-    base = details["novel_url"].rstrip("/")
+    details = HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(novel_title, {})
+    base = (details.get("novel_url") or "").rstrip("/")
+    if not base:
+        return ""
     label = (chapter_label_or_empty or "").strip()
     if not label:
-        return base  # homepage
-
+        return base
     m = re.search(r'chapter\s+(\d+)', label, re.IGNORECASE)
     if not m:
         return base
@@ -304,7 +369,25 @@ def load_comments_mistmint(comments_feed_url: str):
             if pid and str(pid) in id_to_user:
                 reply_to = id_to_user[str(pid)]
 
-        # 3) adjacency fallback (only if credible)
+        # 3) homepage-thread resolver via mapping novel_id
+        if not reply_to:
+            chapter_norm = extract_chapter_mistmint(chapter or "")
+            if chapter_norm == "Homepage":
+                novel_meta = HOSTING_SITE_DATA.get("Mistmint Haven", {}) \
+                                              .get("novels", {}) \
+                                              .get((novel_title or "").strip(), {})
+                novel_id = novel_meta.get("novel_id")
+                if novel_id:
+                    who = resolve_reply_to_on_homepage_by_id(
+                        novel_id=novel_id,
+                        author=(author or ""),
+                        body_raw=(body_raw or ""),
+                        posted_at=(posted_at or "")
+                    )
+                    if who and who != author:
+                        reply_to = who
+
+        # 4) adjacency fallback (only if credible)
         if not reply_to and flags and i > 0 and i-1 < len(flags) and flags[i-1]:
             prev = items[i-1]
             prev_author = pick(prev, *user_keys)
@@ -315,7 +398,7 @@ def load_comments_mistmint(comments_feed_url: str):
             if prev_author and author and prev_author != author and same_novel and close_in_time:
                 reply_to = prev_author
 
-        # 4) never show self-replies
+        # 5) never show self-replies
         if reply_to and reply_to == author:
             reply_to = ""
 
@@ -332,44 +415,7 @@ def load_comments_mistmint(comments_feed_url: str):
 
     print(f"[mistmint] loaded {len(out)} raw comment(s)")
     if out:
-        print(f"[mistmint] sample keys: {sorted(list(items[0].keys()))[:12]}")
-    return out
-
-    # detect reply adjacency off the original raw (still works)
-    flags = _mistmint_reply_flags_from_raw(raw)
-
-    def pick(d, *candidates, default=""):
-        for k in candidates:
-            v = d.get(k)
-            if v not in (None, ""):
-                return v
-        return default
-
-    for i, obj in enumerate(items):
-        reply_to = items[i-1].get("user", "") if i > 0 and i-1 < len(flags) and flags[i-1] else ""
-
-        novel_title = pick(obj, "novel", "novelTitle", "title")
-        chapter     = pick(obj, "chapter", "chapterLabel", "chapterTitle")
-        author      = pick(obj, "user", "author", "username", "name", "displayName")
-        body_raw    = pick(obj, "content", "body", "text", "message").strip()
-        posted_at   = pick(obj, "postedAt", "createdAt", "created_at", "date", "timestamp")
-
-        body = f"In reply to {reply_to}. {body_raw}" if reply_to else body_raw
-
-        out.append({
-            "novel_title": (novel_title or "").strip(),
-            "chapter": chapter or "",
-            "author": author or "",
-            "description": body,
-            "reply_to": reply_to,
-            "posted_at": posted_at or "",
-        })
-
-    print(f"[mistmint] loaded {len(out)} raw comment(s)")
-    # peek first item keys to help future debugging
-    if out:
         print(f"[mistmint] sample fields -> novel_title='{out[0]['novel_title']}', chapter='{out[0]['chapter']}', author='{out[0]['author']}'")
-
     return out
 
 
