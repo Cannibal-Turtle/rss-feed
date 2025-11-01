@@ -9,7 +9,7 @@ from html import unescape
 import aiohttp
 import feedparser
 from bs4 import BeautifulSoup
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Optional
 
 import hashlib
 
@@ -28,6 +28,8 @@ APPROVED_COMMENTS_FEED = (
 MISTMINT_STATE_PATH = "mistmint_state.json"
 
 _MISTMINT_HOME_CACHE: dict[str, dict] = {}
+
+AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=20)
 
 # All arcs for [Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught
 # Used to figure out volume/arc info for any global chapter number.
@@ -269,15 +271,15 @@ if __name__ == "__main__":
     blob = client.fetch_all_comments()
     enriched = enrich_all_comments(client, blob.get("data", []))
 
-    # Example of how you might format for Discord logs
     for e in enriched:
         tag = "reply" if e["is_reply"] else ("top" if e["is_reply"] is False else "unknown")
-        print(f"[{e['createdAt']}] {e['user']} → {e['novel']}  [{tag}]")
-        print(f"   {e['content']}")
-        print(f"   {e['url']}")
-        if e["chapterId"]:
-            print(f"   chapterId={e['chapterId']}  commentId={e['commentId']} parentId={e['parentId']}")
-        if e["gated"]:
+        novel_name = e.get("novel") or e.get("novelTitle") or "?"
+        print(f"[{e.get('createdAt','?')}] {e.get('user','?')} → {novel_name}  [{tag}]")
+        print(f"   {e.get('content','')}")
+        print(f"   {e.get('url','')}")
+        if e.get("chapterId"):
+            print(f"   chapterId={e.get('chapterId')}  commentId={e.get('commentId')} parentId={e.get('parentId')}")
+        if e.get("gated"):
             print("   gated: true (needed cookie or skip)")
         print()
         
@@ -324,8 +326,8 @@ def _mistmint_headers():
     h = {
         "Accept": "application/json",
         "User-Agent": "Mozilla/5.0",
-        "Origin": "https://mistminthaven.com",
-        "Referer": "https://mistminthaven.com/",
+        "Origin": "https://www.mistminthaven.com",
+        "Referer": "https://www.mistminthaven.com/",
     }
     if token:
         h["Authorization"] = f"Bearer {token}"
@@ -751,12 +753,13 @@ def _save_mistmint_state(state):
         json.dump(state, f, indent=2, ensure_ascii=False)
 
 
-def _get_arc_for_ch(ch_num: int):
+def _get_arc_for_ch(ch_num: int, arcs: Optional[List[Dict[str, Any]]] = None):
     """
-    Given a global chapter number (e.g. 50),
-    return the arc dict containing it.
+    Given a global chapter number (e.g. 50), return the arc dict containing it.
+    If `arcs` is None, fall back to the global TDLBKGC_ARCS table.
     """
-    for arc in TDLBKGC_ARCS:
+    table = arcs if arcs is not None else TDLBKGC_ARCS
+    for arc in table:
         if arc["start"] <= ch_num <= arc["end"]:
             return arc
     return None
@@ -917,7 +920,11 @@ def split_paid_chapter_mistmint(raw_title: str):
 
 async def fetch_page(session: aiohttp.ClientSession, url: str) -> str:
     try:
-        async with session.get(url) as resp:
+        async with session.get(
+            url,
+            headers={"User-Agent": UA["User-Agent"]},
+            timeout=AIOHTTP_TIMEOUT,
+        ) as resp:
             if resp.status != 200:
                 print(f"⚠️  {url} returned HTTP {resp.status}")
                 return ""
@@ -925,7 +932,6 @@ async def fetch_page(session: aiohttp.ClientSession, url: str) -> str:
     except Exception as e:
         print(f"⚠️  Network error fetching {url}: {e}")
         return ""
-
 
 def clean_description(raw_desc: str) -> str:
     soup = BeautifulSoup(raw_desc, "html.parser")
