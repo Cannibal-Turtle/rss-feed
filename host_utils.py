@@ -233,10 +233,6 @@ def resolve_reply_to_on_chapter_by_label(novel_title: str, chapter_label: str,
     return ""
 
 def resolve_reply_to_on_homepage_by_id(novel_id: str, author: str, body_raw: str, posted_at: str) -> str:
-    """
-    Given a Mistmint novel_id and this comment's author/body/time,
-    return the parent's username if this is a nested reply; else "".
-    """
     if not novel_id:
         return ""
     if novel_id in _MISTMINT_HOME_CACHE:
@@ -246,21 +242,23 @@ def resolve_reply_to_on_homepage_by_id(novel_id: str, author: str, body_raw: str
         payload = _http_get_json(url) or {}
         _MISTMINT_HOME_CACHE[novel_id] = payload
 
-    want_author = (author or "").strip()
+    want_author = (author or "").strip().casefold()
     want_body   = _norm(body_raw)
     want_dt     = _iso_dt(posted_at)
 
     for top in (payload.get("data") or []):
         parent_user = (((top.get("user") or {}).get("username")) or "").strip()
         for rep in (top.get("replies") or []):
-            rep_user = (((rep.get("user") or {}).get("username")) or "").strip()
+            rep_user = (((rep.get("user") or {}).get("username")) or "").strip().casefold()
             rep_body = _norm(rep.get("content", ""))
             rep_dt   = _iso_dt(rep.get("createdAt", ""))
 
-            if rep_user == want_author and rep_body == want_body:
-                # small tolerance for clock skew
-                if (want_dt and rep_dt and abs((want_dt - rep_dt).total_seconds()) <= 300) or (not want_dt or not rep_dt):
-                    return parent_user
+            same_user = rep_user == want_author
+            same_body = rep_body == want_body
+            close     = (not want_dt or not rep_dt or abs((want_dt - rep_dt).total_seconds()) <= 300)
+
+            if same_user and same_body and close:
+                return parent_user  # keep self-replies; ALLOW_SELF_REPLIES is True
     return ""
     
 def _mistmint_reply_flags_from_raw(raw_text: str) -> list[bool]:
