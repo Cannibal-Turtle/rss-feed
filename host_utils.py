@@ -242,23 +242,25 @@ def resolve_reply_to_on_homepage_by_id(novel_id: str, author: str, body_raw: str
         payload = _http_get_json(url) or {}
         _MISTMINT_HOME_CACHE[novel_id] = payload
 
-    want_author = (author or "").strip().casefold()
+    print(f"[mistmint] homepage-resolver novel_id={novel_id} author={author!r}")
+
+    want_author = (author or "").strip()
     want_body   = _norm(body_raw)
     want_dt     = _iso_dt(posted_at)
 
     for top in (payload.get("data") or []):
         parent_user = (((top.get("user") or {}).get("username")) or "").strip()
         for rep in (top.get("replies") or []):
-            rep_user = (((rep.get("user") or {}).get("username")) or "").strip().casefold()
+            rep_user = (((rep.get("user") or {}).get("username")) or "").strip()
             rep_body = _norm(rep.get("content", ""))
             rep_dt   = _iso_dt(rep.get("createdAt", ""))
 
-            same_user = rep_user == want_author
-            same_body = rep_body == want_body
-            close     = (not want_dt or not rep_dt or abs((want_dt - rep_dt).total_seconds()) <= 300)
-
-            if same_user and same_body and close:
-                return parent_user  # keep self-replies; ALLOW_SELF_REPLIES is True
+            if rep_user == want_author and rep_body == want_body:
+                skew_ok = (not want_dt or not rep_dt or abs((want_dt - rep_dt).total_seconds()) <= 300)
+                if skew_ok:
+                    print(f"[mistmint] matched reply: child={rep_user!r} → parent={parent_user!r}")
+                    return parent_user
+    print("[mistmint] no homepage parent match")
     return ""
     
 def _mistmint_reply_flags_from_raw(raw_text: str) -> list[bool]:
