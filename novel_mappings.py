@@ -52,7 +52,7 @@ HOSTING_SITE_DATA = {
         "translator": "CannibalTurtle",
         "host_logo": "https://i.imgur.com/oLT0jCN.png",
         "coin_emoji": "<:mistmint_currency:1433046707121422487>",
-        "token_secret": "MISTMINT_TOKEN"
+        "token_secret": "MISTMINT_TOKEN",
         "novels": {
             "[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught": {
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/chapters",
@@ -61,7 +61,7 @@ HOSTING_SITE_DATA = {
                 "featured_image": "https://i.imgur.com/YYx6UbX.jpeg",
                 "pub_date_override": {"hour": 12, "minute": 0, "second": 0},
                 # for manually updated paid feed
-                "short_code": "tdlbkgc",
+                "short_code": "tdlbkgc", #for parsing feed without guid
                 "coin_price": 5,
 
                 # ─── webhook-only fields ───
