@@ -63,7 +63,7 @@ BASE_API = "https://api.mistminthaven.com/api"
 ALL_COMMENTS_URL = f"{BASE_API}/comments/trans/all-comments"
 UA = {"User-Agent": "mistmint-comments-bot/1.0 (+github.com/Cannibal-Turtle)"}
 
-CHAPTERID_RE = re.compile(r'"type":"chapter","chapterId":"([0-9a-f-]{36})"')
+CHAPTERID_RE = re.compile(r'"chapterId"\s*:\s*"([0-9a-f-]{36})"', re.I)
 
 class MistmintClient:
     def __init__(self, translator_cookie: Optional[str] = None, timeout: int = 20):
@@ -133,6 +133,66 @@ class MistmintClient:
         r = self._get(u, use_cookie=bool(self.cookie))  # cookie not strictly required for public
         r.raise_for_status()
         return r.json()  # keys: data[], paging{}
+
+def extract_chapter_mistmint(value: str) -> str:
+    """
+    Fallback used only when we’re given a URL/URI instead of a human chapter label.
+    If it's a label already, just normalize and return it.
+    """
+    v = (value or "").strip()
+    if not v:
+        return "Homepage"
+
+    # Already a human label? Just normalize and stop.
+    if not (v.lower().startswith("mm://") or v.lower().startswith("http://") or v.lower().startswith("https://")):
+        return normalize_mistmint_chapter_label(v)
+
+    # mm://novel/<novel_slug>/chapter/<chapter_slug>
+    m = _MM_SCHEME.match(v)
+    if m:
+        chapter_slug = m.group(2).lower()
+    else:
+        # Try real https://www.mistminthaven.com/novels/<novel>/<chapter>
+        p = urlparse(v)
+        segs = [s for s in p.path.split("/") if s]
+        chapter_slug = segs[-1].lower() if len(segs) >= 3 and segs[0] == "novels" else ""
+
+    if not chapter_slug or chapter_slug in {"homepage", "comments"}:
+        return "Homepage"
+
+    # Only parse the slug (not the display label)
+    m = re.search(r'(?:^|-)chapter-(?:(extra)-)?(\d+(?:\.\d+)?)\b', chapter_slug, re.I)
+    if m:
+        return f"Chapter {'Extra ' if m.group(1) else ''}{m.group(2)}"
+
+    m = re.search(r'(?:^|-)extra-(\d+)\b', chapter_slug, re.I)
+    if m:
+        return f"Chapter Extra {m.group(1)}"
+
+    return "Homepage"
+
+def _find_chapter_slug_live(client: MistmintClient, novel_slug: str, ch_str: str) -> str | None:
+    """
+    GET /novels/<novel_slug> and find an <a href="/novels/<novel_slug>/<slug>">
+    whose <slug> tail is either 'chapter-<N>' or '<anything>-chapter-<N>'.
+    Returns that <slug> (tail only) or None.
+    """
+    url = f"{BASE_APP}/novels/{novel_slug}"
+    r = client._get(url, use_cookie=False)
+    if not (r and r.text):
+        return None
+
+    soup = BeautifulSoup(r.text, "html.parser")
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        p = urlparse(href)
+        parts = [s for s in p.path.split("/") if s]
+        if len(parts) >= 3 and parts[0] == "novels" and parts[1] == novel_slug:
+            tail = parts[-1].lower()
+            # allow "chapter-4" OR "…-chapter-4"
+            if re.fullmatch(rf'(?:.*-)?chapter-{re.escape(str(ch_str))}', tail, flags=re.I):
+                return parts[-1]  # return the tail slug exactly as on site
+    return None
 
 def match_comment_in_thread(thread_json: Dict[str, Any], username: str, created_at_iso: str) -> Optional[Dict[str, Any]]:
     """
@@ -294,112 +354,75 @@ def _iso_dt(s: str):
     except Exception:
         return None
 
-# cache: { novel_title -> { "Chapter N": "chapter-guid" } }
-_MISTMINT_CHAPTER_GUID_INDEX: dict[str, dict[str, str]] = {}
-
 # let self-replies show up if desired
 ALLOW_SELF_REPLIES = True
 
-def _mistmint_build_chapter_guid_index(novel_title: str) -> dict[str, str]:
-    """
-    Build a { 'Chapter N': <chapterId> } map for a Mistmint novel by parsing the
-    free/public feed. Requires HOSTING_SITE_DATA["Mistmint Haven"]["free_feed_url"]
-    (site-level) OR per-novel ["free_feed_url"] (we use both if present).
-    """
-    key = novel_title.strip()
-    if key in _MISTMINT_CHAPTER_GUID_INDEX:
-        return _MISTMINT_CHAPTER_GUID_INDEX[key]
+def resolve_reply_to_on_chapter_by_label(
+    novel_title: str,
+    chapter_label: str,
+    author: str,
+    body_raw: str,
+    posted_at: str,
+    *,
+    novel_slug: str | None = None,
+    chapter_slug_hint: str | None = None,
+) -> str:
+    if not novel_slug:
+        # optional fallback from mapping if you really need it
+        meta = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("novels", {}).get((novel_title or "").strip(), {})
+        base = (meta.get("novel_url") or "").rstrip("/")
+        if not base:
+            return ""
+        novel_slug = base.split("/")[-1]
 
-    idx: dict[str, str] = {}
-    host_block = HOSTING_SITE_DATA.get("Mistmint Haven", {})
-    utils = MISTMINT_UTILS  # we are inside this module already
+    client = MistmintClient(translator_cookie=os.getenv("MISTMINT_COOKIE", "").strip())
 
-    # collect candidate feeds: site-level plus per-novel if defined
-    feeds = []
-    site_free = host_block.get("free_feed_url")
-    if site_free:
-        feeds.append(site_free)
-    per = (host_block.get("novels") or {}).get(key, {})
-    per_free = per.get("free_feed_url")
-    if per_free:
-        feeds.append(per_free)
+    chapter_slug = chapter_slug_hint
+    if not chapter_slug:
+        # rare fallback: try to discover the slug on the novel page
+        # (only if you *must*; otherwise just bail)
+        return ""  # prefer to not guess
 
-    # parse each feed; keep the newest mapping for any duplicate Chapter N
-    for feed_url in feeds:
-        try:
-            parsed = feedparser.parse(feed_url)
-        except Exception:
-            continue
-        for e in getattr(parsed, "entries", []):
-            try:
-                nt, ch_label, _ = utils["split_title"](e.title)
-            except Exception:
-                continue
-            if (nt or "").strip() != key:
-                continue
-            ch_norm = extract_chapter_mistmint(ch_label)  # "Chapter N" or "Homepage"
-            if ch_norm and ch_norm.lower() != "homepage":
-                chap_id = getattr(e, "id", "") or getattr(e, "guid", "")
-                if chap_id:
-                    idx[ch_norm] = chap_id
-    _MISTMINT_CHAPTER_GUID_INDEX[key] = idx
-    return idx
-
-
-def resolve_reply_to_on_chapter_by_label(novel_title: str, chapter_label: str,
-                                         author: str, body_raw: str, posted_at: str) -> str:
-    """
-    Find the parent username for a comment posted under a specific chapter.
-    We map 'Chapter N' -> chapterId via the free feed GUID, then query the
-    chapter comments endpoint to locate the parent chain.
-    """
-    ch_norm = extract_chapter_mistmint(chapter_label)  # -> "Chapter N" / "Homepage"
-    if not ch_norm or ch_norm.lower() == "homepage":
-        return ""
-
-    idx = _mistmint_build_chapter_guid_index(novel_title)
-    chap_id = idx.get(ch_norm)
+    chap_id, _ = client.get_chapter_id(novel_slug, chapter_slug)
     if not chap_id:
-        # no way to resolve without an id
-        print(f"[mistmint] no chapterId for {novel_title} / {ch_norm}")
         return ""
 
-    url = f"https://api.mistminthaven.com/api/comments/chapter/{chap_id}?skipPage=0&limit=50"
-    payload = _http_get_json(url) or {}
+    payload = client.fetch_chapter_comments(chap_id, skip_page=0, limit=100)
 
     def _name(u):
         u = u or {}
-        # the chapter API uses 'user' -> { username, displayName? (future) }
         return (u.get("displayName") or u.get("username") or "").strip()
 
     want_author = (author or "").strip().casefold()
-    want_body   = _norm(body_raw)
-    want_dt     = _iso_dt(posted_at)
+    want_body   = re.sub(r"\s+", " ", (body_raw or "").strip())
+    try:
+        want_dt = datetime.datetime.fromisoformat((posted_at or "").replace("Z", "+00:00"))
+    except Exception:
+        want_dt = None
+
+    def _is_same(obj) -> bool:
+        rep_user = _name(obj.get("user")).casefold()
+        rep_body = re.sub(r"\s+", " ", (obj.get("content") or "").strip())
+        try:
+            rep_dt = datetime.datetime.fromisoformat((obj.get("createdAt") or "").replace("Z", "+00:00"))
+        except Exception:
+            rep_dt = None
+        if rep_user != want_author or rep_body != want_body:
+            return False
+        return (not want_dt or not rep_dt or abs((want_dt - rep_dt).total_seconds()) <= 300)
 
     for top in (payload.get("data") or []):
         parent_user = _name(top.get("user"))
-        # is THIS the one we’re matching?
-        def _is_same(comment_obj) -> bool:
-            rep_user = _name(comment_obj.get("user")).casefold()
-            rep_body = _norm(comment_obj.get("content", ""))
-            rep_dt   = _iso_dt(comment_obj.get("createdAt", ""))
-            if rep_user != want_author or rep_body != want_body:
-                return False
-            # tolerate up to 5 minutes skew or missing timestamps
-            return (not want_dt or not rep_dt or abs((want_dt - rep_dt).total_seconds()) <= 300)
-
         if _is_same(top):
-            # a root comment under the chapter; no parent
-            return ""
-
+            return ""  # top-level
         for rep in (top.get("replies") or []):
             if _is_same(rep):
-                who = parent_user or _name(rep.get("toUser"))  # in case API adds a toUser
-                if not ALLOW_SELF_REPLIES and who.strip().casefold() == want_author:
-                    return ""
-                return who
+                who = parent_user or _name(rep.get("toUser"))
+                return (who or "").strip()
+
     return ""
 
+                                             
 def resolve_reply_to_on_homepage_by_id(novel_id: str, author: str, body_raw: str, posted_at: str) -> str:
     if not novel_id:
         return ""
@@ -452,93 +475,53 @@ def _mistmint_reply_flags_from_raw(raw_text: str) -> list[bool]:
 
 EXTRA_ALIASES = r'(?:extra|side\s*story|sidestory|ss|special|bonus|omake)'
 
-def _mistmint_parse_chapter_label(ch: str):
-    """
-    Normalize Mistmint labels:
-      'Chapter 1'            -> ('Chapter 1', 1)
-      'Chapter 12.5'         -> ('Chapter 12.5', 12.5)
-      'Chapter Extra 1'      -> ('Chapter Extra 1', None)
-      'Extra 2'              -> ('Chapter Extra 2', None)
-      '' / None              -> ('Homepage', None)
-    """
-    s = (ch or '').strip()
+# keep this helper exactly as-is (it handles "Extra", decimals, etc.)
+def _mistmint_parse_chapter_label(s: str):
+    s = (s or '').strip()
     if not s:
         return ('Homepage', None)
 
-    # Chapter Extra N
-    m = re.match(rf'^\s*Chapter\s+{EXTRA_ALIASES}\s+(\d+)\s*$', s, flags=re.I)
-    if m:
-        return (f'Chapter Extra {int(m.group(1))}', None)
+    EXTRA_ALIASES = r'(?:extra|side\s*story|sidestory|ss|special|bonus|omake)'
 
-    # Extra N (no 'Chapter' prefix)
-    m = re.match(rf'^\s*{EXTRA_ALIASES}\s+(\d+)\s*$', s, flags=re.I)
-    if m:
-        return (f'Chapter Extra {int(m.group(1))}', None)
+    m = re.match(rf'^\s*Chapter\s+{EXTRA_ALIASES}\s+(\d+)\s*$', s, re.I)
+    if m: return (f'Chapter Extra {int(m.group(1))}', None)
 
-    # Chapter N or Chapter N.M
-    m = re.match(r'^\s*Chapter\s+(\d+(?:\.\d+)?)', s, flags=re.I)
+    m = re.match(rf'^\s*{EXTRA_ALIASES}\s+(\d+)\s*$', s, re.I)
+    if m: return (f'Chapter Extra {int(m.group(1))}', None)
+
+    m = re.match(r'^\s*Chapter\s+(\d+(?:\.\d+)?)', s, re.I)
     if m:
         num = m.group(1)
         return (f'Chapter {num}', float(num) if '.' in num else int(num))
 
-    # Fallback: unknown pattern → keep as-is
     return (s, None)
 
+_MM_SCHEME = re.compile(r'^mm://novel/([^/]+)/chapter/([^/]+)$', re.I)
+
 def build_comment_link_mistmint(novel_title: str, host: str, chapter_label_or_empty: str) -> str:
-    details = HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(novel_title, {})
-    base = (details.get("novel_url") or "").rstrip("/")
-    if not base:
-        return ""
     label = (chapter_label_or_empty or "").strip()
-    if not label:
-        return base
+    # homepage
+    if not label or label.lower() == "homepage":
+        details = HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(novel_title, {})
+        return (details.get("novel_url") or "").rstrip("/")
 
-    # Chapter N (numeric)
-    m = re.search(r'chapter\s+(\d+(?:\.\d+)?)', label, re.I)
+    # exact slugs passed as mm://… → canonicalize to https
+    m = _MM_SCHEME.match(label)
     if m:
-        ch = m.group(1)
-        arc = _get_arc_for_ch(int(float(ch))) if ch.replace('.', '', 1).isdigit() else None
-        if not arc:
-            return base
-        arc_slug = _slug_arc(arc["arc_num"], arc["title"])
-        return f"{base}/{arc_slug}-chapter-{ch}"
+        novel_slug, chapter_slug = m.groups()
+        return MistmintClient.build_url(novel_slug, chapter_slug)
 
-    # Chapter Extra N or Extra N → don’t guess, fall back to base
-    if re.search(r'(chapter\s+)?extra\s+\d+', label, re.I):
-        return base
+    # if a fully qualified https URL slipped through, just return it
+    if label.lower().startswith(("http://", "https://")):
+        return label
 
-    return base
+    # Otherwise do not guess from human text; fall back to novel homepage.
+    details = HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(novel_title, {})
+    return (details.get("novel_url") or "").rstrip("/")
 
-def extract_chapter_mistmint(chapter_or_url: str) -> str:
-    if not chapter_or_url:
-        return "Homepage"
-
-    # Label form
-    if not chapter_or_url.startswith("http"):
-        return _mistmint_parse_chapter_label(chapter_or_url)[0]
-
-    # URL form
-    path = urlparse(chapter_or_url).path.rstrip("/")
-    tail = path.split("/")[-1].lower()
-
-    # ...-chapter-extra-1
-    m = re.search(r'(?:^|-)chapter-extra-(\d+)$', tail, re.I)
-    if m:
-        return f"Chapter Extra {int(m.group(1))}"
-
-    # ...-extra-1  (in case site drops 'chapter-')
-    m = re.search(r'(?:^|-)extra-(\d+)$', tail, re.I)
-    if m:
-        return f"Chapter Extra {int(m.group(1))}"
-
-    # ...-chapter-12 or ...-chapter-12.5
-    m = re.search(r'(?:^|-)chapter-(\d+(?:\.\d+)?)$', tail, re.I)
-    if m:
-        n = m.group(1)
-        return f"Chapter {n}"
-
-    return "Homepage"
-
+def normalize_mistmint_chapter_label(label: str) -> str:
+    # Empty → Homepage. Otherwise keep exactly what the API says.
+    return (label or "").strip() or "Homepage"
 
 # --- Mistmint comments loader (JSON recent-comments endpoint) ---------------
 def load_comments_mistmint(comments_feed_url: str):
@@ -546,11 +529,9 @@ def load_comments_mistmint(comments_feed_url: str):
     Returns list[dict] with keys:
       novel_title, chapter, author, description, reply_to, posted_at
     """
-    import os, json, requests
-
     out = []
-    token  = os.getenv("MISTMINT_TOKEN", "").strip()     # raw JWT (no prefix)
-    cookie = os.getenv("MISTMINT_COOKIE", "").strip()    # e.g. "mistmint_token=<JWT>"
+    token  = os.getenv("MISTMINT_TOKEN", "").strip()
+    cookie = os.getenv("MISTMINT_COOKIE", "").strip()
 
     base_headers = {
         "Accept": "application/json",
@@ -568,7 +549,6 @@ def load_comments_mistmint(comments_feed_url: str):
         t = (payload_text or "").lower()
         return ("you must be logged in" in t) or ('"code":401' in t)
 
-    # return (resp, raw_text, parsed_json)
     def get_with(headers: dict, label: str):
         r = requests.get(comments_feed_url, headers=headers, timeout=20)
         ctype = r.headers.get("content-type", "?")
@@ -584,7 +564,6 @@ def load_comments_mistmint(comments_feed_url: str):
     payload = None
     raw_used = ""
 
-    # Try #1: Bearer
     if token:
         h1 = dict(base_headers)
         h1["Authorization"] = f"Bearer {token}"
@@ -592,14 +571,12 @@ def load_comments_mistmint(comments_feed_url: str):
         if not unauth(raw, pj):
             payload, raw_used = (pj if pj is not None else {}), raw
         else:
-            # Try #2: Cookie built from token (Nuxt/Auth setups)
             h2 = dict(base_headers)
             h2["Cookie"] = f"auth._token.local=Bearer%20{token}; auth.strategy=local"
             r, raw, pj = get_with(h2, "cookie-from-token")
             if not unauth(raw, pj):
                 payload, raw_used = (pj if pj is not None else {}), raw
 
-    # Try #3: Real session cookie if provided
     if payload is None and cookie:
         h3 = dict(base_headers)
         h3["Cookie"] = cookie
@@ -611,7 +588,6 @@ def load_comments_mistmint(comments_feed_url: str):
         print("[mistmint] unauthorized; set MISTMINT_TOKEN or MISTMINT_COOKIE")
         return out
 
-    # ---- flexible list extraction (top-level or nested)
     def pick_list(obj):
         if isinstance(obj, list):
             return obj
@@ -635,7 +611,6 @@ def load_comments_mistmint(comments_feed_url: str):
         print(f"[mistmint] no items; top-level keys={list(payload)[:6]} sample={preview!r}")
         return out
 
-    # Common pick helper
     def pick(d, *cands, default=""):
         for k in cands:
             v = d.get(k)
@@ -643,99 +618,93 @@ def load_comments_mistmint(comments_feed_url: str):
                 return v
         return default
 
-    # Keys we’ll look for
-    id_keys      = ("id", "_id", "commentId", "comment_id")
-    parent_keys  = ("parentId", "parent_id", "inReplyTo", "in_reply_to", "replyToId", "reply_to_id")
-    user_keys    = ("user", "author", "username", "name", "displayName")
+    id_keys       = ("id", "_id", "commentId", "comment_id")
+    parent_keys   = ("parentId", "parent_id", "inReplyTo", "in_reply_to", "replyToId", "reply_to_id")
+    user_keys     = ("user", "author", "username", "name", "displayName")
     reply_user_keys = ("replyToUser", "reply_user", "replyToName", "reply_name", "parentUser", "parent_user", "toUser", "to_user")
 
-    # 1) Build id->author map
     id_to_user = {}
     for obj in items:
         cid = pick(obj, *id_keys)
         if cid:
             id_to_user[str(cid)] = pick(obj, *user_keys)
 
-    # 2) Heuristic adjacency flags (safe)
     flags = _mistmint_reply_flags_from_raw(raw_used or "")
 
-    # Helper: parse timestamps
     def _parse_when(d):
         s = pick(d, "postedAt", "createdAt", "created_at", "date", "timestamp")
         try:
-            return datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+            return datetime.datetime.fromisoformat((s or "").replace("Z", "+00:00"))
         except Exception:
             return None
 
     for i, obj in enumerate(items):
-        novel_title = pick(obj, "novel", "novelTitle", "title")
-        chapter     = pick(obj, "chapter", "chapterLabel", "chapterTitle")
-        author      = pick(obj, *user_keys)
-        body_raw    = pick(obj, "content", "body", "text", "message").strip()
-        posted_at   = pick(obj, "postedAt", "createdAt", "created_at", "date", "timestamp")
+        novel_title  = pick(obj, "novel", "novelTitle", "title").strip()
+        author       = pick(obj, *user_keys).strip()
+        body_raw     = (pick(obj, "content", "body", "text", "message") or "").strip()
+        posted_at    = pick(obj, "postedAt", "createdAt", "created_at", "date", "timestamp")
 
-        # 1) explicit reply hints
+        novel_id     = pick(obj, "novelId", "novel_id")
+        novel_slug   = pick(obj, "novelSlug", "novel_slug")
+        chapter_slug = pick(obj, "chapterSlug", "chapter_slug")
+
+        # Chapter label: prefer a lossless mm:// marker so we never have to guess later.
+        if chapter_slug:
+            chapter = f"mm://novel/{novel_slug}/chapter/{chapter_slug}"
+        else:
+            chapter = normalize_mistmint_chapter_label(pick(obj, "chapter", "chapterLabel", "chapterTitle"))
+
         reply_to = pick(obj, *reply_user_keys)
-        
-        # 2) parentId -> author (if the JSON already carries that)
         if not reply_to:
             pid = pick(obj, *parent_keys)
             if pid and str(pid) in id_to_user:
                 reply_to = id_to_user[str(pid)]
-        
-        # 3) explicit Mistmint resolvers
-        if not reply_to:
-            chapter_norm = extract_chapter_mistmint(chapter or "")
-            if chapter_norm == "Homepage":
-                novel_meta = HOSTING_SITE_DATA.get("Mistmint Haven", {}) \
-                                              .get("novels", {}) \
-                                              .get((novel_title or "").strip(), {})
-                novel_id = novel_meta.get("novel_id")
-                if not novel_id:
-                    print(f"[mistmint] no novel_id for '{novel_title}', cannot resolve homepage replies")
-                else:
-                    who = resolve_reply_to_on_homepage_by_id(
-                        novel_id=novel_id,
-                        author=(author or ""),
-                        body_raw=(body_raw or ""),
-                        posted_at=(posted_at or "")
-                    )
-                    if who and (ALLOW_SELF_REPLIES or who != author):
-                        reply_to = who
-            else:
-                who = resolve_reply_to_on_chapter_by_label(
-                    novel_title=(novel_title or ""),
-                    chapter_label=(chapter or ""),
-                    author=(author or ""),
-                    body_raw=(body_raw or ""),
-                    posted_at=(posted_at or "")
-                )
-                if who and (ALLOW_SELF_REPLIES or who != author):
-                    reply_to = who
 
-        # 4) adjacency fallback (only if credible)
+        if not reply_to:
+            if chapter_slug:
+                who = resolve_reply_to_on_chapter_by_label(
+                    novel_title=novel_title,
+                    chapter_label=chapter,  # display not used here
+                    author=author,
+                    body_raw=body_raw,
+                    posted_at=posted_at,
+                    novel_slug=novel_slug or None,
+                    chapter_slug_hint=chapter_slug or None,
+                )
+            elif novel_id:
+                who = resolve_reply_to_on_homepage_by_id(
+                    novel_id=novel_id,
+                    author=author,
+                    body_raw=body_raw,
+                    posted_at=posted_at
+                )
+            else:
+                who = ""
+
+            if who and (ALLOW_SELF_REPLIES or who.strip().casefold() != author.casefold()):
+                reply_to = who
+
         if not reply_to and flags and i > 0 and i-1 < len(flags) and flags[i-1]:
             prev = items[i-1]
             prev_author = pick(prev, *user_keys)
-            same_novel  = (novel_title or "").strip() == pick(prev, "novel", "novelTitle", "title").strip()
+            same_novel  = novel_title == pick(prev, "novel", "novelTitle", "title").strip()
             t_cur  = _parse_when(obj)
             t_prev = _parse_when(prev)
             close_in_time = (t_cur and t_prev and abs((t_cur - t_prev).total_seconds()) <= 120)
             if prev_author and author and prev_author != author and same_novel and close_in_time:
                 reply_to = prev_author
-                
-        # 5) optionally suppress self-replies
+
         if (not ALLOW_SELF_REPLIES
             and reply_to
-            and reply_to.strip().casefold() == (author or "").strip().casefold()):
+            and reply_to.strip().casefold() == author.casefold()):
             reply_to = ""
 
         body = f"In reply to {reply_to}. {body_raw}" if reply_to else body_raw
 
         out.append({
-            "novel_title": (novel_title or "").strip(),
-            "chapter": chapter or "",
-            "author": author or "",
+            "novel_title": novel_title,
+            "chapter": chapter,
+            "author": author,
             "description": body,
             "reply_to": reply_to,
             "posted_at": posted_at or "",
@@ -745,7 +714,6 @@ def load_comments_mistmint(comments_feed_url: str):
     if out:
         print(f"[mistmint] sample fields -> novel_title='{out[0]['novel_title']}', chapter='{out[0]['chapter']}', author='{out[0]['author']}'")
     return out
-
 
 # =============================================================================
 # MISTMINT STATE HELPERS (multi-novel, keyed by short_code)
