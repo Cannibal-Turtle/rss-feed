@@ -42,6 +42,7 @@ jobs:
           PAT_GITHUB: ${{ secrets.PAT_GITHUB }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           MISTMINT_TOKEN: ${{ secrets.MISTMINT_TOKEN }}
+          MISTMINT_COOKIE:   ${{ secrets.MISTMINT_COOKIE }}
         run: python comments.py
 
       - name: Commit and Push Changes (feed + token state)
