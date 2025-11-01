@@ -1,36 +1,36 @@
 #!/usr/bin/env python
+import os
+import re
+import html
+import time
+import json
+import base64
 import datetime
 import feedparser
 import PyRSS2Gen
 import xml.dom.minidom
-import re
-import html
+from pathlib import Path
 from xml.sax.saxutils import escape
 from bs4 import BeautifulSoup
 
-# Import your host mapping data and utilities.
 from novel_mappings import HOSTING_SITE_DATA
 from host_utils import get_host_utils
 
-# --- token expiry + dispatch helpers ---
-import os, base64, json, time, requests, pathlib
+# --- token expiry → repository_dispatch (no Discord creds here) ---
+import requests
 
 ALERT_STATE_FILE = ".token_alert_state.json"
 
 def _load_alert_state() -> dict:
     try:
-        with open(ALERT_STATE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
+        return json.loads(Path(ALERT_STATE_FILE).read_text(encoding="utf-8"))
     except Exception:
         return {}
 
 def _save_alert_state(d: dict) -> None:
-    with open(ALERT_STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(d, f, indent=2)
+    Path(ALERT_STATE_FILE).write_text(json.dumps(d, indent=2), encoding="utf-8")
 
-def _jwt_expiry_unix(token: str) -> int | None:
+def _jwt_expiry_unix(token: str):
     try:
         parts = token.split(".")
         if len(parts) != 3:
@@ -41,55 +41,59 @@ def _jwt_expiry_unix(token: str) -> int | None:
     except Exception:
         return None
 
-def maybe_dispatch_token_alert(threshold_days: int = 1):
-    """
-    Fires a repository_dispatch if MISTMINT_TOKEN expires within N days.
-    Throttled: will only send once per unique exp value.
-    Requires env:
-      - MISTMINT_TOKEN
-      - PAT_GITHUB            (fine-grained PAT with repo + actions scopes)
-      - GITHUB_REPOSITORY     (e.g. 'Cannibal-Turtle/rss-feed')
-    """
-    token = os.getenv("MISTMINT_TOKEN", "").strip()
-    if not token:
-        return
-    exp = _jwt_expiry_unix(token)
-    if not exp:
-        return
-
-    now = int(time.time())
-    secs_left = exp - now
-    if secs_left > threshold_days * 86400:
-        return  # not expiring soon
-
-    state = _load_alert_state()
-    last_alerted_exp = int(state.get("last_alerted_exp", 0))
-    if last_alerted_exp == exp:
-        return  # already alerted for this exact token
-
+def maybe_dispatch_token_alerts(threshold_days: int = 1):
+    """Alert once per (host, token_secret, exp) when a JWT is ≤ threshold from expiry."""
     repo = os.getenv("GITHUB_REPOSITORY", "")
     pat  = os.getenv("PAT_GITHUB", "")
     if not repo or not pat:
         return
 
+    state = _load_alert_state()
+    now = int(time.time())
     url = f"https://api.github.com/repos/{repo}/dispatches"
-    payload = {
-        "event_type": "mistmint-token-expiring",
-        "client_payload": {"exp": exp, "secs_left": secs_left}
-    }
     headers = {
         "Accept": "application/vnd.github+json",
         "Authorization": f"Bearer {pat}",
         "X-GitHub-Api-Version": "2022-11-28",
     }
-    try:
-        r = requests.post(url, headers=headers, json=payload, timeout=15)
-        r.raise_for_status()
-        # mark alerted for this exp
-        state["last_alerted_exp"] = exp
-        _save_alert_state(state)
-    except Exception as e:
-        print(f"[warn] repository_dispatch failed: {e}")
+
+    for host, data in HOSTING_SITE_DATA.items():
+        token_secret = data.get("token_secret")
+        if not token_secret:
+            continue
+        token = os.getenv(token_secret, "").strip()
+        if not token:
+            continue
+
+        exp = _jwt_expiry_unix(token)
+        if not exp:
+            continue
+
+        secs_left = exp - now
+        if secs_left > threshold_days * 86400:
+            continue
+
+        key = f"{host}:{token_secret}:last_exp"
+        if int(state.get(key, 0)) == exp:
+            continue  # already alerted for this exact token
+
+        payload = {
+            "event_type": "token-expiring",
+            "client_payload": {
+                "host": host,
+                "token_secret_name": token_secret,
+                "exp": exp,
+                "secs_left": secs_left,
+            },
+        }
+        try:
+            r = requests.post(url, headers=headers, json=payload, timeout=15)
+            r.raise_for_status()
+            state[key] = exp
+            _save_alert_state(state)
+            print(f"[alert] dispatched token-expiring → {host} ({token_secret})")
+        except Exception as e:
+            print(f"[warn] repository_dispatch failed for {host}: {e}")
 
 
 # --- Compact Description ---
@@ -193,8 +197,8 @@ class CustomCommentRSS2(PyRSS2Gen.RSS2):
         writer.write("</rss>" + newl)
 
 def main():
-    # Alert if token is close to expiring; does nothing if OK/missing.
-    maybe_dispatch_token_alert(threshold_days=1)
+    # Fire repo_dispatch if any host JWT is within 1 day of expiry (throttled).
+    maybe_dispatch_token_alerts(threshold_days=1)
     all_rss_items = []
     # Loop over all hosts in your mappings.
     for host, data in HOSTING_SITE_DATA.items():
@@ -224,13 +228,18 @@ def main():
 
             pub_date = datetime.datetime(*entry.published_parsed[:6])
             # 1) prefer the real HTML block if it exists
-            raw_html = entry.get("content:encoded")
+            raw_html = None
+            content = entry.get("content")
+            if isinstance(content, list) and content:
+                raw_html = content[0].get("value")
             if raw_html is None:
-                # fallback: un-escape the escaped <description> CDATA
                 raw_html = html.unescape(entry.get("description", ""))
             
             # 2) split off the “In reply to…” header, but keep your existing reply_chain logic
-            reply_chain, post_html = utils["split_reply_chain"](raw_html)
+            split_reply_chain = get_host_utils(host).get(
+                "split_reply_chain", lambda s: ("", s)
+            )
+            reply_chain, post_html = split_reply_chain(raw_html)
             
             # 3) strip *all* HTML tags (including both real <p> and ones that were &lt;p&gt;)
             soup = BeautifulSoup(post_html, "html.parser")
