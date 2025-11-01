@@ -1141,24 +1141,47 @@ def split_comment_title_dragonholic(comment_title: str) -> str:
 
 
 def extract_chapter_dragonholic(link: str) -> str:
+    # If this is a direct comment link, try to resolve its chapter from the approved feed.
     m = re.search(r"#comment-(\d+)", link)
     if m:
         cid = m.group(1)
         approved = feedparser.parse(APPROVED_COMMENTS_FEED)
         for entry in approved.entries:
+            # Your Apps Script feed puts an approve_url and a custom <chapter> field
             if hasattr(entry, "approve_url") and f"c={cid}" in entry.approve_url:
-                return entry.chapter
+                if hasattr(entry, "chapter") and entry.chapter:
+                    return entry.chapter
 
-    parsed = urlparse(link)
-    segments = [s for s in parsed.path.split("/") if s]
+    # Fallback: parse the URL path
+    path = urlparse(link).path.rstrip("/")
+    segments = [s for s in path.split("/") if s]
     if len(segments) <= 2:
         return "Homepage"
 
-    last = unquote(segments[-1]).replace("-", " ")
-    lower = last.lower()
-    if lower.startswith("novel") or lower.startswith("comments"):
+    tail_slug = segments[-1]           # e.g. "chapter-12-some-title" or "homepage"
+    tail = tail_slug.lower()
+
+    # Explicit home-y tails
+    if tail in {"homepage", "comments"}:
         return "Homepage"
-    return last
+
+    # Match "chapter-extra-N" or "chapter-N(.M)" anywhere in the tail
+    m = re.search(r'(?:^|-)chapter-(?:(extra)-)?(\d+(?:\.\d+)?)\b', tail, re.I)
+    if m:
+        is_extra = bool(m.group(1))
+        num = m.group(2)
+        return f"Chapter {'Extra ' if is_extra else ''}{num}"
+
+    # Match plain "extra-N" (in case site omits 'chapter-')
+    m = re.search(r'(?:^|-)extra-(\d+)\b', tail, re.I)
+    if m:
+        return f"Chapter Extra {m.group(1)}"
+
+    # Last-resort: humanize the last segment
+    last = unquote(tail_slug).replace("-", " ").strip()
+    if last.lower().startswith(("novel", "comments")):
+        return "Homepage"
+    return last or "Homepage"
 
 
 def build_comment_link_dragonholic(novel_title: str, host: str, placeholder_link: str) -> str:
