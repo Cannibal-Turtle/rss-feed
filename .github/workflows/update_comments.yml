@@ -2,22 +2,22 @@ name: Update Comments Feed
 
 on:
   schedule:
-    - cron: "0 * * * *"  # Runs every hour
+    - cron: "0 * * * *"  # every hour
   workflow_dispatch:
 
 permissions:
   contents: write
 
-concurrency:
-  group: comments-feed
-  cancel-in-progress: true
-
 jobs:
-  update_comments:
+  update_feed:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
+
+      - name: Seed token alert state if missing
+        run: |
+          [ -f .token_alert_state.json ] || echo '{}' > .token_alert_state.json
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -28,43 +28,28 @@ jobs:
         run: |
           pip install feedparser PyRSS2Gen aiohttp beautifulsoup4 requests
 
-      - name: Run Comments Feed Generator
+      - name: Run Comments Feed Generator (also checks token)
         env:
-          # needed by comments.py for token alert
-          MISTMINT_TOKEN: ${{ secrets.MISTMINT_TOKEN }}
+          # needed by comments.py for repo dispatch
           PAT_GITHUB: ${{ secrets.PAT_GITHUB }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          # optional if your comments.py needs the token for API calls
+          MISTMINT_TOKEN: ${{ secrets.MISTMINT_TOKEN }}
         run: python comments.py
 
-      - name: Commit and Push Changes
+      - name: Commit and Push Changes (feed + token state)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -e
-      
-          git config user.name  "GitHub Action"
-          git config user.email "action@github.com"
-      
-          # Stage generated XML
-          git add aggregated_comments_feed.xml
-      
-          # Stage alert state only if it exists (created after a successful alert)
-          if [ -f .token_alert_state.json ]; then
-            git add .token_alert_state.json
-          fi
-      
-          # Commit only if something is staged
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Update Comments Feed"
-          fi
-      
-          # Safely rebase in case main moved; autostash handles local mods
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+
+          git add aggregated_comments_feed.xml .token_alert_state.json
+          git commit -m "Update Comments Feed + token state" || echo "No changes to commit"
+
           git pull --rebase --autostash
-      
-          # Push using token
-          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git HEAD:main
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
+          git push
 
       - name: Wait for RSS to propagate
         run: sleep 10
@@ -77,4 +62,4 @@ jobs:
                -H "Accept: application/vnd.github.v3+json" \
                -H "Authorization: Bearer $PAT_GITHUB" \
                https://api.github.com/repos/Cannibal-Turtle/discord-webhook/dispatches \
-               -d '{"event_type": "trigger-discord-comments"}'
+               -d '{"event_type":"trigger-discord-comments"}'
