@@ -167,35 +167,66 @@ def load_comments_mistmint(comments_feed_url: str):
     out = []
 
     token  = os.getenv("MISTMINT_TOKEN", "").strip()
-    cookie = os.getenv("MISTMINT_COOKIE", "").strip()   # optional: session cookie fallback
+    cookie = os.getenv("MISTMINT_COOKIE", "").strip()   # optional: real session cookie(s)
 
-    headers = {
+    base_headers = {
         "Accept": "application/json",
         "User-Agent": "Mozilla/5.0",
+        "Origin": "https://mistminthaven.com",
+        "Referer": "https://mistminthaven.com/",
     }
+
+    def unauth(payload_text: str, payload_json: dict | None) -> bool:
+        try:
+            if isinstance(payload_json, dict) and str(payload_json.get("code", "")).startswith("401"):
+                return True
+        except Exception:
+            pass
+        t = (payload_text or "").lower()
+        return ("you must be logged in" in t) or ('"code":401' in t)
+
+    def get_with(headers: dict, label: str):
+        r = requests.get(comments_feed_url, headers=headers, timeout=20)
+        ctype = r.headers.get("content-type", "?")
+        print(f"[mistmint] try={label} status={r.status_code} ctype={ctype} bytes={len(r.content)}")
+        pj = None
+        try:
+            pj = r.json()
+        except Exception:
+            pass
+        return r, pj
+
+    # Try #1: Authorization: Bearer <token>
     if token:
-        headers["Authorization"] = f"Bearer {token}"
-    if cookie:
-        headers["Cookie"] = cookie
+        h1 = dict(base_headers)
+        h1["Authorization"] = f"Bearer {token}"
+        r, pj = get_with(h1, "bearer")
+        if not unauth(r.text, pj):
+            payload = pj if pj is not None else {}
+        else:
+            # Try #2: Cookie-style auth commonly used by Nuxt/Auth
+            h2 = dict(base_headers)
+            h2["Cookie"] = f"auth._token.local=Bearer%20{token}; auth.strategy=local"
+            r, pj = get_with(h2, "cookie-from-token")
+            if not unauth(r.text, pj):
+                payload = pj if pj is not None else {}
+            else:
+                payload = None
+    else:
+        payload = None
 
-    # Some APIs support a limit param; harmless if ignored.
-    params = {}
-    try:
-        params["limit"] = int(os.getenv("MISTMINT_RECENT_LIMIT", "50"))
-    except Exception:
-        pass
+    # Try #3: real session cookie if provided
+    if payload is None and cookie:
+        h3 = dict(base_headers)
+        h3["Cookie"] = cookie
+        r, pj = get_with(h3, "cookie-secret")
+        if not unauth(r.text, pj):
+            payload = pj if pj is not None else {}
+        else:
+            payload = None
 
-    r = requests.get(comments_feed_url, headers=headers, params=params, timeout=20)
-    print(f"[mistmint] status={r.status_code} ctype={r.headers.get('content-type','?')} auth={'yes' if (token or cookie) else 'no'} bytes={len(r.content)}")
-
-    if r.status_code in (401, 403):
-        print("[mistmint] unauthorized; check MISTMINT_TOKEN or MISTMINT_COOKIE")
-        return out
-
-    try:
-        payload = r.json()
-    except Exception as e:
-        print(f"[mistmint] JSON parse error: {e}; first 200={r.text[:200]!r}")
+    if payload is None:
+        print("[mistmint] unauthorized; set MISTMINT_TOKEN or MISTMINT_COOKIE")
         return out
 
     # ---- flexible list extraction (top-level or nested under data/…)
@@ -203,12 +234,10 @@ def load_comments_mistmint(comments_feed_url: str):
         if isinstance(obj, list):
             return obj
         if isinstance(obj, dict):
-            # direct lists
             for k in ("data", "items", "results", "comments", "entries"):
                 v = obj.get(k)
                 if isinstance(v, list):
                     return v
-            # nested under data: { "data": { "comments": [...] } }
             v = obj.get("data")
             if isinstance(v, dict):
                 for k in ("comments", "items", "results", "data", "entries"):
@@ -219,11 +248,14 @@ def load_comments_mistmint(comments_feed_url: str):
 
     items = pick_list(payload)
     if not items:
-        print(f"[mistmint] no items; keys={list(payload)[:6]} sample={r.text[:200]!r}")
+        # show short preview so we can see the envelope shape
+        preview = str(payload)
+        preview = preview[:200] + ("…" if len(preview) > 200 else "")
+        print(f"[mistmint] no items; top-level keys={list(payload)[:6]} sample={preview!r}")
         return out
 
-    # If you still want reply adjacency, keep using raw:
-    flags = _mistmint_reply_flags_from_raw(r.text)
+    # keep your adjacency flags (reply-chain) logic
+    flags = _mistmint_reply_flags_from_raw(json.dumps(payload))
 
     def pick(d, *cands, default=""):
         for k in cands:
@@ -234,15 +266,12 @@ def load_comments_mistmint(comments_feed_url: str):
 
     for i, obj in enumerate(items):
         reply_to = items[i-1].get("user", "") if i > 0 and i-1 < len(flags) and flags[i-1] else ""
-
         novel_title = pick(obj, "novel", "novelTitle", "title")
         chapter     = pick(obj, "chapter", "chapterLabel", "chapterTitle")
         author      = pick(obj, "user", "author", "username", "name", "displayName")
         body_raw    = pick(obj, "content", "body", "text", "message").strip()
         posted_at   = pick(obj, "postedAt", "createdAt", "created_at", "date", "timestamp")
-
         body = f"In reply to {reply_to}. {body_raw}" if reply_to else body_raw
-
         out.append({
             "novel_title": (novel_title or "").strip(),
             "chapter": chapter or "",
