@@ -1202,33 +1202,21 @@ def build_comment_link_dragonholic(novel_title: str, host: str, placeholder_link
     return f"{base_url}{chapter_slug}/#comment-{cid}"
 
 
-def split_reply_chain_dragonholic(raw: str) -> tuple[str, str]:
+def split_reply_chain_dragonholic(raw: str) -> tuple:
+    import re
     from html import unescape
-    # collapse whitespace and unescape HTML entities
-    t = " ".join(unescape(raw or "").split())
-
-    # 1) HTML anchor form: In reply to <a ...>Name</a> . Body...
+    ws_collapsed = " ".join(raw.split())
+    t = unescape(ws_collapsed)
     m = re.match(
-        r'^\s*In\s+reply\s+to\s*<a[^>]*>([^<]+)</a>\s*\.?\s*(.*)$',
-        t, re.IGNORECASE
+        r'\s*In reply to\s*<a [^>]+>([^<]+)</a>\.\s*(.*)$',
+        t,
+        re.IGNORECASE
     )
     if m:
         name = m.group(1).strip()
         body = m.group(2).strip()
         return f"In reply to {name}", body
-
-    # 2) Plaintext form: In reply to Name . Body...
-    m = re.match(
-        r'^\s*In\s+reply\s+to\s+([^.]+?)\s*\.?\s*(.*)$',
-        t, re.IGNORECASE
-    )
-    if m:
-        name = m.group(1).strip()
-        body = m.group(2).strip()
-        return f"In reply to {name}", body
-
-    # no reply header
-    return "", (raw or "").strip()
+    return "", raw.strip()
 
 
 # =============================================================================
