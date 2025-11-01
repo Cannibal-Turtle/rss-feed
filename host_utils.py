@@ -1206,16 +1206,17 @@ def split_reply_chain_dragonholic(raw: str) -> tuple[str, str]:
     import re
     s = unescape(raw or "")
     s = re.sub(r"\s+", " ", s).strip()
+    s_head = re.sub(r'^(?:\s*<[^>]+>\s*)+', '', s)
 
     # 1) HTML-tagged name (<a>…</a> or any tag), optional whitespace + punctuation
-    m = re.match(r'(?is)^\s*in\s+reply\s+to\s*<[^>]*>([^<]+)</[^>]*>\s*[.,:;!?]?\s*(.*)$', s)
+    m = re.match(r'(?is)^\s*in\s+reply\s+to\s*<[^>]*>([^<]+)</[^>]*>\s*[.,:;!?]?\s*(.*)$', s_head)
     if m:
         name, body = m.group(1).strip(), m.group(2).strip()
         body = re.sub(r'\s+([.,!?;:])', r'\1', body)
         return f"In reply to {name}", body
 
     # 2) Plain-text variant (feeds that already stripped the anchor)
-    m = re.match(r'(?is)^\s*in\s+reply\s+to\s+([^.:\n]+?)\s*[.,:;!?]?\s*(.*)$', s)
+    m = re.match(r'(?is)^\s*in\s+reply\s+to\s+([^.:\n<]+?)\s*[.,:;!?]?\s*(.+)?$', s_head)
     if m:
         name, body = m.group(1).strip(), m.group(2).strip()
         body = re.sub(r'\s+([.,!?;:])', r'\1', body)
@@ -1223,6 +1224,18 @@ def split_reply_chain_dragonholic(raw: str) -> tuple[str, str]:
 
     return "", (raw or "").strip()
 
+def pick_comment_html_dragonholic(entry) -> str:
+    # Dragonholic puts the reply header in description
+    return unescape(entry.get("description", "") or "")
+
+ # Default/generic picker used by Mistmint (and others)
+def pick_comment_html_default(entry) -> str:
+    content = entry.get("content")
+    if isinstance(content, list) and content:
+        v = content[0].get("value") or ""
+        if v:
+            return v
+    return unescape(entry.get("description", "") or "")
 
 # =============================================================================
 # DISPATCH TABLE
@@ -1247,6 +1260,7 @@ DRAGONHOLIC_UTILS = {
     "extract_chapter": extract_chapter_dragonholic,
     "build_comment_link": build_comment_link_dragonholic,
     "split_reply_chain": split_reply_chain_dragonholic,
+    "pick_comment_html": pick_comment_html_dragonholic,
 
     # passthroughs to novel_mappings
     "get_novel_details":
@@ -1282,6 +1296,7 @@ MISTMINT_UTILS = {
     "extract_chapter":    extract_chapter_mistmint,
     "reply_flags_from_raw": _mistmint_reply_flags_from_raw,
     "load_comments": load_comments_mistmint,
+    "pick_comment_html": pick_comment_html_default,
 
     # passthroughs to novel_mappings
     "get_novel_details":
