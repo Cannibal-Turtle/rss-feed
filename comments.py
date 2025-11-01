@@ -292,15 +292,14 @@ def main():
             if raw_html is None:
                 raw_html = html.unescape(entry.get("description", ""))
             
-            # 2) split off the “In reply to…” header, but keep your existing reply_chain logic
-            split_reply_chain = get_host_utils(host).get(
-                "split_reply_chain", lambda s: ("", s)
-            )
+            # 2) Split off “In reply to …” → put only the name line in <reply_chain>
+            split_reply_chain = get_host_utils(host).get("split_reply_chain", lambda s: ("", s))
             reply_chain, post_html = split_reply_chain(raw_html)
             
-            # 3) strip *all* HTML tags (including both real <p> and ones that were &lt;p&gt;)
+            # 3) Strip tags and fix stray spaces before punctuation in the body
             soup = BeautifulSoup(post_html, "html.parser")
             description_text = soup.get_text(separator=" ").strip()
+            description_text = re.sub(r"\s+([.,!?;:])", r"\1", description_text)
         
             # 4) pass both into your RSS item
             item = MyCommentRSSItem(
