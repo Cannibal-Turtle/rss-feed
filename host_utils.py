@@ -163,56 +163,99 @@ def load_comments_mistmint(comments_feed_url: str):
     Returns list[dict] with keys:
       novel_title, chapter, author, description, reply_to, posted_at
     """
+    import os, json, requests
     out = []
-    
-    token = os.getenv("MISTMINT_TOKEN", "").strip()
+
+    token  = os.getenv("MISTMINT_TOKEN", "").strip()
+    cookie = os.getenv("MISTMINT_COOKIE", "").strip()   # optional: session cookie fallback
+
     headers = {
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari",
         "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0",
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"
+    if cookie:
+        headers["Cookie"] = cookie
 
-    r = requests.get(comments_feed_url, timeout=20, headers=headers)
-    ctype = r.headers.get("content-type", "?")
-    print(f"[mistmint] status={r.status_code} ctype={ctype} auth={'yes' if token else 'no'} bytes={len(r.text)}")
-
-    # If we got blocked or the API prefers X-API-Key, try a quick fallback once.
-    if r.status_code in (401, 403) and token:
-        alt_headers = dict(headers)
-        alt_headers.pop("Authorization", None)
-        alt_headers["X-API-Key"] = token
-        r = requests.get(comments_feed_url, timeout=20, headers=alt_headers)
-        ctype = r.headers.get("content-type", "?")
-        print(f"[mistmint] retry with X-API-Key → status={r.status_code} ctype={ctype} bytes={len(r.text)}")
-
-    # Detect stealth HTML/anti-bot pages returned with 200 OK
-    first400 = (r.text or "")[:400].lower()
-    if "<html" in first400 or "cloudflare" in first400 or "captcha" in first400:
-        print("[mistmint] HTML/challenge detected instead of JSON. First 200 chars:")
-        print((r.text or "")[:200])
-        return out
-
-    r.raise_for_status()
-    raw = r.text
-
-    # quick debug once (kept concise)
+    # Some APIs support a limit param; harmless if ignored.
+    params = {}
     try:
-        payload = json.loads(raw)
-    except Exception as e:
-        print(f"[mistmint] JSON parse error: {e}")
+        params["limit"] = int(os.getenv("MISTMINT_RECENT_LIMIT", "50"))
+    except Exception:
+        pass
+
+    r = requests.get(comments_feed_url, headers=headers, params=params, timeout=20)
+    print(f"[mistmint] status={r.status_code} ctype={r.headers.get('content-type','?')} auth={'yes' if (token or cookie) else 'no'} bytes={len(r.content)}")
+
+    if r.status_code in (401, 403):
+        print("[mistmint] unauthorized; check MISTMINT_TOKEN or MISTMINT_COOKIE")
         return out
 
-    # tolerate "data" vs "items" vs "results"
-    items = (
-        payload.get("data")
-        or payload.get("items")
-        or payload.get("results")
-        or []
-    )
-    if not isinstance(items, list):
-        print(f"[mistmint] unexpected payload shape; top-level keys = {list(payload.keys())[:6]}")
+    try:
+        payload = r.json()
+    except Exception as e:
+        print(f"[mistmint] JSON parse error: {e}; first 200={r.text[:200]!r}")
         return out
+
+    # ---- flexible list extraction (top-level or nested under data/…)
+    def pick_list(obj):
+        if isinstance(obj, list):
+            return obj
+        if isinstance(obj, dict):
+            # direct lists
+            for k in ("data", "items", "results", "comments", "entries"):
+                v = obj.get(k)
+                if isinstance(v, list):
+                    return v
+            # nested under data: { "data": { "comments": [...] } }
+            v = obj.get("data")
+            if isinstance(v, dict):
+                for k in ("comments", "items", "results", "data", "entries"):
+                    w = v.get(k)
+                    if isinstance(w, list):
+                        return w
+        return []
+
+    items = pick_list(payload)
+    if not items:
+        print(f"[mistmint] no items; keys={list(payload)[:6]} sample={r.text[:200]!r}")
+        return out
+
+    # If you still want reply adjacency, keep using raw:
+    flags = _mistmint_reply_flags_from_raw(r.text)
+
+    def pick(d, *cands, default=""):
+        for k in cands:
+            v = d.get(k)
+            if v not in (None, ""):
+                return v
+        return default
+
+    for i, obj in enumerate(items):
+        reply_to = items[i-1].get("user", "") if i > 0 and i-1 < len(flags) and flags[i-1] else ""
+
+        novel_title = pick(obj, "novel", "novelTitle", "title")
+        chapter     = pick(obj, "chapter", "chapterLabel", "chapterTitle")
+        author      = pick(obj, "user", "author", "username", "name", "displayName")
+        body_raw    = pick(obj, "content", "body", "text", "message").strip()
+        posted_at   = pick(obj, "postedAt", "createdAt", "created_at", "date", "timestamp")
+
+        body = f"In reply to {reply_to}. {body_raw}" if reply_to else body_raw
+
+        out.append({
+            "novel_title": (novel_title or "").strip(),
+            "chapter": chapter or "",
+            "author": author or "",
+            "description": body,
+            "reply_to": reply_to,
+            "posted_at": posted_at or "",
+        })
+
+    print(f"[mistmint] loaded {len(out)} raw comment(s)")
+    if out:
+        print(f"[mistmint] sample fields -> novel_title='{out[0]['novel_title']}', chapter='{out[0]['chapter']}', author='{out[0]['author']}'")
+    return out
 
     # detect reply adjacency off the original raw (still works)
     flags = _mistmint_reply_flags_from_raw(raw)
