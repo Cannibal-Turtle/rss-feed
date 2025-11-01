@@ -164,10 +164,10 @@ def load_comments_mistmint(comments_feed_url: str):
       novel_title, chapter, author, description, reply_to, posted_at
     """
     import os, json, requests
-    out = []
 
-    token  = os.getenv("MISTMINT_TOKEN", "").strip()
-    cookie = os.getenv("MISTMINT_COOKIE", "").strip()   # optional: real session cookie(s)
+    out = []
+    token  = os.getenv("MISTMINT_TOKEN", "").strip()     # raw JWT (no prefix)
+    cookie = os.getenv("MISTMINT_COOKIE", "").strip()    # e.g. "mistmint_token=<JWT>"
 
     base_headers = {
         "Accept": "application/json",
@@ -185,51 +185,50 @@ def load_comments_mistmint(comments_feed_url: str):
         t = (payload_text or "").lower()
         return ("you must be logged in" in t) or ('"code":401' in t)
 
+    # return (resp, raw_text, parsed_json)
     def get_with(headers: dict, label: str):
         r = requests.get(comments_feed_url, headers=headers, timeout=20)
         ctype = r.headers.get("content-type", "?")
+        raw = r.text
         print(f"[mistmint] try={label} status={r.status_code} ctype={ctype} bytes={len(r.content)}")
         pj = None
         try:
             pj = r.json()
         except Exception:
             pass
-        return r, pj
+        return r, raw, pj
 
-    # Try #1: Authorization: Bearer <token>
+    payload = None
+    raw_used = ""
+
+    # Try #1: Bearer
     if token:
         h1 = dict(base_headers)
         h1["Authorization"] = f"Bearer {token}"
-        r, pj = get_with(h1, "bearer")
-        if not unauth(r.text, pj):
-            payload = pj if pj is not None else {}
+        r, raw, pj = get_with(h1, "bearer")
+        if not unauth(raw, pj):
+            payload, raw_used = (pj if pj is not None else {}), raw
         else:
-            # Try #2: Cookie-style auth commonly used by Nuxt/Auth
+            # Try #2: Cookie built from token (some Nuxt/Auth setups)
             h2 = dict(base_headers)
             h2["Cookie"] = f"auth._token.local=Bearer%20{token}; auth.strategy=local"
-            r, pj = get_with(h2, "cookie-from-token")
-            if not unauth(r.text, pj):
-                payload = pj if pj is not None else {}
-            else:
-                payload = None
-    else:
-        payload = None
+            r, raw, pj = get_with(h2, "cookie-from-token")
+            if not unauth(raw, pj):
+                payload, raw_used = (pj if pj is not None else {}), raw
 
-    # Try #3: real session cookie if provided
+    # Try #3: Real session cookie if provided
     if payload is None and cookie:
         h3 = dict(base_headers)
         h3["Cookie"] = cookie
-        r, pj = get_with(h3, "cookie-secret")
-        if not unauth(r.text, pj):
-            payload = pj if pj is not None else {}
-        else:
-            payload = None
+        r, raw, pj = get_with(h3, "cookie-secret")
+        if not unauth(raw, pj):
+            payload, raw_used = (pj if pj is not None else {}), raw
 
     if payload is None:
         print("[mistmint] unauthorized; set MISTMINT_TOKEN or MISTMINT_COOKIE")
         return out
 
-    # ---- flexible list extraction (top-level or nested under data/…)
+    # ---- flexible list extraction (top-level or nested)
     def pick_list(obj):
         if isinstance(obj, list):
             return obj
@@ -248,15 +247,12 @@ def load_comments_mistmint(comments_feed_url: str):
 
     items = pick_list(payload)
     if not items:
-        # show short preview so we can see the envelope shape
         preview = str(payload)
         preview = preview[:200] + ("…" if len(preview) > 200 else "")
         print(f"[mistmint] no items; top-level keys={list(payload)[:6]} sample={preview!r}")
         return out
 
-    # keep your adjacency flags (reply-chain) logic
-    flags = _mistmint_reply_flags_from_raw(json.dumps(payload))
-
+    # 1) Build an id->author map in case parentId is present
     def pick(d, *cands, default=""):
         for k in cands:
             v = d.get(k)
@@ -264,14 +260,42 @@ def load_comments_mistmint(comments_feed_url: str):
                 return v
         return default
 
+    id_keys      = ("id", "_id", "commentId", "comment_id")
+    parent_keys  = ("parentId", "parent_id", "inReplyTo", "in_reply_to", "replyToId", "reply_to_id")
+    user_keys    = ("user", "author", "username", "name", "displayName")
+    reply_user_keys = ("replyToUser", "reply_user", "replyToName", "reply_name", "parentUser", "parent_user", "toUser", "to_user")
+
+    id_to_user = {}
+    for obj in items:
+        cid = pick(obj, *id_keys)
+        if cid:
+            id_to_user[str(cid)] = pick(obj, *user_keys)
+
+    # 2) Heuristic fallback using *raw response text* (NOT json.dumps)
+    flags = _mistmint_reply_flags_from_raw(raw_used or "")
+
     for i, obj in enumerate(items):
-        reply_to = items[i-1].get("user", "") if i > 0 and i-1 < len(flags) and flags[i-1] else ""
+        # explicit reply target if present
+        reply_to = pick(obj, *reply_user_keys)
+
+        # or via parentId → author
+        if not reply_to:
+            pid = pick(obj, *parent_keys)
+            if pid and str(pid) in id_to_user:
+                reply_to = id_to_user[str(pid)]
+
+        # or adjacency heuristic
+        if not reply_to and i > 0 and i-1 < len(flags) and flags[i-1]:
+            reply_to = pick(items[i-1], *user_keys)
+
         novel_title = pick(obj, "novel", "novelTitle", "title")
         chapter     = pick(obj, "chapter", "chapterLabel", "chapterTitle")
-        author      = pick(obj, "user", "author", "username", "name", "displayName")
+        author      = pick(obj, *user_keys)
         body_raw    = pick(obj, "content", "body", "text", "message").strip()
         posted_at   = pick(obj, "postedAt", "createdAt", "created_at", "date", "timestamp")
+
         body = f"In reply to {reply_to}. {body_raw}" if reply_to else body_raw
+
         out.append({
             "novel_title": (novel_title or "").strip(),
             "chapter": chapter or "",
@@ -283,7 +307,8 @@ def load_comments_mistmint(comments_feed_url: str):
 
     print(f"[mistmint] loaded {len(out)} raw comment(s)")
     if out:
-        print(f"[mistmint] sample fields -> novel_title='{out[0]['novel_title']}', chapter='{out[0]['chapter']}', author='{out[0]['author']}'")
+        # quick debug of available keys to refine mapping later
+        print(f"[mistmint] sample keys: {sorted(list(items[0].keys()))[:12]}")
     return out
 
     # detect reply adjacency off the original raw (still works)
