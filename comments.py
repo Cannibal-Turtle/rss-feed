@@ -12,6 +12,87 @@ from bs4 import BeautifulSoup
 from novel_mappings import HOSTING_SITE_DATA
 from host_utils import get_host_utils
 
+# --- token expiry + dispatch helpers ---
+import os, base64, json, time, requests, pathlib
+
+ALERT_STATE_FILE = ".token_alert_state.json"
+
+def _load_alert_state() -> dict:
+    try:
+        with open(ALERT_STATE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+    except Exception:
+        return {}
+
+def _save_alert_state(d: dict) -> None:
+    with open(ALERT_STATE_FILE, "w", encoding="utf-8") as f:
+        json.dump(d, f, indent=2)
+
+def _jwt_expiry_unix(token: str) -> int | None:
+    try:
+        parts = token.split(".")
+        if len(parts) != 3:
+            return None
+        payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+        return int(payload.get("exp")) if "exp" in payload else None
+    except Exception:
+        return None
+
+def maybe_dispatch_token_alert(threshold_days: int = 1):
+    """
+    Fires a repository_dispatch if MISTMINT_TOKEN expires within N days.
+    Throttled: will only send once per unique exp value.
+    Requires env:
+      - MISTMINT_TOKEN
+      - PAT_GITHUB            (fine-grained PAT with repo + actions scopes)
+      - GITHUB_REPOSITORY     (e.g. 'Cannibal-Turtle/rss-feed')
+    """
+    token = os.getenv("MISTMINT_TOKEN", "").strip()
+    if not token:
+        return
+    exp = _jwt_expiry_unix(token)
+    if not exp:
+        return
+
+    now = int(time.time())
+    secs_left = exp - now
+    if secs_left > threshold_days * 86400:
+        return  # not expiring soon
+
+    state = _load_alert_state()
+    last_alerted_exp = int(state.get("last_alerted_exp", 0))
+    if last_alerted_exp == exp:
+        return  # already alerted for this exact token
+
+    repo = os.getenv("GITHUB_REPOSITORY", "")
+    pat  = os.getenv("PAT_GITHUB", "")
+    if not repo or not pat:
+        return
+
+    url = f"https://api.github.com/repos/{repo}/dispatches"
+    payload = {
+        "event_type": "mistmint-token-expiring",
+        "client_payload": {"exp": exp, "secs_left": secs_left}
+    }
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {pat}",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    try:
+        r = requests.post(url, headers=headers, json=payload, timeout=15)
+        r.raise_for_status()
+        # mark alerted for this exp
+        state["last_alerted_exp"] = exp
+        _save_alert_state(state)
+    except Exception as e:
+        print(f"[warn] repository_dispatch failed: {e}")
+
+
+# --- Compact Description ---
 def compact_cdata(xml_str):
     """
     Finds <description><![CDATA[ ... ]]></description> sections and replaces
@@ -112,6 +193,8 @@ class CustomCommentRSS2(PyRSS2Gen.RSS2):
         writer.write("</rss>" + newl)
 
 def main():
+    # Alert if token is close to expiring; does nothing if OK/missing.
+    maybe_dispatch_token_alert(threshold_days=1)
     all_rss_items = []
     # Loop over all hosts in your mappings.
     for host, data in HOSTING_SITE_DATA.items():
