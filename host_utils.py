@@ -1202,21 +1202,27 @@ def build_comment_link_dragonholic(novel_title: str, host: str, placeholder_link
     return f"{base_url}{chapter_slug}/#comment-{cid}"
 
 
-def split_reply_chain_dragonholic(raw: str) -> tuple:
+def split_reply_chain_dragonholic(raw: str) -> tuple[str, str]:
     import re
     from html import unescape
-    ws_collapsed = " ".join(raw.split())
-    t = unescape(ws_collapsed)
-    m = re.match(
-        r'\s*In reply to\s*<a [^>]+>([^<]+)</a>\.\s*(.*)$',
-        t,
-        re.IGNORECASE
-    )
+
+    # collapse whitespace and unescape in case the feed ships &lt;a ...&gt;
+    s = " ".join(unescape(raw or "").split())
+
+    # 1) HTML-anchor form; tolerate optional whitespace and optional period
+    m = re.match(r'^\s*In\s+reply\s+to\s*<a[^>]*>([^<]+)</a>\s*\.?\s*(.*)$',
+                 s, re.I | re.S)
     if m:
-        name = m.group(1).strip()
-        body = m.group(2).strip()
-        return f"In reply to {name}", body
-    return "", raw.strip()
+        return f"In reply to {m.group(1).strip()}", m.group(2).strip()
+
+    # 2) Plain-text fallback (some feeds already strip tags)
+    m = re.match(r'^\s*In\s+reply\s+to\s+([^.:\n]+)\s*\.?\s*(.*)$',
+                 s, re.I | re.S)
+    if m:
+        return f"In reply to {m.group(1).strip()}", m.group(2).strip()
+
+    # 3) No match → keep original
+    return "", (raw or "").strip()
 
 
 # =============================================================================
