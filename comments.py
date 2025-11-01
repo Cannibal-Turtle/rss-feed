@@ -284,13 +284,18 @@ def main():
                 if pp else datetime.datetime.now(datetime.timezone.utc)
             )
             
-            # 1) prefer the real HTML block if it exists
-            raw_html = None
-            content = entry.get("content")
-            if isinstance(content, list) and content:
-                raw_html = content[0].get("value")
-            if raw_html is None:
-                raw_html = html.unescape(entry.get("description", ""))
+            # 1) let host_utils decide which HTML to split (description vs content)
+            pick_html = utils.get("pick_comment_html")
+            if callable(pick_html):
+                raw_html = pick_html(entry)
+            else:
+                # generic fallback
+                raw_html = None
+                content = entry.get("content")
+                if isinstance(content, list) and content:
+                    raw_html = content[0].get("value")
+                if raw_html is None:
+                    raw_html = html.unescape(entry.get("description", "") or "")
             
             # 2) Split off “In reply to …” → put only the name line in <reply_chain>
             split_reply_chain = get_host_utils(host).get("split_reply_chain", lambda s: ("", s))
