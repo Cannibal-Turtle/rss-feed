@@ -33,7 +33,6 @@ jobs:
           # needed by comments.py for repo dispatch
           PAT_GITHUB: ${{ secrets.PAT_GITHUB }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          # optional if your comments.py needs the token for API calls
           MISTMINT_TOKEN: ${{ secrets.MISTMINT_TOKEN }}
         run: python comments.py
 
