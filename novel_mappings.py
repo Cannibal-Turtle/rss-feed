@@ -48,12 +48,13 @@ HOSTING_SITE_DATA = {
 
     "Mistmint Haven": {
         "feed_url": "https://www.mistminthaven.com/feed",
-        "comments_feed_url": "",
+        "comments_feed_url": "https://api.mistminthaven.com/api/trans/metrics/recent-comments",
         "translator": "CannibalTurtle",
         "host_logo": "https://i.imgur.com/oLT0jCN.png",
         "coin_emoji": "<:mistmint_currency:1433046707121422487>",
         "novels": {
             "[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught": {
+                "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/chapters",
                 "discord_role_id": "<@&1431675643078250646>",
                 "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught",
                 "featured_image": "https://i.imgur.com/YYx6UbX.jpeg",
