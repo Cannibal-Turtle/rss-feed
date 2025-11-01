@@ -8,21 +8,29 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: comments-feed
+  cancel-in-progress: true
+
 jobs:
   update_comments:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
-
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          
       - name: Seed token alert state if missing
         run: |
           [ -f .token_alert_state.json ] || echo '{}' > .token_alert_state.json
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+          cache: 'pip'
 
       - name: Install Dependencies
         run: |
@@ -42,13 +50,15 @@ jobs:
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-
-          git add aggregated_comments_feed.xml .token_alert_state.json
-          git commit -m "Update Comments Feed + token state" || echo "No changes to commit"
-
-          git pull --rebase --autostash
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
-          git push
+          git add aggregated_comments_feed.xml .token_alert_state.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update Comments Feed + token state"
+            git pull --rebase --autostash
+            git push
+          fi
 
       - name: Wait for RSS to propagate
         run: sleep 10
