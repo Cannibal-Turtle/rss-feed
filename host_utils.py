@@ -2,11 +2,14 @@ import re
 import os
 import json
 import datetime
+from datetime import timezone
 from urllib.parse import urlparse, unquote
 
 import aiohttp
 import feedparser
 from bs4 import BeautifulSoup
+
+import hashlib
 
 from novel_mappings import HOSTING_SITE_DATA
 
@@ -46,6 +49,111 @@ TDLBKGC_ARCS = [
     {"arc_num": 19, "title": "Top Musician Gong × Autistic Little Pitiful Shou",            "start": 667, "end": 700},
     {"arc_num": 20, "title": "Tentacled Alien Gong × Passerby Doctor Shou",                 "start": 701, "end": 734},
 ]
+
+
+# --- Mistmint comment helpers -----------------------------------------------
+
+def _guid_from(parts):
+    h = hashlib.sha1()
+    for p in parts:
+        h.update(str(p).encode("utf-8", "ignore"))
+        h.update(b"\x1f")
+    return h.hexdigest()
+
+def _extract_data_array_segment(raw: str) -> str | None:
+    # Pull out the substring between "data":[ and its matching closing ]
+    m = re.search(r'"data"\s*:\s*\[', raw)
+    if not m:
+        return None
+    i = m.end()
+    depth = 1
+    in_string = False
+    while i < len(raw):
+        ch = raw[i]
+        if in_string:
+            if ch == '\\':
+                i += 2
+                continue
+            if ch == '"':
+                in_string = False
+        else:
+            if ch == '"':
+                in_string = True
+            elif ch == '[':
+                depth += 1
+            elif ch == ']':
+                depth -= 1
+                if depth == 0:
+                    return raw[m.end():i]  # between '[' and the matching ']'
+        i += 1
+    return None
+
+def _mistmint_reply_flags_from_raw(raw_text: str) -> list[bool]:
+    """
+    Return a list of booleans with length == (#items - 1).
+    flags[k] == True  => item k+1 is a reply to item k (boundary is '},{')
+    flags[k] == False => top-level (boundary has whitespace: '}, {', '},\\n{', etc)
+    """
+    seg = _extract_data_array_segment(raw_text)
+    if seg is None:
+        return []
+    flags = []
+    for m in re.finditer(r'}(?P<ws1>\s*),(?P<ws2>\s*){', seg):
+        ws = (m.group('ws1') or '') + (m.group('ws2') or '')
+        flags.append(ws == '')  # no whitespace ⇒ reply-chaining
+    return flags
+
+def _parse_iso_utc(s: str) -> datetime.datetime:
+    return datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+
+
+def _mistmint_parse_chapter_label(ch: str):
+    """
+    'Chapter 1: 1.1' -> ('Chapter 1', 1)
+    'Chapter 50'     -> ('Chapter 50', 50)
+    '' or None       -> ('Homepage', None)
+    """
+    if not ch:
+        return ("Homepage", None)
+    m = re.match(r'^\s*Chapter\s+(\d+)', ch, re.IGNORECASE)
+    if not m:
+        # Unknown format, just show what we got
+        return (ch.strip(), None)
+    n = int(m.group(1))
+    return (f"Chapter {n}", n)
+
+def build_comment_link_mistmint(novel_title: str, host: str, chapter_label_or_empty: str) -> str:
+    details = HOSTING_SITE_DATA[host]["novels"][novel_title]
+    base = details["novel_url"].rstrip("/")
+    label = (chapter_label_or_empty or "").strip()
+    if not label:
+        return base  # homepage
+
+    m = re.search(r'chapter\s+(\d+)', label, re.IGNORECASE)
+    if not m:
+        return base
+    ch = int(m.group(1))
+    arc = _get_arc_for_ch(ch)
+    if not arc:
+        return base
+    arc_slug = _slug_arc(arc["arc_num"], arc["title"])
+    return f"{base}/{arc_slug}-chapter-{ch}"
+
+def extract_chapter_mistmint(chapter_or_url: str) -> str:
+    """
+    If given a chapter label, return normalized ('Chapter N' or 'Homepage').
+    If given a URL, try to pull Chapter N from ...-chapter-N; else 'Homepage'.
+    """
+    if not chapter_or_url:
+        return "Homepage"
+    if not chapter_or_url.startswith("http"):
+        return _mistmint_parse_chapter_label(chapter_or_url)[0]
+
+    # URL case: .../<arc-slug>-chapter-123
+    m = re.search(r'-chapter-(\d+)(?:/|$)', chapter_or_url)
+    if m:
+        return f"Chapter {int(m.group(1))}"
+    return "Homepage"
 
 
 # =============================================================================
@@ -714,12 +822,9 @@ MISTMINT_UTILS = {
     "scrape_paid_chapters_async": scrape_paid_chapters_mistmint_async,
 
     # Comments/etc. (reuse Dragonholic logic for now)
-    "clean_description": clean_description,
-    "extract_pubdate": extract_pubdate_from_soup,
-    "split_comment_title": split_comment_title_dragonholic,
-    "extract_chapter": extract_chapter_dragonholic,
-    "build_comment_link": build_comment_link_dragonholic,
-    "split_reply_chain": split_reply_chain_dragonholic,
+    "build_comment_link": build_comment_link_mistmint,
+    "extract_chapter":    extract_chapter_mistmint,
+    "reply_flags_from_raw": _mistmint_reply_flags_from_raw,
 
     # passthroughs to novel_mappings
     "get_novel_details":
