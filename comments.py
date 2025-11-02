@@ -244,12 +244,7 @@ def main():
                     reply_to      = obj.get("reply_to", "")
     
                     # GUID: prefer the canonical comment id, else hash a stable fingerprint
-                    comment_id = (
-                        obj.get("commentId")
-                        or obj.get("comment_id")
-                        or obj.get("id")
-                        or obj.get("_id")
-                    )
+                    comment_id = next((obj.get(k) for k in ("commentId", "comment_id", "id", "_id") if obj.get(k)), None)
                     guid_val = str(comment_id) if comment_id else _guid_from([
                         novel_title,
                         author_name,
