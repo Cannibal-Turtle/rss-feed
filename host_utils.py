@@ -334,10 +334,6 @@ def resolve_chapter_id(novel_slug: str, chapter_slug: str) -> str:
         diag_fail("slug-resolve-error", error=str(e))
         raise
 
-def fetch_comments_by_slug(novel_slug: str, chapter_slug: str, skip_page: int = 0, limit: int = 100):
-    chapter_id = resolve_chapter_id(novel_slug, chapter_slug)
-    return fetch_chapter_comments(chapter_id, skip_page=skip_page, limit=limit)
-
 def _extract_chapter_id_from_html(html: str, chapter_slug: str) -> str | None:
     if not html:
         return None
