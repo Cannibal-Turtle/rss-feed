@@ -1030,12 +1030,12 @@ def load_comments_mistmint(comments_feed_url: str):
             "reply_to": reply_to,
             "posted_at": posted_at or "",
             # NEW: surface identifiers so the feed can use them
-            "comment_id": e.get("commentId"),
-            "parent_id":  e.get("parentId"),
-            "is_reply":   bool(e.get("is_reply")),
+            "comment_id": obj.get("commentId"),
+            "parent_id":  obj.get("parentId"),
+            "is_reply":   bool(obj.get("is_reply")),
             "novel_id":   novel_id,
             "novel_slug": novel_slug,
-            "chapter_id": e.get("chapterId"),
+            "chapter_id": obj.get("chapterId"),
         })
 
     print(f"[mistmint] loaded {len(out)} raw comment(s)")
