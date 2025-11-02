@@ -2,6 +2,7 @@ import re
 import os
 import json
 import datetime
+from datetime import datetime, timezone
 import traceback
 import time
 from urllib.parse import urlparse, unquote
@@ -14,6 +15,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from collections import Counter
 from contextlib import contextmanager
 import hashlib
+import unicodedata
 
 from novel_mappings import HOSTING_SITE_DATA
 
@@ -136,6 +138,23 @@ CHAPTERID_RE = re.compile(
     re.I
 )
 
+def _canon_name(s: str) -> str:
+    # "Cannibal Turtle" == "cannibalturtle" == "CANNIBAL_TURTLE"
+    return re.sub(r'[\W_]+', '', (s or '').casefold())
+
+def _iso_dt(s: str):
+    try:
+        return datetime.fromisoformat((s or '').replace('Z', '+00:00')).astimezone(timezone.utc).replace(microsecond=0)
+    except Exception:
+        return None
+
+def _norm(s: str) -> str:
+    # stronger normalization for Mistmint text bodies
+    s = unescape(s or "")
+    s = s.replace("\u200b", "").replace("\ufeff", "")
+    s = unicodedata.normalize("NFKC", s)
+    return re.sub(r"\s+", " ", s.strip())
+    
 def _canon_ts(s: str) -> str:
     # Normalize to UTC and strip fractional seconds → 'YYYY-MM-DDTHH:MM:SSZ'
     import datetime as _dt
@@ -442,18 +461,27 @@ def _find_chapter_slug_live(client: MistmintClient, novel_slug: str, ch_str: str
     return None
 
 def match_comment_in_thread(thread_json: Dict[str, Any], username: str, created_at_iso: str) -> Optional[Dict[str, Any]]:
-    want = (username or "").strip()
-    for c in thread_json.get("data", []):
-        u = _user_str(c.get("user"))
-        if u == want and c.get("createdAt") == created_at_iso:
-            diag_ok("comment-match", user=want, at=created_at_iso, where="top")
+    want_name = _canon_name(username)
+    want_dt = _iso_dt(created_at_iso)
+
+    def _time_close(a: str, b: datetime | None) -> bool:
+        if want_dt is None:
+            # if we don't have a usable target, allow string equality as a last resort
+            return (a or "") == (created_at_iso or "")
+        bd = _iso_dt(a)
+        return (bd is not None) and (abs((bd - want_dt).total_seconds()) <= 1)
+
+    for c in thread_json.get("data", []) or []:
+        u = _canon_name(_user_str(c.get("user")))
+        if u == want_name and _time_close(c.get("createdAt") or "", want_dt):
+            diag_ok("comment-match", user=username, at=created_at_iso, where="top")
             return c
-        for rc in c.get("replies", []):
-            ru = _user_str(rc.get("user"))
-            if ru == want and rc.get("createdAt") == created_at_iso:
-                diag_ok("comment-match", user=want, at=created_at_iso, where="reply")
+        for rc in (c.get("replies") or []):
+            ru = _canon_name(_user_str(rc.get("user")))
+            if ru == want_name and _time_close(rc.get("createdAt") or "", want_dt):
+                diag_ok("comment-match", user=username, at=created_at_iso, where="reply")
                 return rc
-    diag_fail("comment-match-miss", user=want, at=created_at_iso, tops=len(thread_json.get("data", [])))
+    diag_fail("comment-match-miss", user=username, at=created_at_iso, tops=len(thread_json.get("data", []) or []))
     return None
 
 def enrich_all_comments(client: MistmintClient, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -639,55 +667,46 @@ def resolve_reply_to_on_chapter_by_id(client: MistmintClient, chapter_id: str,
                                       author: str, body_raw: str, posted_at: str) -> str:
     if not chapter_id:
         return ""
+    want_author = _canon_name(author)
+    want_body = _norm(body_raw)
+    want_dt = _iso_dt(posted_at)
+
+    def _name(u):
+        return (u or {}).get("displayName") or (u or {}).get("username") or ""
+
+    def _is_same(obj) -> bool:
+        rep_user = _canon_name(_name(obj.get("user")))
+        rep_body = _norm(obj.get("content") or "")
+        if rep_user != want_author or rep_body != want_body:
+            return False
+        if want_dt is None:
+            return True
+        rep_dt = _iso_dt(obj.get("createdAt"))
+        return (rep_dt is None) or abs((rep_dt - want_dt).total_seconds()) <= 300
+
     with diag_step("reply-resolve-chapter", chapter_id=chapter_id, author=author):
-        payload = client.fetch_chapter_comments(chapter_id, skip_page=0, limit=100)
-
-        def _name(u):
-            u = u or {}
-            return (u.get("displayName") or u.get("username") or "").strip()
-
-        want_author = (author or "").strip().casefold()
-        want_body   = re.sub(r"\s+", " ", (body_raw or "").strip())
-        try:
-            want_dt = datetime.datetime.fromisoformat((posted_at or "").replace("Z", "+00:00"))
-        except Exception:
-            want_dt = None
-
-        def _is_same(obj) -> bool:
-            rep_user = _name(obj.get("user")).casefold()
-            rep_body = re.sub(r"\s+", " ", (obj.get("content") or "").strip())
-            try:
-                rep_dt = datetime.datetime.fromisoformat((obj.get("createdAt") or "").replace("Z", "+00:00"))
-            except Exception:
-                rep_dt = None
-            if rep_user != want_author or rep_body != want_body:
-                return False
-            return (not want_dt or not rep_dt or abs((want_dt - rep_dt).total_seconds()) <= 300)
-
-        for top in (payload.get("data") or []):
-            parent_user = _name(top.get("user"))
-            if _is_same(top):
-                diag_ok("reply-resolve-top", chapter_id=chapter_id)
-                return ""
-            for rep in (top.get("replies") or []):
-                if _is_same(rep):
-                    who = parent_user or _name(rep.get("toUser"))
-                    diag_ok("reply-resolve-hit", chapter_id=chapter_id, parent=who)
-                    return (who or "").strip()
+        # try first three pages just in case the comment is older
+        for page in range(0, 3):
+            payload = client.fetch_chapter_comments(chapter_id, skip_page=page, limit=100)
+            for top in (payload.get("data") or []):
+                parent_user = _name(top.get("user"))
+                if _is_same(top):
+                    diag_ok("reply-resolve-top", chapter_id=chapter_id, page=page)
+                    return ""
+                for rep in (top.get("replies") or []):
+                    if _is_same(rep):
+                        who = parent_user or _name(rep.get("toUser"))
+                        diag_ok("reply-resolve-hit", chapter_id=chapter_id, parent=who, page=page)
+                        return (who or "").strip()
 
         diag_fail("reply-resolve-miss", chapter_id=chapter_id, author=author)
         return ""
         
                                              
 def resolve_reply_to_on_homepage_by_id(novel_id: str, author: str, body_raw: str, posted_at: str) -> str:
-    """
-    Resolve reply target from the novel homepage thread (not a specific chapter).
-    Returns the parent username or "" if not found.
-    """
     if not novel_id:
         return ""
 
-    # fetch or use cache, and log which path we took
     if novel_id in _MISTMINT_HOME_CACHE:
         payload = _MISTMINT_HOME_CACHE[novel_id]
         diag_ok("homepage-cache-hit", novel_id=novel_id)
@@ -697,20 +716,19 @@ def resolve_reply_to_on_homepage_by_id(novel_id: str, author: str, body_raw: str
         _MISTMINT_HOME_CACHE[novel_id] = payload
         diag_ok("homepage-fetch", novel_id=novel_id)
 
-    want_author = (author or "").strip()
-    want_body   = _norm(body_raw)
-    want_dt     = _iso_dt(posted_at)
+    want_author = _canon_name(author)
+    want_body = _norm(body_raw)
+    want_dt = _iso_dt(posted_at)
 
     for top in (payload.get("data") or []):
-        parent_user = (((top.get("user") or {}).get("username")) or "").strip()
+        parent_user = _user_str(top.get("user"))
         for rep in (top.get("replies") or []):
-            rep_user = (((rep.get("user") or {}).get("username")) or "").strip()
+            rep_user = _canon_name(_user_str(rep.get("user")))
             rep_body = _norm(rep.get("content", ""))
-            rep_dt   = _iso_dt(rep.get("createdAt", ""))
+            rep_dt = _iso_dt(rep.get("createdAt", ""))
 
             if rep_user == want_author and rep_body == want_body:
-                skew_ok = (not want_dt or not rep_dt or abs((want_dt - rep_dt).total_seconds()) <= 300)
-                if skew_ok:
+                if want_dt is None or rep_dt is None or abs((rep_dt - want_dt).total_seconds()) <= 300:
                     diag_ok("reply-resolve-homepage-hit", novel_id=novel_id, parent=parent_user)
                     return parent_user
 
