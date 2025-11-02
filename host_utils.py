@@ -1022,17 +1022,27 @@ def load_comments_mistmint(comments_feed_url: str):
 
         body = body_raw
 
+        # Derive a stable comment id even when we couldn't fetch the thread
+        cid = (obj.get("commentId") or obj.get("comment_id")
+               or obj.get("id") or obj.get("_id"))
+        pid = (obj.get("parentId") or obj.get("replyToId")
+               or obj.get("inReplyTo") or obj.get("in_reply_to"))
+
         out.append({
             "novel_title": novel_title,
             "chapter": chapter,
             "author": author,
             "description": body,
-            "reply_to": reply_to,
+            "reply_to": reply_to,                 # <- this is what becomes <reply_chain> later
             "posted_at": posted_at or "",
-            # NEW: surface identifiers so the feed can use them
-            "comment_id": obj.get("commentId"),
-            "parent_id":  obj.get("parentId"),
-            "is_reply":   bool(obj.get("is_reply")),
+
+            # expose id in both styles so comments.py can pick it up
+            "comment_id": cid,
+            "commentId":  cid,
+
+            "parent_id":  pid,
+            "is_reply":   bool(obj.get("is_reply") or pid),
+
             "novel_id":   novel_id,
             "novel_slug": novel_slug,
             "chapter_id": obj.get("chapterId"),
