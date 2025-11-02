@@ -90,7 +90,8 @@ APPROVED_COMMENTS_FEED = (
     "AKfycbxx6YrbuG1WVqc5uRmmQBw3Z8s8k29RS0sgK9ivhbaTUYTp-8t76mzLo0IlL1LlqinY/exec"
 )
 
-MISTMINT_STATE_PATH = "mistmint_state.json"
+MISTMINT_STATE_PATH = os.getenv("MISTMINT_STATE_PATH", "mistmint_state.json")
+
 
 _MISTMINT_HOME_CACHE: dict[str, dict] = {}
 
