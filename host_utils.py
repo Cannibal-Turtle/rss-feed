@@ -1349,7 +1349,7 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
                 "link":        link,
                 "description": desc_html,
                 "pubDate":     pub_dt,                                      # from createdAt
-                "guid":        stable_guid,                                 # NEW: stable, history-friendly
+                "guid":        api_uuid,
                 "coin":        price,
                 "source":      "api",                                       # NEW: so generator can skip override
                 "api_guid":    api_uuid,                                    # optional: keep real UUID for logs
