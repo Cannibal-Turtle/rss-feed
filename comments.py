@@ -243,7 +243,10 @@ def main():
                     posted_at     = obj.get("posted_at", "")
                     reply_to      = obj.get("reply_to", "")
         
-                    guid_val = _guid_from([novel_title, chapter_label, author_name, posted_at, body])
+                    # Prefer the origin comment ID if available (e.g., Mistmint chapter/homepage APIs),
+                    # otherwise fall back to deterministic hash.
+                    comment_id = obj.get("commentId") or obj.get("comment_id")
+                    guid_val = comment_id or _guid_from([novel_title, chapter_label, author_name, posted_at, body])
         
                     item = MyCommentRSSItem(
                         novel_title=novel_title,
