@@ -941,6 +941,27 @@ def load_comments_mistmint(comments_feed_url: str):
     flags = _mistmint_reply_flags_from_raw(raw_used or "")
 
     # ── ENRICHMENT PHASE ──────────────────────────────────────────────────────
+
+    # Pre-inject mapping so enrich_all_comments can resolve homepage commentId
+    mistmint_map = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("novels", {})
+    for obj in items:
+        title = (obj.get("novel") or obj.get("novelTitle") or obj.get("title") or "").strip()
+        if not title:
+            continue
+        meta = mistmint_map.get(title, {})
+    
+        # novelId
+        if not (obj.get("novelId") or obj.get("novel_id")):
+            nid = meta.get("novel_id", "")
+            if nid:
+                obj["novelId"] = nid
+    
+        # novelSlug
+        if not (obj.get("novelSlug") or obj.get("novel_slug")):
+            base = (meta.get("novel_url") or "").rstrip("/")
+            if base:
+                obj["novelSlug"] = base.split("/")[-1]
+
     with diag_step("comments-enrich"):
         client = MistmintClient(translator_cookie=_resolve_mistmint_cookie())
         enriched = enrich_all_comments(client, items)
