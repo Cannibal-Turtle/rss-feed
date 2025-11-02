@@ -243,15 +243,13 @@ def main():
                     posted_at     = obj.get("posted_at", "")
                     reply_to      = obj.get("reply_to", "")
     
-                    # GUID: prefer the canonical comment id, else hash a stable fingerprint
-                    comment_id = next((obj.get(k) for k in ("commentId", "comment_id", "id", "_id") if obj.get(k)), None)
-                    guid_val = str(comment_id) if comment_id else _guid_from([
-                        novel_title,
-                        author_name,
-                        posted_at,
-                        body[:80],
-                    ])
-                    
+                    # Prefer an explicit guid from loader, else any id field, else stable hash
+                    guid_val = (
+                        str(obj.get("guid") or "") or
+                        next((str(obj.get(k)) for k in ("commentId", "comment_id", "id", "_id") if obj.get(k)), "") or
+                        _guid_from([novel_title, author_name, posted_at, body[:80]])
+                    )
+                                        
                     item = MyCommentRSSItem(
                         novel_title=novel_title,
                         title=novel_title,
