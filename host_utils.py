@@ -740,7 +740,7 @@ def load_comments_mistmint(comments_feed_url: str):
             if prev_author and author and prev_author != author and same_novel and close_in_time:
                 reply_to = prev_author
 
-        body = f"In reply to {reply_to}. {body_raw}" if reply_to else body_raw
+        body = f"{body_raw}" if reply_to else body_raw
 
         out.append({
             "novel_title": novel_title,
