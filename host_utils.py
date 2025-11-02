@@ -376,37 +376,11 @@ def _iso_dt(s: str):
 # let self-replies show up if desired
 ALLOW_SELF_REPLIES = True
 
-def resolve_reply_to_on_chapter_by_label(
-    novel_title: str,
-    chapter_label: str,
-    author: str,
-    body_raw: str,
-    posted_at: str,
-    *,
-    novel_slug: str | None = None,
-    chapter_slug_hint: str | None = None,
-) -> str:
-    if not novel_slug:
-        # optional fallback from mapping if you really need it
-        meta = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("novels", {}).get((novel_title or "").strip(), {})
-        base = (meta.get("novel_url") or "").rstrip("/")
-        if not base:
-            return ""
-        novel_slug = base.split("/")[-1]
-
-    client = MistmintClient(translator_cookie=_resolve_mistmint_cookie())
-
-    chapter_slug = chapter_slug_hint
-    if not chapter_slug:
-        # rare fallback: try to discover the slug on the novel page
-        # (only if you *must*; otherwise just bail)
-        return ""  # prefer to not guess
-
-    chap_id, _ = client.get_chapter_id(novel_slug, chapter_slug)
-    if not chap_id:
+def resolve_reply_to_on_chapter_by_id(client: MistmintClient, chapter_id: str,
+                                      author: str, body_raw: str, posted_at: str) -> str:
+    if not chapter_id:
         return ""
-
-    payload = client.fetch_chapter_comments(chap_id, skip_page=0, limit=100)
+    payload = client.fetch_chapter_comments(chapter_id, skip_page=0, limit=100)
 
     def _name(u):
         u = u or {}
@@ -438,9 +412,7 @@ def resolve_reply_to_on_chapter_by_label(
             if _is_same(rep):
                 who = parent_user or _name(rep.get("toUser"))
                 return (who or "").strip()
-
     return ""
-
                                              
 def resolve_reply_to_on_homepage_by_id(novel_id: str, author: str, body_raw: str, posted_at: str) -> str:
     if not novel_id:
@@ -657,7 +629,7 @@ def load_comments_mistmint(comments_feed_url: str):
             return datetime.datetime.fromisoformat((s or "").replace("Z", "+00:00"))
         except Exception:
             return None
-
+    
     # Pre-enrich to get chapterId/slug where possible (for chapter threads)
     enriched = enrich_all_comments(client, items)
 
@@ -687,6 +659,7 @@ def load_comments_mistmint(comments_feed_url: str):
             _disp, ch_num = _mistmint_parse_chapter_label(chapter_lbl)
             if ch_num is not None:
                 alt = _find_chapter_slug_live(client, novel_slug, ch_num)
+                item["chapterSlug"] = alt
                 if alt:
                     chapter_slug = alt
 
@@ -703,9 +676,23 @@ def load_comments_mistmint(comments_feed_url: str):
             if pid and str(pid) in id_to_user:
                 reply_to = id_to_user[str(pid)]
 
+        # NEW: strongest resolver – use enriched chapterId if present
+        if not reply_to:
+            chap_id_enriched = obj.get("chapterId")
+            if chap_id_enriched:
+                who = resolve_reply_to_on_chapter_by_id(
+                    client=client,
+                    chapter_id=chap_id_enriched,
+                    author=author,
+                    body_raw=body_raw,
+                    posted_at=posted_at,
+                )
+                if who and (ALLOW_SELF_REPLIES or who.strip().casefold() != author.casefold()):
+                    reply_to = who
+
+        # Existing slug-based fallback remains (nice to keep as backup)
         if not reply_to:
             if chapter_slug and novel_slug:
-                # CHAPTER thread
                 who = resolve_reply_to_on_chapter_by_label(
                     novel_title=novel_title,
                     chapter_label=chapter,
@@ -716,7 +703,6 @@ def load_comments_mistmint(comments_feed_url: str):
                     chapter_slug_hint=chapter_slug,
                 )
             elif novel_id:
-                # HOMEPAGE thread — uses novel_id from mappings
                 who = resolve_reply_to_on_homepage_by_id(
                     novel_id=novel_id,
                     author=author,
@@ -725,10 +711,9 @@ def load_comments_mistmint(comments_feed_url: str):
                 )
             else:
                 who = ""
-
             if who and (ALLOW_SELF_REPLIES or who.strip().casefold() != author.casefold()):
                 reply_to = who
-
+                
         # Adjacency heuristic as a last resort
         if not reply_to and flags and i > 0 and i-1 < len(flags) and flags[i-1]:
             prev = enriched[i-1]
@@ -740,7 +725,7 @@ def load_comments_mistmint(comments_feed_url: str):
             if prev_author and author and prev_author != author and same_novel and close_in_time:
                 reply_to = prev_author
 
-        body = f"{body_raw}" if reply_to else body_raw
+        body = f"In reply to {reply_to}. {body_raw}" if reply_to else body_raw
 
         out.append({
             "novel_title": novel_title,
