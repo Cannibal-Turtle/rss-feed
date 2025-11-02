@@ -46,22 +46,36 @@ jobs:
       - name: Commit and Push Changes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # repeat the same toggle here so this step can see it
+          MISTMINT_FORCE_STATE: "0"   # set to "1" only when you want to commit manual state/history
         run: |
-          set -e
+          set -euo pipefail
           git config --global user.name  "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-
-          # Stage & (maybe) commit
-          git add paid_chapters_feed.xml paid_history.json mistmint_state.json || true
-          git commit -m "ci: update paid feed & mistmint state" || echo "No changes to commit"
-
-          # Use tokenized remote and rebase onto latest main
+      
+          # One-time cleanup in case old root paths were tracked before (harmless if absent)
+          git rm --cached mistmint_state.json paid_history.json 2>/dev/null || true
+      
+          # Always stage the generated feed
+          git add paid_chapters_feed.xml
+      
+          # Only stage manual state/history when STATE mode is ON
+          if [ "${MISTMINT_FORCE_STATE:-0}" = "1" ]; then
+            [ -f rss-feed/manual_scripts/mistmint_state.json ] && git add rss-feed/manual_scripts/mistmint_state.json || true
+            [ -f rss-feed/manual_scripts/paid_history.json ]   && git add rss-feed/manual_scripts/paid_history.json   || true
+          fi
+      
+          # Commit only if something is staged
+          if git diff --quiet --staged; then
+            echo "No changes to commit."
+            exit 0
+          fi
+      
+          git commit -m "ci: update paid feed"
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
           git fetch origin main
           git rebase origin/main || git pull --rebase origin main
-
-          # Safe force so bots don't clobber human commits
           git push --force-with-lease origin HEAD:main
 
       - name: Wait for RSS to update
