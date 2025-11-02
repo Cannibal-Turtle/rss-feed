@@ -318,15 +318,14 @@ def main():
             description_text = soup.get_text(separator=" ").strip()
             description_text = re.sub(r"\s+([.,!?;:])", r"\1", description_text)
     
-            # 3.1) GUID: prefer numeric comment id from the link, else entry.id, else a stable hash
             m = re.search(r"#comment-(\d+)", entry.get("link", "") or "")
             cid = m.group(1) if m else None
-            guid_val = cid or getattr(entry, "id", "") or _guid_from([
+            guid_val = (getattr(entry, "id", "") or cid or _guid_from([
                 novel_title,
                 entry.get("author", ""),
                 entry.get("published", "") or str(getattr(entry, "published_parsed", "")),
                 description_text[:80],
-            ])
+            ]))
     
             # 4) pass both into your RSS item
             item = MyCommentRSSItem(
