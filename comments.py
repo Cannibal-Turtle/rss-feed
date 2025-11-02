@@ -227,6 +227,7 @@ def main():
         if loader:
             try:
                 norm_items = loader(comments_feed_url)
+                print(f"[loader] {host}: {len(norm_items)} items from loader (url={comments_feed_url})")
                 for obj in norm_items:
                     novel_title   = obj.get("novel_title", "").strip()
                     if not novel_title:
@@ -249,7 +250,10 @@ def main():
                         next((str(obj.get(k)) for k in ("commentId", "comment_id", "id", "_id") if obj.get(k)), "") or
                         _guid_from([novel_title, author_name, posted_at, body[:80]])
                     )
-                                        
+                    label = (chapter_label or "").strip()
+                    where = "homepage" if (not label or label.lower() == "homepage") else label
+                    print(f"[loader] using guid={guid_val} for {novel_title} ({where})")
+                                                
                     item = MyCommentRSSItem(
                         novel_title=novel_title,
                         title=novel_title,
