@@ -107,7 +107,8 @@ async def process_novel(session, host, novel_title):
                     pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
 
                 override = get_pub_date_override(novel_title, host)
-                if override:
+                # Only apply override to manual/state items. API items keep their true createdAt.
+                if override and (chap.get("source") != "api"):   # NEW
                     pub_date = pub_date.replace(**override)
 
                 item = MyRSSItem(
