@@ -143,10 +143,11 @@ def _canon_name(s: str) -> str:
 
 def _iso_dt(s: str):
     try:
-        return datetime.fromisoformat((s or '').replace('Z', '+00:00')).astimezone(timezone.utc).replace(microsecond=0)
+        d = datetime.datetime.fromisoformat((s or '').replace('Z', '+00:00'))
+        return d.astimezone(datetime.timezone.utc).replace(microsecond=0)
     except Exception:
         return None
-
+        
 def _norm(s: str) -> str:
     # stronger normalization for Mistmint text bodies
     s = unescape(s or "")
@@ -155,14 +156,12 @@ def _norm(s: str) -> str:
     return re.sub(r"\s+", " ", s.strip())
     
 def _canon_ts(s: str) -> str:
-    # Normalize to UTC and strip fractional seconds → 'YYYY-MM-DDTHH:MM:SSZ'
-    import datetime as _dt
     if not s:
         return ""
     try:
-        dt = _dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
-        dt = dt.astimezone(_dt.timezone.utc).replace(microsecond=0)
-        return dt.isoformat().replace("+00:00", "Z")
+        d = datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+        d = d.astimezone(datetime.timezone.utc).replace(microsecond=0)
+        return d.strftime("%Y-%m-%dT%H:%M:%SZ")
     except Exception:
         return s.strip()
         
