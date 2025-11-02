@@ -136,10 +136,23 @@ CHAPTERID_RE = re.compile(
     re.I
 )
 
-def match_comment_on_homepage_by_id(novel_id: str, author: str, body_raw: str, posted_at: str) -> tuple[dict|None, str]:
+def _canon_ts(s: str) -> str:
+    # Normalize to UTC and strip fractional seconds → 'YYYY-MM-DDTHH:MM:SSZ'
+    import datetime as _dt
+    if not s:
+        return ""
+    try:
+        dt = _dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
+        dt = dt.astimezone(_dt.timezone.utc).replace(microsecond=0)
+        return dt.isoformat().replace("+00:00", "Z")
+    except Exception:
+        return s.strip()
+        
+def match_comment_on_homepage_by_id(novel_id: str, author: str, body_raw: str, posted_at: str):
     """
     Return (matching_comment_obj, parent_user_name) from the novel homepage thread.
-    parent_user_name is "" if the hit is top-level.
+    Mirrors chapter logic: author + createdAt exact string match.
+    Parent username is "" for top-level hits.
     """
     if not novel_id:
         return None, ""
@@ -154,34 +167,24 @@ def match_comment_on_homepage_by_id(novel_id: str, author: str, body_raw: str, p
         _MISTMINT_HOME_CACHE[novel_id] = payload
         diag_ok("homepage-fetch", novel_id=novel_id)
 
-    want_author = (author or "").strip()
-    want_body   = _norm(body_raw)
-    want_dt     = _iso_dt(posted_at)
-
-    def _time_ok(s):
-        if not want_dt:
-            return True
-        try:
-            got = _iso_dt(s or "")
-            return (not got) or abs((want_dt - got).total_seconds()) <= 300
-        except Exception:
-            return True
+    want_user = (author or "").strip()
+    want_ts   = (posted_at or "").strip()
 
     for top in (payload.get("data") or []):
-        # top-level
         top_user = _user_str(top.get("user"))
-        if top_user == want_author and _norm(top.get("content", "")) == want_body and _time_ok(top.get("createdAt")):
+        top_ts   = (top.get("createdAt") or "").strip()
+        if top_user == want_user and top_ts == want_ts:
             diag_ok("homepage-match-top", novel_id=novel_id, comment_id=top.get("id"))
             return top, ""
-        # replies
         for rep in (top.get("replies") or []):
             rep_user = _user_str(rep.get("user"))
-            if rep_user == want_author and _norm(rep.get("content", "")) == want_body and _time_ok(rep.get("createdAt")):
+            rep_ts   = (rep.get("createdAt") or "").strip()
+            if rep_user == want_user and rep_ts == want_ts:
                 parent_user = _user_str(top.get("user"))
                 diag_ok("homepage-match-reply", novel_id=novel_id, comment_id=rep.get("id"), parent=parent_user)
                 return rep, parent_user
 
-    diag_fail("homepage-match-miss", novel_id=novel_id, author=author)
+    diag_fail("homepage-match-miss", novel_id=novel_id, author=author, want_ts=want_ts)
     return None, ""
 
 def resolve_chapter_id(novel_slug: str, chapter_slug: str) -> str:
