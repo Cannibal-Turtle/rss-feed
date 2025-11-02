@@ -989,6 +989,7 @@ def load_comments_mistmint(comments_feed_url: str):
             "posted_at": posted_at or "",
 
             # expose id in both styles so comments.py can pick it up
+            "guid":       cid or _guid_from([novel_title, author, posted_at, body[:80]]),
             "comment_id": cid,
             "commentId":  cid,
             "id":         cid,                
