@@ -122,6 +122,94 @@ TDLBKGC_ARCS = [
 ]
 
 # =============================================================================
+# API-based Mistmint paid scraper + detector (fallback to state)
+# =============================================================================
+
+def _manual_mode_on() -> bool:
+    return os.getenv("MISTMINT_FORCE_STATE", "").strip() == "1"
+
+def _mistmint_slug_from_url(novel_url: str) -> str:
+    return (novel_url or "").rstrip("/").split("/")[-1]
+
+def _mistmint_find_details_by_url(host: str, novel_url: str) -> tuple[str, dict]:
+    """Return (novel_title, details) for this host/novel_url from HOSTING_SITE_DATA."""
+    block = HOSTING_SITE_DATA.get(host, {}).get("novels", {}) or {}
+    target = (novel_url or "").rstrip("/")
+    target_slug = _mistmint_slug_from_url(novel_url)
+    for title, det in block.items():
+        u = (det.get("novel_url") or "").rstrip("/")
+        if u == target or _mistmint_slug_from_url(u) == target_slug:
+            return title, det
+    return "", {}
+
+async def _scrape_paid_chapters_mistmint_from_state(session, novel_url: str, host: str):
+    # === this is your original synthetic implementation, unchanged ===
+    # (copied from your current scrape_paid_chapters_mistmint_async)
+    all_items = []
+    state = _load_mistmint_state()
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+
+    mistmint_block = HOSTING_SITE_DATA.get(host, {}).get("novels", {})
+
+    for novel_title, details in mistmint_block.items():
+        short_code = details.get("short_code")
+        if not short_code:
+            continue
+        novel_state = state.get(short_code, {
+            "last_posted_chapter": 0,
+            "latest_available_chapter": 0
+        })
+        last_posted = int(novel_state.get("last_posted_chapter", 0))
+        latest_avail = int(novel_state.get("latest_available_chapter", 0))
+        if latest_avail <= last_posted:
+            continue
+
+        novel_slug = details["novel_url"].rstrip("/").split("/")[-1]
+        desc_html  = details.get("custom_description", "")
+        
+        override   = details.get("pub_date_override", None)
+
+        pub_dt = now_utc
+        if override:
+            pub_dt = pub_dt.replace(**override)
+        
+        for ch in range(last_posted + 1, latest_avail + 1):
+            arc = _get_arc_for_ch(ch)
+            if not arc:
+                continue
+            arc_num   = arc["arc_num"]
+            arc_title = arc["title"]
+            arc_local_index = ch - arc["start"] + 1
+
+            volume      = f"Arc {arc_num}: {arc_title}"
+            chaptername = f"Chapter {ch}"
+            nameextend  = f"{arc_num}.{arc_local_index}"
+
+            arc_slug = _slug_arc(arc_num, arc_title)
+            link = f"{BASE_APP}/novels/{novel_slug}/{arc_slug}-chapter-{ch}"
+
+            guid_val = f"{details.get('short_code','')}-{ch}"
+            coin_amt = str(details.get("coin_price", "5"))
+
+            all_items.append({
+                "volume":      volume,
+                "chaptername": chaptername,
+                "nameextend":  nameextend,
+                "link":        link,
+                "description": desc_html,
+                "pubDate":     pub_dt,
+                "guid":        guid_val,
+                "coin":        coin_amt,
+                "novel_title": novel_title
+            })
+
+        novel_state["last_posted_chapter"] = latest_avail
+        state[short_code] = novel_state
+
+    _save_mistmint_state(state)
+    return all_items, ""
+
+# =============================================================================
 # MISTMINT PRO SCRAPER (URL TO CHAPTERID)
 # =============================================================================
 
@@ -1168,126 +1256,122 @@ def _slug_arc(arc_num: int, arc_title: str) -> str:
 
 async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str):
     """
-    Generate synthetic "paid chapters" for ALL Mistmint novels in mapping.
-
-    For each Mistmint novel:
-    - Look up its short_code in novel_mappings.
-    - Check mistmint_state.json[short_code].
-      * last_posted_chapter
-      * latest_available_chapter
-    - For any new chapters in (last_posted+1 ... latest_available):
-        build an RSS-style item:
-          volume       -> "Arc X: <arc_title>"
-          chaptername  -> "Chapter 50"
-          nameextend   -> "1.7"  (arcNum.localIndexInArc)
-          link         -> predictable URL based on arc slug + global chapter num
-          guid         -> "<short_code>-<global_chapter_num>"
-
-    After generating, bump last_posted_chapter = latest_available_chapter
-    and save back to mistmint_state.json.
-
-    Returns (all_items, "") where all_items is a list[dict] for feed builder.
+    Mistmint (API): build paid items directly from the chapters endpoint.
+    Only include chapters where isFree == False.
+    Fields:
+      volume      -> volumeTitle
+      chaptername -> "Chapter {chapterNumber}"
+      nameextend  -> title (e.g., "1.2")
+      link        -> https://www.mistminthaven.com/novels/<novel_slug>/<slug>
+      description -> mapping.custom_description (per novel)
+      pubDate     -> createdAt (UTC)
+      guid        -> id
+      coin        -> price
+    Falls back to state-file synthetic exporter if no cookie.
     """
-    all_items = []
-    state = _load_mistmint_state()
-    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    cookie = _resolve_mistmint_cookie()
+    if _manual_mode_on() or not cookie:
+        return await _scrape_paid_chapters_mistmint_from_state(session, novel_url, host)
 
-    mistmint_block = HOSTING_SITE_DATA.get(host, {}).get("novels", {})
+    novel_title, details = _mistmint_find_details_by_url(host, novel_url)
+    desc_html = (details.get("custom_description") or "")
+    novel_slug = _mistmint_slug_from_url(novel_url)
+    api_url = f"{BASE_API}/novels/slug/{novel_slug}/chapters"
+    base = f"{BASE_APP}/novels/{novel_slug}/"
 
-    for novel_title, details in mistmint_block.items():
-        short_code = details.get("short_code")
-        if not short_code:
-            # if a Mistmint novel in mapping doesn't define short_code,
-            # we can't track it. skip silently.
-            continue
+    items = []
+    try:
+        async with session.get(api_url, headers=_mistmint_headers(), timeout=AIOHTTP_TIMEOUT) as resp:
+            if resp.status != 200:
+                diag_fail("mistmint-paid-scrape-http", url=api_url, code=resp.status)
+                return [], ""
+            payload = await resp.json()
+    except Exception as e:
+        diag_fail("mistmint-paid-scrape-ex", url=api_url, error=str(e))
+        return [], ""
 
-        # get (or init) per-novel state
-        novel_state = state.get(short_code, {
-            "last_posted_chapter": 0,
-            "latest_available_chapter": 0
-        })
-        last_posted = int(novel_state.get("last_posted_chapter", 0))
-        latest_avail = int(novel_state.get("latest_available_chapter", 0))
-
-        if latest_avail <= last_posted:
-            # nothing new to export for this novel
-            continue
-
-        novel_slug = details["novel_url"].rstrip("/").split("/")[-1]
-        desc_html  = details.get("custom_description", "")
-        override   = details.get("pub_date_override", None)
-
-        # build each missing chapter
-        for ch in range(last_posted + 1, latest_avail + 1):
-            arc = _get_arc_for_ch(ch)
-            if not arc:
-                # if you ever go beyond arc 20 and forget to extend TDLBKGC_ARCS,
-                # we'll just skip unknown ranges instead of crashing.
+    for vol in (payload or {}).get("data", []) or []:
+        vol_title = (vol.get("volumeTitle") or "").strip()
+        for ch in (vol.get("chapters") or []):
+            if ch.get("isFree") is True:
+                continue  # skip free
+            if ch.get("isHidden"):
                 continue
+            chapter_num = str(ch.get("chapterNumber") or "").strip()
+            nameextend  = (ch.get("title") or "").strip()           # e.g., "1.2"
+            slug_tail   = (ch.get("slug") or "").strip()
+            link        = base + slug_tail if slug_tail else novel_url
+            guid        = (ch.get("id") or "").strip()
+            price       = str(ch.get("price") if ch.get("price") is not None else "")
+            created     = (ch.get("createdAt") or "").strip()
 
-            arc_num   = arc["arc_num"]
-            arc_title = arc["title"]
-            arc_local_index = ch - arc["start"] + 1  # chapter index inside that arc
+            try:
+                pub_dt = datetime.datetime.fromisoformat(created.replace("Z", "+00:00")).astimezone(datetime.timezone.utc)
+            except Exception:
+                pub_dt = datetime.datetime.now(datetime.timezone.utc)
 
-            volume      = f"Arc {arc_num}: {arc_title}"
-            chaptername = f"Chapter {ch}"
-            nameextend  = f"{arc_num}.{arc_local_index}"
-
-            arc_slug = _slug_arc(arc_num, arc_title)
-            link = (
-                "https://www.mistminthaven.com/novels/"
-                f"{novel_slug}/{arc_slug}-chapter-{ch}"
-            )
-
-            pub_dt = now_utc
-            if override:
-                pub_dt = pub_dt.replace(**override)
-
-            guid_val = f"{short_code}-{ch}"
-    
-            # pull the per-novel fixed price (default "5" just in case)
-            coin_amt = str(details.get("coin_price", "5"))
-    
-            all_items.append({
-                "volume":      volume,
-                "chaptername": chaptername,
+            items.append({
+                "volume":      vol_title,
+                "chaptername": f"Chapter {chapter_num}" if chapter_num else "Chapter",
                 "nameextend":  nameextend,
                 "link":        link,
                 "description": desc_html,
                 "pubDate":     pub_dt,
-                "guid":        guid_val,
-                "coin":        coin_amt,
-                "novel_title": novel_title
+                "guid":        guid or link,    # safety
+                "coin":        price,
             })
-            
-        # advance pointer for THIS novel
-        novel_state["last_posted_chapter"] = latest_avail
-        state[short_code] = novel_state
 
-    # persist updated state for next run
-    _save_mistmint_state(state)
-
-    return all_items, ""
+    # Let the caller (paid_feed_generator) handle 7-day trimming and sorting.
+    return items, ""
 
 
 async def novel_has_paid_update_mistmint_async(session, novel_url: str) -> bool:
     """
-    Return True if *any* Mistmint novel in mapping has new premium chapters
-    we haven't exported yet.
+    Mistmint (API): True if this specific novel has any *paid* (isFree == False)
+    chapter whose createdAt is within the last 7 days. Falls back to state file
+    if no cookie is available.
     """
-    state = _load_mistmint_state()
-    mistmint_block = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("novels", {})
-
-    for _title, details in mistmint_block.items():
-        short_code = details.get("short_code")
+    cookie = _resolve_mistmint_cookie()
+    if _manual_mode_on() or not cookie:
+        # Fallback to old state model (best effort)
+        block = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("novels", {})
+        # try to find this novel's short_code
+        short_code = None
+        for _title, det in block.items():
+            if (det.get("novel_url") or "").rstrip("/") == (novel_url or "").rstrip("/"):
+                short_code = det.get("short_code")
+                break
         if not short_code:
-            continue
-        novel_state = state.get(short_code, {
-            "last_posted_chapter": 0,
-            "latest_available_chapter": 0
-        })
-        if int(novel_state.get("latest_available_chapter", 0)) > int(novel_state.get("last_posted_chapter", 0)):
-            return True
+            return False
+        state = _load_mistmint_state()
+        entry = state.get(short_code, {"last_posted_chapter": 0, "latest_available_chapter": 0})
+        return int(entry.get("latest_available_chapter", 0)) > int(entry.get("last_posted_chapter", 0))
+
+    # API path
+    novel_slug = _mistmint_slug_from_url(novel_url)
+    url = f"{BASE_API}/novels/slug/{novel_slug}/chapters"
+    try:
+        async with session.get(url, headers=_mistmint_headers(), timeout=AIOHTTP_TIMEOUT) as resp:
+            if resp.status != 200:
+                diag_fail("mistmint-paid-check-http", url=url, code=resp.status)
+                return False
+            data = await resp.json()
+    except Exception as e:
+        diag_fail("mistmint-paid-check-ex", url=url, error=str(e))
+        return False
+
+    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
+    for vol in (data or {}).get("data", []) or []:
+        for ch in (vol.get("chapters") or []):
+            if ch.get("isFree") is False:
+                s = ch.get("createdAt") or ""
+                try:
+                    dt = datetime.datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(datetime.timezone.utc)
+                    if dt >= cutoff:
+                        return True
+                except Exception:
+                    # if createdAt is weird but paid, be conservative and skip
+                    pass
     return False
 
 
