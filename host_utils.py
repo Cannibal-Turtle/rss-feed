@@ -464,6 +464,9 @@ def enrich_all_comments(client: MistmintClient, records: List[Dict[str, Any]]) -
         username      = _user_str(rec.get("user") or rec.get("username") or rec.get("displayName"))
         created_at    = rec.get("createdAt")   or ""
 
+        novel_id = rec.get("novelId") or rec.get("novel_id") or ""
+        body_raw = (rec.get("content") or rec.get("body") or rec.get("text") or rec.get("message") or "").strip()
+        
         item = dict(rec)
         item["url"] = client.build_url(novel_slug, chapter_slug)
         item["chapterId"] = None
@@ -513,27 +516,7 @@ def enrich_all_comments(client: MistmintClient, records: List[Dict[str, Any]]) -
                 item["parentId"]  = hit.get("parentId") or hit.get("replyToId")
                 if item["is_reply"] and parent_user:
                     item["replyToUser"] = parent_user
-                # NEW: bubble up the parent's username so loader can render reply_chain right away
-                if item["is_reply"] and item["parentId"]:
-                    pid = str(item["parentId"])
-                    parent_user = ""
-                    # parent is top-level on Mistmint, so scan top-level data[]
-                    for top in thread.get("data", []):
-                        if str(top.get("id") or top.get("_id")) == pid:
-                            parent_user = _user_str((top.get("user") or {}))
-                            break
-                    if not parent_user:
-                        # ultra-safe fallback: scan all replies too
-                        for top in thread.get("data", []):
-                            for rep in (top.get("replies") or []):
-                                if str(rep.get("id") or rep.get("_id")) == pid:
-                                    parent_user = _user_str((rep.get("user") or {}))
-                                    break
-                            if parent_user:
-                                break
-                    if parent_user:
-                        item["replyToUser"] = parent_user
-
+            
         out.append(item)
     return out
     
