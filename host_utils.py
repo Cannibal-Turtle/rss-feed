@@ -168,8 +168,8 @@ def _canon_ts(s: str) -> str:
 def match_comment_on_homepage_by_id(novel_id: str, author: str, body_raw: str, posted_at: str):
     """
     Return (matching_comment_obj, parent_user_name) from the novel homepage thread.
-    Mirrors chapter logic: author + createdAt exact string match.
-    Parent username is "" for top-level hits.
+    Behaves like the chapter-thread matcher: canonicalized name, tolerant timestamp,
+    and (if provided) normalized body equality as a tie-breaker.
     """
     if not novel_id:
         return None, ""
@@ -184,24 +184,41 @@ def match_comment_on_homepage_by_id(novel_id: str, author: str, body_raw: str, p
         _MISTMINT_HOME_CACHE[novel_id] = payload
         diag_ok("homepage-fetch", novel_id=novel_id)
 
-    want_user = (author or "").strip()
-    want_ts   = (posted_at or "").strip()
+    want_name = _canon_name(author)
+    want_dt   = _iso_dt(posted_at)
+    want_body = _norm(body_raw)
+
+    def _time_close(theirs: str, target: datetime.datetime | None) -> bool:
+        if target is None:
+            # if we don't have a usable target, fall back to string equality
+            return (theirs or "").strip() == (posted_at or "").strip()
+        dt = _iso_dt(theirs)
+        return (dt is not None) and (abs((dt - target).total_seconds()) <= 300)
+
+    def _hit(user_obj, created_at: str, content: str) -> bool:
+        u = _canon_name(_user_str(user_obj))
+        if u != want_name:
+            return False
+        if not _time_close(created_at, want_dt):
+            return False
+        # If we have a body, require equality after normalization to disambiguate.
+        return (not want_body) or (_norm(content or "") == want_body)
 
     for top in (payload.get("data") or []):
-        top_user = _user_str(top.get("user"))
-        top_ts   = (top.get("createdAt") or "").strip()
-        if top_user == want_user and top_ts == want_ts:
+        if _hit(top.get("user"), top.get("createdAt") or "", top.get("content") or ""):
             diag_ok("homepage-match-top", novel_id=novel_id, comment_id=top.get("id"))
             return top, ""
         for rep in (top.get("replies") or []):
-            rep_user = _user_str(rep.get("user"))
-            rep_ts   = (rep.get("createdAt") or "").strip()
-            if rep_user == want_user and rep_ts == want_ts:
+            if _hit(rep.get("user"), rep.get("createdAt") or "", rep.get("content") or ""):
                 parent_user = _user_str(top.get("user"))
                 diag_ok("homepage-match-reply", novel_id=novel_id, comment_id=rep.get("id"), parent=parent_user)
                 return rep, parent_user
 
-    diag_fail("homepage-match-miss", novel_id=novel_id, author=author, want_ts=want_ts)
+    diag_fail("homepage-match-miss",
+              novel_id=novel_id,
+              author=author,
+              want_ts=(posted_at or ""),
+              note="try relaxed time+body match but none found")
     return None, ""
 
 def resolve_chapter_id(novel_slug: str, chapter_slug: str) -> str:
