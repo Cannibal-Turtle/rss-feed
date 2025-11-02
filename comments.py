@@ -243,11 +243,15 @@ def main():
                     posted_at     = obj.get("posted_at", "")
                     reply_to      = obj.get("reply_to", "")
         
-                    # Prefer the origin comment ID if available (e.g., Mistmint chapter/homepage APIs),
-                    # otherwise fall back to deterministic hash.
+                    # GUID: prefer the canonical comment id, else hash a stable fingerprint
                     comment_id = obj.get("commentId") or obj.get("comment_id")
-                    guid_val = comment_id or _guid_from([novel_title, chapter_label, author_name, posted_at, body])
-        
+                    guid_val = str(comment_id) if comment_id else _guid_from([
+                        novel_title,
+                        author_name,
+                        posted_at,
+                        body[:80],
+                    ])
+                    
                     item = MyCommentRSSItem(
                         novel_title=novel_title,
                         title=novel_title,
@@ -311,7 +315,17 @@ def main():
             soup = BeautifulSoup(post_html, "html.parser")
             description_text = soup.get_text(separator=" ").strip()
             description_text = re.sub(r"\s+([.,!?;:])", r"\1", description_text)
-        
+    
+            # 3.1) GUID: prefer numeric comment id from the link, else entry.id, else a stable hash
+            m = re.search(r"#comment-(\d+)", entry.get("link", "") or "")
+            cid = m.group(1) if m else None
+            guid_val = cid or getattr(entry, "id", "") or _guid_from([
+                novel_title,
+                entry.get("author", ""),
+                entry.get("published", "") or str(getattr(entry, "published_parsed", "")),
+                description_text[:80],
+            ])
+    
             # 4) pass both into your RSS item
             item = MyCommentRSSItem(
                 novel_title=novel_title,
@@ -320,7 +334,7 @@ def main():
                 author=entry.get("author", ""),
                 description=description_text,
                 reply_chain=reply_chain,
-                guid=PyRSS2Gen.Guid(entry.id, isPermaLink=False),
+                guid=PyRSS2Gen.Guid(guid_val, isPermaLink=False),
                 pubDate=pub_date,
                 host=host
             )
