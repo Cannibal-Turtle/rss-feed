@@ -38,6 +38,9 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Paid Feed Generator
+        env:
+          MISTMINT_COOKIE: ${{ secrets.MISTMINT_COOKIE }}
+          MISTMINT_FORCE_STATE: "0"   # use API mode (cookie); set "1" to force state fallback
         run: python paid_feed_generator.py
 
       - name: Commit and Push Changes
