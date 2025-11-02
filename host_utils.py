@@ -190,7 +190,7 @@ async def _scrape_paid_chapters_mistmint_from_state(session, novel_url: str, hos
             link = f"{BASE_APP}/novels/{novel_slug}/{arc_slug}-chapter-{ch}"
 
             guid_val = f"{details.get('short_code','')}-{ch}"
-            coin_amt = str(details.get("coin_price", "5"))
+            coin_amt = str(details.get("coin_price") or "")
 
             all_items.append({
                 "volume":      volume,
