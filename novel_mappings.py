@@ -62,7 +62,7 @@ HOSTING_SITE_DATA = {
                 "pub_date_override": {"hour": 12, "minute": 0, "second": 0},
                 "novel_id": "8ebd3484-d5b2-422d-a22d-11404bc8481f", #comment homepage for scraping reply chain
                 # for manually updated paid feed
-                "short_code": "tdlbkgc", #for parsing feed without guid. Also for short_code keyword to token
+                "short_code": "tdlbkgc", #for parsing feed without guid. Also for short_code.
                 "coin_price": 5,
 
                 # ─── webhook-only fields ───
