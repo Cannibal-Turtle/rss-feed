@@ -41,7 +41,7 @@ jobs:
       - name: Run Comments Feed Generator (also checks token)
         env:
           # needed by comments.py for repo dispatch
-          PAT_GITHUB: ${{ secrets.PAT_GITHUB }}
+          GITHUB_TOKEN:      ${{ github.token }} 
           GITHUB_REPOSITORY: ${{ github.repository }}
           MISTMINT_COOKIE:   ${{ secrets.MISTMINT_COOKIE }}
         run: python comments.py
