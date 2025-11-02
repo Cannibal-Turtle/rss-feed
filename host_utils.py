@@ -997,7 +997,8 @@ def load_comments_mistmint(comments_feed_url: str):
                 if who and (ALLOW_SELF_REPLIES or who.strip().casefold() != author.casefold()):
                     reply_to = who
 
-        if not reply_to and novel_id:
+        looks_like_reply = bool(obj.get("parentId") or obj.get("replyToId") or obj.get("toUser"))
+        if not reply_to and looks_like_reply and novel_id:
             who = resolve_reply_to_on_homepage_by_id(
                 novel_id=novel_id,
                 author=author,
@@ -1028,6 +1029,13 @@ def load_comments_mistmint(comments_feed_url: str):
             "description": body,
             "reply_to": reply_to,
             "posted_at": posted_at or "",
+            # NEW: surface identifiers so the feed can use them
+            "comment_id": e.get("commentId"),
+            "parent_id":  e.get("parentId"),
+            "is_reply":   bool(e.get("is_reply")),
+            "novel_id":   novel_id,
+            "novel_slug": novel_slug,
+            "chapter_id": e.get("chapterId"),
         })
 
     print(f"[mistmint] loaded {len(out)} raw comment(s)")
