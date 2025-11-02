@@ -9,7 +9,7 @@ from html import unescape
 import aiohttp
 import feedparser
 from bs4 import BeautifulSoup
-from typing import Dict, Any, List, Optional, Tuple, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 import hashlib
 
@@ -221,12 +221,6 @@ def match_comment_in_thread(thread_json: Dict[str, Any], username: str, created_
     return None
 
 def enrich_all_comments(client: MistmintClient, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    out = []
-    thread_cache: Dict[str, Dict[str, Any]] = {}
-    
-    client: MistmintClient,
-    records: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
     """
     For each record from /trans/all-comments, attach:
       - "url": canonical web URL
@@ -236,11 +230,13 @@ def enrich_all_comments(client: MistmintClient, records: List[Dict[str, Any]]) -
       - "parentId": str|None
       - "commentId": str|None
     """
-    out = []
+    out: List[Dict[str, Any]] = []
+    thread_cache: Dict[str, Dict[str, Any]] = {}
+
     for rec in records:
         novel_slug   = rec.get("novelSlug")   or ""
         chapter_slug = rec.get("chapterSlug") or ""
-        chapter_label = rec.get("chapter") or rec.get("chapterLabel") or ""   # ← add this
+        chapter_label = rec.get("chapter") or rec.get("chapterLabel") or ""
         username     = rec.get("user")        or ""
         created_at   = rec.get("createdAt")   or ""
 
@@ -253,39 +249,47 @@ def enrich_all_comments(client: MistmintClient, records: List[Dict[str, Any]]) -
         item["parentId"] = None
         item["commentId"] = None
 
-        # ── BEGIN: new chapterId resolution with fallback ───────────────────
+        # ── Resolve chapterId with fallback discovery ─────────────────────────
         cid, gated = (None, False)
 
-        # Try direct slug first (if API gave one)
         if chapter_slug:
             cid, gated = client.get_chapter_id(novel_slug, chapter_slug)
 
-        # If that failed, try to discover the real slug from the novel page
         if not cid:
-            # parse "Chapter 12" / "Chapter Extra 3" → numeric
-            _, ch_num = _mistmint_parse_chapter_label(chapter_label)
+            # Try to parse "Chapter ..." → numeric, then discover slug from novel page
+            _lbl, ch_num = _mistmint_parse_chapter_label(chapter_label)
             if ch_num is not None:
                 alt = _find_chapter_slug_live(client, novel_slug, ch_num)
                 if alt:
-                    chapter_slug = alt  # adopt discovered slug
+                    chapter_slug = alt
                     cid, gated = client.get_chapter_id(novel_slug, alt)
 
         item["chapterId"] = cid
         item["gated"] = gated
-        # ── END: new block ──────────────────────────────────────────────────
 
-        # Build URL now that chapter_slug may have changed
+        # Canonical URL (homepage if no slug)
         item["url"] = client.build_url(novel_slug, chapter_slug)
 
-        # Thread fetch only if we resolved a chapterId
+        # ── If we have a chapterId, try to match this exact comment in the thread ─
         if cid:
             if cid not in thread_cache:
-                time.sleep(0.2)
+                time.sleep(0.2)  # gentle throttle
                 thread_cache[cid] = client.fetch_chapter_comments(cid, skip_page=0, limit=100)
+
             thread = thread_cache[cid]
             hit = match_comment_in_thread(thread, username=username, created_at_iso=created_at)
+            if hit:
+                # Minimal IDs (support different key spellings)
+                item["commentId"] = hit.get("id") or hit.get("_id")
+                parent_id = hit.get("parentId") or hit.get("parent_id")
+                item["parentId"] = parent_id
+                item["is_reply"] = bool(parent_id)
+            else:
+                # Found thread but not the specific node → treat as top-level unless unknown
+                item["is_reply"] = False
 
         out.append(item)
+
     return out
     
 if __name__ == "__main__":
