@@ -124,13 +124,6 @@ async def process_novel(session, host, novel_title):
                     host=host
                 )
                 items.append(item)
-        hook = utils.get("postprocess_paid_items")
-        if hook:
-            import asyncio as _asyncio
-            if _asyncio.iscoroutinefunction(hook):
-                items = await hook(session, items, novel_title=novel_title, host=host)
-            else:
-                items = hook(items, novel_title=novel_title, host=host)
         return items
 
 class MyRSSItem(PyRSS2Gen.RSSItem):
