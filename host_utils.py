@@ -2,7 +2,6 @@ import re
 import os
 import json
 import datetime
-from datetime import datetime, timezone
 import traceback
 import time
 from urllib.parse import urlparse, unquote
