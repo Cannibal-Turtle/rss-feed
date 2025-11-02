@@ -132,6 +132,39 @@ UA = {"User-Agent": "mistmint-comments-bot/1.0 (+github.com/Cannibal-Turtle)"}
 
 CHAPTERID_RE = re.compile(r'"chapterId"\s*:\s*"([0-9a-f-]{36})"', re.I)
 
+UUID_RE = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+
+def _extract_chapter_id_from_html(html: str, chapter_slug: str) -> str | None:
+    if not html:
+        return None
+    # Try a targeted “slug … id” search inside any JSON blob
+    m = re.search(
+        rf'"slug"\s*:\s*"{re.escape(chapter_slug)}"(?s:.{{0,400}}?)"id"\s*:\s*"({UUID_RE})"',
+        html, re.I
+    )
+    if m:
+        return m.group(1)
+    # Try a looser catch-all for either "chapterId" or "id"
+    m = re.search(rf'"(?:chapterId|id)"\s*:\s*"({UUID_RE})"', html, re.I)
+    return m.group(1) if m else None
+
+def _api_chapter_id_by_slug(self, chapter_slug: str) -> str | None:
+    # Best-effort API fallback (works only if backend exposes a slug→chapter endpoint)
+    for path in (f"{BASE_API}/chapters/slug/{chapter_slug}",
+                 f"{BASE_API}/chapter/{chapter_slug}",
+                 f"{BASE_API}/chapters/{chapter_slug}"):
+        try:
+            r = self._get(path, use_cookie=True)
+            if r.ok:
+                j = r.json()
+                # common shapes: {"data":{"id":...}} or {"id":...}
+                cid = (j.get("data", {}) or {}).get("id") or j.get("id")
+                if cid and re.fullmatch(UUID_RE, cid, re.I):
+                    return cid
+        except Exception:
+            pass
+    return None
+
 class MistmintClient:
     def __init__(self, translator_cookie: Optional[str] = None, timeout: int = 20):
         if translator_cookie is None:
@@ -165,6 +198,27 @@ class MistmintClient:
             diag_ok("api-get", url=url, code=r.status_code, use_cookie=use_cookie)
         return r
 
+    def _api_chapter_id_by_slug(self, chapter_slug: str) -> Optional[str]:
+        """Best-effort API probe: resolve chapter id by slug (if backend exposes it)."""
+        candidates = [
+            f"{BASE_API}/chapters/slug/{chapter_slug}",
+            f"{BASE_API}/chapter/{chapter_slug}",
+            f"{BASE_API}/chapters/{chapter_slug}",
+        ]
+        for url in candidates:
+            try:
+                r = self._get(url, use_cookie=True)
+                if r.ok:
+                    j = r.json() or {}
+                    data = j.get("data") if isinstance(j, dict) else None
+                    cid = (data or {}).get("id") or j.get("id")
+                    if cid and re.fullmatch(UUID_RE, cid, re.I):
+                        return cid
+            except Exception:
+                # swallow and try next shape
+                pass
+        return None
+
     def fetch_all_comments(self) -> Dict[str, Any]:
         r = self._get(ALL_COMMENTS_URL)
         r.raise_for_status()
@@ -177,69 +231,87 @@ class MistmintClient:
         return f"{BASE_APP}/novels/{novel_slug}"
 
     def get_chapter_id(self, novel_slug: str, chapter_slug: str) -> Tuple[Optional[str], bool]:
+        """
+        Returns (chapter_id, gated)
+        gated=True if we couldn't extract chapterId anonymously (and also failed with cookie if provided)
+        """
         if not chapter_slug:
             return None, False
-        key = (novel_slug, chapter_slug)
-        if key in self._chapter_id_cache:
-            cid = self._chapter_id_cache[key]
-            return cid, cid is None
     
-        url = self.build_url(novel_slug, chapter_slug)
-    
-        # 1) try anonymous
-        with diag_step("chapterId-anon", url=url):
-            r = self._get(url, use_cookie=False)
-            html = r.text or ""
-            m = CHAPTERID_RE.search(html)
-            if m:
-                cid = m.group(1)
-                self._chapter_id_cache[key] = cid
-                diag_ok("chapterid-extract", novel=novel_slug, chapter=chapter_slug, gated=False)
-                return cid, False
-            diag_fail("chapterid-miss-anon", novel=novel_slug, chapter=chapter_slug)
-    
-        # 2) try cookie if available
-        if self.cookie:
-            with diag_step("chapterId-cookie", url=url):
-                r2 = self._get(url, use_cookie=True)
-                m2 = CHAPTERID_RE.search((r2.text or ""))
-                if m2:
-                    cid = m2.group(1)
-                    self._chapter_id_cache[key] = cid
-                    diag_ok("chapterid-extract-cookie", novel=novel_slug, chapter=chapter_slug)
-                    return cid, False
-                diag_fail("chapterid-miss-cookie", novel=novel_slug, chapter=chapter_slug)
-    
-        # gated or unknown
-        self._chapter_id_cache[key] = None
-        diag_fail("chapterid-unavailable", novel=novel_slug, chapter=chapter_slug)
-        return None, True
-
         key = (novel_slug, chapter_slug)
         if key in self._chapter_id_cache:
             cid = self._chapter_id_cache[key]
             return cid, cid is None  # if None, treat as gated/unknown
-
+    
         url = self.build_url(novel_slug, chapter_slug)
-
-        # 1) try anonymous
-        r = self._get(url, use_cookie=False)
-        html = r.text or ""
-        m = CHAPTERID_RE.search(html)
-        if m:
-            cid = m.group(1)
-            self._chapter_id_cache[key] = cid
-            return cid, False
-
-        # 2) try with cookie once if available
+    
+        # 1) try anonymous HTML (legacy "chapterId" in page)
+        try:
+            if 'diag_step' in globals():
+                with diag_step("chapterId-anon", novel=novel_slug, chapter=chapter_slug):
+                    r = self._get(url, use_cookie=False)
+                    html = r.text or ""
+                    m = CHAPTERID_RE.search(html)
+                    if m:
+                        cid = m.group(1)
+                        self._chapter_id_cache[key] = cid
+                        diag_ok("chapterId-anon-hit", chapter_id=cid)
+                        return cid, False
+                    diag_fail("chapterId-anon-miss")
+            else:
+                r = self._get(url, use_cookie=False)
+                html = r.text or ""
+                m = CHAPTERID_RE.search(html)
+                if m:
+                    cid = m.group(1)
+                    self._chapter_id_cache[key] = cid
+                    return cid, False
+        except Exception:
+            pass
+    
+        # 2) cookie HTML + smarter HTML JSON fallback + API fallback
         if self.cookie:
-            r2 = self._get(url, use_cookie=True)
-            m2 = CHAPTERID_RE.search(r2.text or "")
-            if m2:
-                cid = m2.group(1)
-                self._chapter_id_cache[key] = cid
-                return cid, False
-
+            if 'diag_step' in globals():
+                with diag_step("chapterId-cookie", novel=novel_slug, chapter=chapter_slug):
+                    r2 = self._get(url, use_cookie=True)
+                    html2 = r2.text or ""
+                    # 2a) old regex again
+                    m2 = CHAPTERID_RE.search(html2)
+                    if m2:
+                        cid = m2.group(1)
+                        self._chapter_id_cache[key] = cid
+                        diag_ok("chapterId-cookie-hit", chapter_id=cid)
+                        return cid, False
+                    # 2b) new: parse Nuxt/JSON blobs
+                    cid = _extract_chapter_id_from_html(html2 or html, chapter_slug)
+                    if cid:
+                        self._chapter_id_cache[key] = cid
+                        diag_ok("chapterId-cookie-fallback-html-hit", chapter_id=cid)
+                        return cid, False
+                    # 2c) new: try API shapes
+                    cid = self._api_chapter_id_by_slug(chapter_slug)
+                    if cid:
+                        self._chapter_id_cache[key] = cid
+                        diag_ok("chapterId-cookie-fallback-api-hit", chapter_id=cid)
+                        return cid, False
+                    diag_fail("chapterId-cookie-miss")
+            else:
+                r2 = self._get(url, use_cookie=True)
+                html2 = r2.text or ""
+                m2 = CHAPTERID_RE.search(html2)
+                if m2:
+                    cid = m2.group(1)
+                    self._chapter_id_cache[key] = cid
+                    return cid, False
+                cid = _extract_chapter_id_from_html(html2 or html, chapter_slug)
+                if cid:
+                    self._chapter_id_cache[key] = cid
+                    return cid, False
+                cid = self._api_chapter_id_by_slug(chapter_slug)
+                if cid:
+                    self._chapter_id_cache[key] = cid
+                    return cid, False
+    
         # gated or not found
         self._chapter_id_cache[key] = None
         return None, True
