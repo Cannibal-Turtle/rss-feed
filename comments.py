@@ -153,7 +153,10 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
         writer.write(indent + "    <description><![CDATA[%s]]></description>" % self.description + newl)
 
         if self.reply_chain:
-            writer.write(indent + "    <reply_chain><![CDATA[ᯓ✿ %s]]></reply_chain>" % escape(self.reply_chain) + newl)
+            rc = (self.reply_chain or "").strip()
+            if rc and not rc.lower().startswith("in reply to"):
+                rc = f"In reply to {rc}"
+            writer.write(indent + "    <reply_chain><![CDATA[ᯓ✿ %s]]></reply_chain>" % escape(rc) + newl)
 
         # Get other metadata using host-specific functions.
         translator = utils.get("get_host_translator", lambda host: "")(self.host)
