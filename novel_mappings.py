@@ -62,7 +62,7 @@ HOSTING_SITE_DATA = {
                 "novel_id": "8ebd3484-d5b2-422d-a22d-11404bc8481f", #comment homepage for scraping reply chain
                 # for manually updated paid feed
                 "short_code": "tdlbkgc", #for parsing feed without guid. Also for short_code.
-                "coin_price": 5, #no longer used for automatic updates
+                "coin_price": 5, #no longer used for automatic updates. If you go back to manual updates, also add "pub_date_override".
 
                 # ─── webhook-only fields ───
                 "chapter_count": "734 chapters + 3 extras",
