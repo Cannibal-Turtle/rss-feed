@@ -2,6 +2,7 @@ import re
 import os
 import json
 import datetime
+import traceback
 import time
 from urllib.parse import urlparse, unquote
 import requests
@@ -10,15 +11,13 @@ import aiohttp
 import feedparser
 from bs4 import BeautifulSoup
 from typing import Dict, Any, List, Optional, Tuple
-
+from collections import Counter
+from contextlib import contextmanager
 import hashlib
 
 from novel_mappings import HOSTING_SITE_DATA
 
 # === GitHub Actions diagnostics helpers ======================================
-import traceback, time
-from collections import Counter
-from contextlib import contextmanager
 
 DIAG = {"counts": Counter(), "errors": [], "events": []}
 
@@ -148,23 +147,6 @@ def _extract_chapter_id_from_html(html: str, chapter_slug: str) -> str | None:
     m = re.search(rf'"(?:chapterId|id)"\s*:\s*"({UUID_RE})"', html, re.I)
     return m.group(1) if m else None
 
-def _api_chapter_id_by_slug(self, chapter_slug: str) -> str | None:
-    # Best-effort API fallback (works only if backend exposes a slug→chapter endpoint)
-    for path in (f"{BASE_API}/chapters/slug/{chapter_slug}",
-                 f"{BASE_API}/chapter/{chapter_slug}",
-                 f"{BASE_API}/chapters/{chapter_slug}"):
-        try:
-            r = self._get(path, use_cookie=True)
-            if r.ok:
-                j = r.json()
-                # common shapes: {"data":{"id":...}} or {"id":...}
-                cid = (j.get("data", {}) or {}).get("id") or j.get("id")
-                if cid and re.fullmatch(UUID_RE, cid, re.I):
-                    return cid
-        except Exception:
-            pass
-    return None
-
 class MistmintClient:
     def __init__(self, translator_cookie: Optional[str] = None, timeout: int = 20):
         if translator_cookie is None:
@@ -197,6 +179,37 @@ class MistmintClient:
         else:
             diag_ok("api-get", url=url, code=r.status_code, use_cookie=use_cookie)
         return r
+    
+    def _novel_id_from_slug(self, novel_slug: str) -> str | None:
+        try:
+            r = self._get(f"{BASE_API}/novels/slug/{novel_slug}", use_cookie=True)
+            if r.ok:
+                j = r.json() or {}
+                return (j.get("data") or {}).get("id") or j.get("id")
+        except Exception:
+            pass
+        return None
+    
+    def _chapter_id_via_novel_listing(self, novel_slug: str, chapter_slug: str) -> str | None:
+        nid = self._novel_id_from_slug(novel_slug)
+        if not nid:
+            return None
+        page, limit = 0, 200
+        while True:
+            url = f"{BASE_API}/chapters/novel/{nid}?skipPage={page}&limit={limit}"
+            r = self._get(url, use_cookie=True)
+            if not r.ok:
+                break
+            j = r.json() or {}
+            for ch in (j.get("data") or []):
+                if str(ch.get("slug","")).lower() == chapter_slug.lower():
+                    return ch.get("id")
+            paging = j.get("paging") or {}
+            total_pages = int(paging.get("totalPages") or 1)
+            page += 1
+            if page >= total_pages:
+                break
+        return None
 
     def _api_chapter_id_by_slug(self, chapter_slug: str) -> Optional[str]:
         """Best-effort API probe: resolve chapter id by slug (if backend exposes it)."""
@@ -220,9 +233,9 @@ class MistmintClient:
         return None
 
     def fetch_all_comments(self) -> Dict[str, Any]:
-        r = self._get(ALL_COMMENTS_URL)
+        r = self._get(ALL_COMMENTS_URL, use_cookie=bool(self.cookie))
         r.raise_for_status()
-        return r.json()  # keys: data[], paging{}
+        return r.json()
 
     @staticmethod
     def build_url(novel_slug: str, chapter_slug: str) -> str:
@@ -283,16 +296,22 @@ class MistmintClient:
                         diag_ok("chapterId-cookie-hit", chapter_id=cid)
                         return cid, False
                     # 2b) new: parse Nuxt/JSON blobs
-                    cid = _extract_chapter_id_from_html(html2 or html, chapter_slug)
+                    cid = _extract_chapter_id_from_html(html2 or "", chapter_slug)
                     if cid:
                         self._chapter_id_cache[key] = cid
                         diag_ok("chapterId-cookie-fallback-html-hit", chapter_id=cid)
                         return cid, False
-                    # 2c) new: try API shapes
+                    # 2c) try slug→chapter API (often 404)
                     cid = self._api_chapter_id_by_slug(chapter_slug)
                     if cid:
                         self._chapter_id_cache[key] = cid
                         diag_ok("chapterId-cookie-fallback-api-hit", chapter_id=cid)
+                        return cid, False
+                    # 2d) novel listing fallback (new)
+                    cid = self._chapter_id_via_novel_listing(novel_slug, chapter_slug)
+                    if cid:
+                        self._chapter_id_cache[key] = cid
+                        diag_ok("chapterId-via-listing", novel=novel_slug, chapter=chapter_slug, chapter_id=cid)
                         return cid, False
                     diag_fail("chapterId-cookie-miss")
             else:
@@ -303,7 +322,7 @@ class MistmintClient:
                     cid = m2.group(1)
                     self._chapter_id_cache[key] = cid
                     return cid, False
-                cid = _extract_chapter_id_from_html(html2 or html, chapter_slug)
+                cid = _extract_chapter_id_from_html(html2 or "", chapter_slug)
                 if cid:
                     self._chapter_id_cache[key] = cid
                     return cid, False
@@ -311,8 +330,14 @@ class MistmintClient:
                 if cid:
                     self._chapter_id_cache[key] = cid
                     return cid, False
+                # novel listing fallback (new)
+                cid = self._chapter_id_via_novel_listing(novel_slug, chapter_slug)
+                if cid:
+                    self._chapter_id_cache[key] = cid
+                    return cid, False
     
         # gated or not found
+        diag_fail("chapterId-not-found", novel=novel_slug, chapter=chapter_slug)
         self._chapter_id_cache[key] = None
         return None, True
 
@@ -492,7 +517,7 @@ def enrich_all_comments(client: MistmintClient, records: List[Dict[str, Any]]) -
         out.append(item)
     return out
     
-if __name__ == "__main__":
+def cli_main():
     try:
         import argparse
         parser = argparse.ArgumentParser()
@@ -500,7 +525,6 @@ if __name__ == "__main__":
         args = parser.parse_args()
 
         rows = load_comments_mistmint(ALL_COMMENTS_URL)
-
         if args.print in ("raw","both"):
             for r in rows:
                 tag = "reply" if r["reply_to"] else "top"
@@ -524,13 +548,12 @@ if __name__ == "__main__":
                     print("   gated: true (needed cookie or skip)")
                 print()
     except Exception as e:
-        # record a fatal marker before letting Actions mark the step failed
         diag_fail("fatal", error=str(e), exc_type=type(e).__name__)
         raise
     finally:
-        # ALWAYS emit the roll-up (and a JSON artifact) at the end
         diag_summary(save_json=True)
-        
+
+      
 # --- Mistmint comment helpers -----------------------------------------------
 
 def _guid_from(parts):
@@ -608,13 +631,8 @@ ALLOW_SELF_REPLIES = True
 
 def resolve_reply_to_on_chapter_by_id(client: MistmintClient, chapter_id: str,
                                       author: str, body_raw: str, posted_at: str) -> str:
-    """
-    Try to resolve who this comment is replying to within a specific chapter thread.
-    Returns "" if it's a top-level comment or if no match is found.
-    """
     if not chapter_id:
         return ""
-
     with diag_step("reply-resolve-chapter", chapter_id=chapter_id, author=author):
         payload = client.fetch_chapter_comments(chapter_id, skip_page=0, limit=100)
 
@@ -638,15 +656,13 @@ def resolve_reply_to_on_chapter_by_id(client: MistmintClient, chapter_id: str,
                 rep_dt = None
             if rep_user != want_author or rep_body != want_body:
                 return False
-            # allow up to 5 minutes skew
             return (not want_dt or not rep_dt or abs((want_dt - rep_dt).total_seconds()) <= 300)
 
         for top in (payload.get("data") or []):
             parent_user = _name(top.get("user"))
             if _is_same(top):
                 diag_ok("reply-resolve-top", chapter_id=chapter_id)
-                return ""  # top-level, not a reply
-
+                return ""
             for rep in (top.get("replies") or []):
                 if _is_same(rep):
                     who = parent_user or _name(rep.get("toUser"))
@@ -655,11 +671,7 @@ def resolve_reply_to_on_chapter_by_id(client: MistmintClient, chapter_id: str,
 
         diag_fail("reply-resolve-miss", chapter_id=chapter_id, author=author)
         return ""
-
-    def _name(u):
-        u = u or {}
-        return (u.get("displayName") or u.get("username") or "").strip()
-
+        
     want_author = (author or "").strip().casefold()
     want_body   = re.sub(r"\s+", " ", (body_raw or "").strip())
     try:
@@ -997,8 +1009,9 @@ def load_comments_mistmint(comments_feed_url: str):
                 if who and (ALLOW_SELF_REPLIES or who.strip().casefold() != author.casefold()):
                     reply_to = who
 
-        looks_like_reply = bool(obj.get("parentId") or obj.get("replyToId") or obj.get("toUser"))
-        if not reply_to and looks_like_reply and novel_id:
+        # after: try homepage resolution whenever it's a homepage comment
+        is_homepage = not chapter_slug and (chapter_lbl or "") in ("", "Homepage")
+        if not reply_to and is_homepage and novel_id:
             who = resolve_reply_to_on_homepage_by_id(
                 novel_id=novel_id,
                 author=author,
@@ -1524,6 +1537,8 @@ def extract_volume_mistmint(full_title: str, link: str) -> str:
 
     return ""
 
+if __name__ == "__main__":
+    cli_main()
 
 # =============================================================================
 # DRAGONHOLIC PAID TITLE PARSER
