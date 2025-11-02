@@ -137,6 +137,18 @@ class MistmintClient:
         r.raise_for_status()
         return r.json()  # keys: data[], paging{}
 
+def _user_str(v: Any) -> str:
+    """
+    Normalize a 'user' field that might be a dict or a plain string.
+    Picks displayName → username → name → (stringifies).
+    """
+    if isinstance(v, dict):
+        return (v.get("displayName")
+                or v.get("username")
+                or v.get("name")
+                or "").strip()
+    return str(v or "").strip()
+    
 def _resolve_mistmint_cookie() -> str:
     # 1) direct env
     direct = os.getenv("MISTMINT_COOKIE", "").strip()
@@ -205,18 +217,14 @@ def _find_chapter_slug_live(client: MistmintClient, novel_slug: str, ch_str: str
     return None
 
 def match_comment_in_thread(thread_json: Dict[str, Any], username: str, created_at_iso: str) -> Optional[Dict[str, Any]]:
-    """
-    Find the comment with the same (username, createdAt) in the chapter thread.
-    Returns the comment dict if found.
-    """
+    want = (username or "").strip()
     for c in thread_json.get("data", []):
-        u = (c.get("user") or {}).get("username")
-        if u == username and c.get("createdAt") == created_at_iso:
+        u = _user_str(c.get("user"))
+        if u == want and c.get("createdAt") == created_at_iso:
             return c
-        # also scan replies just in case the API nests them
         for rc in c.get("replies", []):
-            ru = (rc.get("user") or {}).get("username")
-            if ru == username and rc.get("createdAt") == created_at_iso:
+            ru = _user_str(rc.get("user"))
+            if ru == want and rc.get("createdAt") == created_at_iso:
                 return rc
     return None
 
@@ -228,7 +236,7 @@ def enrich_all_comments(client: MistmintClient, records: List[Dict[str, Any]]) -
         novel_slug    = rec.get("novelSlug")   or ""
         chapter_slug  = rec.get("chapterSlug") or ""
         chapter_label = rec.get("chapter") or rec.get("chapterLabel") or ""
-        username      = rec.get("user")        or ""
+        username      = _user_str(rec.get("user") or rec.get("username") or rec.get("displayName"))
         created_at    = rec.get("createdAt")   or ""
 
         item = dict(rec)
@@ -614,11 +622,12 @@ def load_comments_mistmint(comments_feed_url: str):
     user_keys       = ("user", "author", "username", "name", "displayName")
     reply_user_keys = ("replyToUser", "reply_user", "replyToName", "reply_name", "parentUser", "parent_user", "toUser", "to_user")
 
+    # Build id_to_user safely
     id_to_user = {}
     for obj in items:
         cid = pick(obj, *id_keys)
         if cid:
-            id_to_user[str(cid)] = pick(obj, *user_keys)
+            id_to_user[str(cid)] = _user_str(obj.get("user") or pick(obj, *user_keys))
 
     flags = _mistmint_reply_flags_from_raw(raw_used or "")
     client = MistmintClient(translator_cookie=_resolve_mistmint_cookie())
@@ -635,7 +644,7 @@ def load_comments_mistmint(comments_feed_url: str):
 
     for i, obj in enumerate(enriched):
         novel_title  = pick(obj, "novel", "novelTitle", "title").strip()
-        author       = pick(obj, *user_keys).strip()
+        author       = _user_str(obj.get("user") or pick(obj, *user_keys))
         body_raw     = (pick(obj, "content", "body", "text", "message") or "").strip()
         posted_at    = pick(obj, "postedAt", "createdAt", "created_at", "date", "timestamp")
 
@@ -659,8 +668,8 @@ def load_comments_mistmint(comments_feed_url: str):
             _disp, ch_num = _mistmint_parse_chapter_label(chapter_lbl)
             if ch_num is not None:
                 alt = _find_chapter_slug_live(client, novel_slug, ch_num)
-                item["chapterSlug"] = alt
                 if alt:
+                    obj["chapterSlug"] = alt     # ← was item["chapterSlug"]
                     chapter_slug = alt
 
         # Canonical chapter field for the feed
@@ -668,15 +677,15 @@ def load_comments_mistmint(comments_feed_url: str):
             chapter = f"mm://novel/{novel_slug}/chapter/{chapter_slug}"
         else:
             chapter = normalize_mistmint_chapter_label(chapter_lbl)
-
+        
         # --- Resolve reply target ---
         reply_to = pick(obj, *reply_user_keys)
         if not reply_to:
             pid = pick(obj, *parent_keys)
             if pid and str(pid) in id_to_user:
                 reply_to = id_to_user[str(pid)]
-
-        # NEW: strongest resolver – use enriched chapterId if present
+        
+        # strongest: use enriched chapterId directly
         if not reply_to:
             chap_id_enriched = obj.get("chapterId")
             if chap_id_enriched:
@@ -689,37 +698,24 @@ def load_comments_mistmint(comments_feed_url: str):
                 )
                 if who and (ALLOW_SELF_REPLIES or who.strip().casefold() != author.casefold()):
                     reply_to = who
-
-        # Existing slug-based fallback remains (nice to keep as backup)
-        if not reply_to:
-            if chapter_slug and novel_slug:
-                who = resolve_reply_to_on_chapter_by_label(
-                    novel_title=novel_title,
-                    chapter_label=chapter,
-                    author=author,
-                    body_raw=body_raw,
-                    posted_at=posted_at,
-                    novel_slug=novel_slug,
-                    chapter_slug_hint=chapter_slug,
-                )
-            elif novel_id:
-                who = resolve_reply_to_on_homepage_by_id(
-                    novel_id=novel_id,
-                    author=author,
-                    body_raw=body_raw,
-                    posted_at=posted_at
-                )
-            else:
-                who = ""
+        
+        # homepage fallback (if we have novel_id)
+        if not reply_to and novel_id:
+            who = resolve_reply_to_on_homepage_by_id(
+                novel_id=novel_id,
+                author=author,
+                body_raw=body_raw,
+                posted_at=posted_at
+            )
             if who and (ALLOW_SELF_REPLIES or who.strip().casefold() != author.casefold()):
                 reply_to = who
-                
-        # Adjacency heuristic as a last resort
+        
+        # adjacency heuristic last
         if not reply_to and flags and i > 0 and i-1 < len(flags) and flags[i-1]:
             prev = enriched[i-1]
-            prev_author = pick(prev, *user_keys)
-            same_novel  = novel_title == (pick(prev, "novel", "novelTitle", "title").strip())
-            t_cur  = _parse_when(obj)
+            prev_author = _user_str(prev.get("user") or pick(prev, *user_keys))
+            same_novel = novel_title == (pick(prev, "novel", "novelTitle", "title").strip())
+            t_cur = _parse_when(obj)
             t_prev = _parse_when(prev)
             close_in_time = (t_cur and t_prev and abs((t_cur - t_prev).total_seconds()) <= 120)
             if prev_author and author and prev_author != author and same_novel and close_in_time:
