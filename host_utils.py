@@ -1005,6 +1005,8 @@ def load_comments_mistmint(comments_feed_url: str):
 
     print(f"[mistmint] loaded {len(out)} raw comment(s)")
     diag_ok("comments-loaded", count=len(out))
+    for e in out[:5]:
+        print(f"[mistmint] sample guid={e.get('guid')} title={e.get('novel_title')} chap={e.get('chapter')}")
     return out
 
 # =============================================================================
