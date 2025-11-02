@@ -69,11 +69,12 @@ CHAPTERID_RE = re.compile(r'"chapterId"\s*:\s*"([0-9a-f-]{36})"', re.I)
 
 class MistmintClient:
     def __init__(self, translator_cookie: Optional[str] = None, timeout: int = 20):
+        if translator_cookie is None:
+            translator_cookie = _resolve_mistmint_cookie()
         self.s = requests.Session()
         self.s.headers.update(UA)
         self.timeout = timeout
         self.cookie = translator_cookie
-        # cache to avoid re-fetching the same page
         self._chapter_id_cache: Dict[Tuple[str, str], Optional[str]] = {}
 
     def _get(self, url: str, use_cookie: bool = False) -> requests.Response:
@@ -136,6 +137,17 @@ class MistmintClient:
         r.raise_for_status()
         return r.json()  # keys: data[], paging{}
 
+def _resolve_mistmint_cookie() -> str:
+    # 1) direct env
+    direct = os.getenv("MISTMINT_COOKIE", "").strip()
+    if direct:
+        return direct
+    # 2) mapping indirection: token_secret stores the *env var name*
+    env_name = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("token_secret", "").strip()
+    if env_name:
+        return os.getenv(env_name, "").strip()
+    return ""
+
 def extract_chapter_mistmint(value: str) -> str:
     """
     Fallback used only when we’re given a URL/URI instead of a human chapter label.
@@ -174,13 +186,9 @@ def extract_chapter_mistmint(value: str) -> str:
     return "Homepage"
 
 def _find_chapter_slug_live(client: MistmintClient, novel_slug: str, ch_str: str) -> str | None:
-    """
-    GET /novels/<novel_slug> and find an <a href="/novels/<novel_slug>/<slug>">
-    whose <slug> tail is either 'chapter-<N>' or '<anything>-chapter-<N>'.
-    Returns that <slug> (tail only) or None.
-    """
     url = f"{BASE_APP}/novels/{novel_slug}"
-    r = client._get(url, use_cookie=False)
+    # use cookie if you have one; some listings are gated
+    r = client._get(url, use_cookie=bool(client.cookie))
     if not (r and r.text):
         return None
 
@@ -193,7 +201,7 @@ def _find_chapter_slug_live(client: MistmintClient, novel_slug: str, ch_str: str
             tail = parts[-1].lower()
             # allow "chapter-4" OR "…-chapter-4"
             if re.fullmatch(rf'(?:.*-)?chapter-{re.escape(str(ch_str))}', tail, flags=re.I):
-                return parts[-1]  # return the tail slug exactly as on site
+                return parts[-1]  # exact tail slug
     return None
 
 def match_comment_in_thread(thread_json: Dict[str, Any], username: str, created_at_iso: str) -> Optional[Dict[str, Any]]:
@@ -212,7 +220,10 @@ def match_comment_in_thread(thread_json: Dict[str, Any], username: str, created_
                 return rc
     return None
 
-def enrich_all_comments(
+def enrich_all_comments(client: MistmintClient, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out = []
+    thread_cache: Dict[str, Dict[str, Any]] = {}
+    
     client: MistmintClient,
     records: List[Dict[str, Any]]
 ) -> List[Dict[str, Any]]:
@@ -227,46 +238,58 @@ def enrich_all_comments(
     """
     out = []
     for rec in records:
-        novel_slug = rec.get("novelSlug") or ""
+        novel_slug   = rec.get("novelSlug")   or ""
         chapter_slug = rec.get("chapterSlug") or ""
-        username = rec.get("user") or ""
-        created_at = rec.get("createdAt") or ""
-        url = client.build_url(novel_slug, chapter_slug)
+        chapter_label = rec.get("chapter") or rec.get("chapterLabel") or ""   # ← add this
+        username     = rec.get("user")        or ""
+        created_at   = rec.get("createdAt")   or ""
 
+        # Start item with placeholders; we'll set url after slug discovery
         item = dict(rec)
-        item["url"] = url
+        item["url"] = ""
         item["chapterId"] = None
         item["gated"] = False
         item["is_reply"] = None
         item["parentId"] = None
         item["commentId"] = None
 
+        # ── BEGIN: new chapterId resolution with fallback ───────────────────
+        cid, gated = (None, False)
+
+        # Try direct slug first (if API gave one)
         if chapter_slug:
-            chapter_id, gated = client.get_chapter_id(novel_slug, chapter_slug)
-            item["chapterId"] = chapter_id
-            item["gated"] = gated
+            cid, gated = client.get_chapter_id(novel_slug, chapter_slug)
 
-            if chapter_id:  # only if we can see the thread
-                # light backoff in case you’re looping a lot
+        # If that failed, try to discover the real slug from the novel page
+        if not cid:
+            # parse "Chapter 12" / "Chapter Extra 3" → numeric
+            _, ch_num = _mistmint_parse_chapter_label(chapter_label)
+            if ch_num is not None:
+                alt = _find_chapter_slug_live(client, novel_slug, ch_num)
+                if alt:
+                    chapter_slug = alt  # adopt discovered slug
+                    cid, gated = client.get_chapter_id(novel_slug, alt)
+
+        item["chapterId"] = cid
+        item["gated"] = gated
+        # ── END: new block ──────────────────────────────────────────────────
+
+        # Build URL now that chapter_slug may have changed
+        item["url"] = client.build_url(novel_slug, chapter_slug)
+
+        # Thread fetch only if we resolved a chapterId
+        if cid:
+            if cid not in thread_cache:
                 time.sleep(0.2)
-                thread = client.fetch_chapter_comments(chapter_id, skip_page=0, limit=100)
-                hit = match_comment_in_thread(thread, username=username, created_at_iso=created_at)
-                if hit:
-                    item["commentId"] = hit.get("id")
-                    item["parentId"] = hit.get("parentId")
-                    item["is_reply"] = bool(hit.get("parentId"))
-                else:
-                    # not found in first page; optionally iterate more pages using thread["paging"]
-                    pass
+                thread_cache[cid] = client.fetch_chapter_comments(cid, skip_page=0, limit=100)
+            thread = thread_cache[cid]
+            hit = match_comment_in_thread(thread, username=username, created_at_iso=created_at)
 
-        # Novel-level comments: URL present, but reply detection unavailable without a novel-comments API
         out.append(item)
     return out
-
+    
 if __name__ == "__main__":
-    # If you want to try with a translator cookie for gated chapters, set it here:
-    COOKIE = None  # e.g., "mm_session=abcd; other=xyz"
-    client = MistmintClient(translator_cookie=COOKIE)
+    client = MistmintClient() 
 
     blob = client.fetch_all_comments()
     enriched = enrich_all_comments(client, blob.get("data", []))
@@ -321,8 +344,8 @@ def _extract_data_array_segment(raw: str) -> str | None:
     return None
 
 def _mistmint_headers():
-    token  = os.getenv("MISTMINT_TOKEN", "").strip()   # optional
-    cookie = os.getenv("MISTMINT_COOKIE", "").strip()  # ← you have this
+    token  = os.getenv("MISTMINT_TOKEN", "").strip()
+    cookie = _resolve_mistmint_cookie()
     h = {
         "Accept": "application/json",
         "User-Agent": "Mozilla/5.0",
@@ -332,7 +355,6 @@ def _mistmint_headers():
     if token:
         h["Authorization"] = f"Bearer {token}"
     if cookie:
-        # e.g. "mistmint_token=eyJ...; other_cookie=val"
         h["Cookie"] = cookie
     return h
 
@@ -377,7 +399,7 @@ def resolve_reply_to_on_chapter_by_label(
             return ""
         novel_slug = base.split("/")[-1]
 
-    client = MistmintClient(translator_cookie=os.getenv("MISTMINT_COOKIE", "").strip())
+    client = MistmintClient(translator_cookie=_resolve_mistmint_cookie())
 
     chapter_slug = chapter_slug_hint
     if not chapter_slug:
@@ -538,8 +560,8 @@ def load_comments_mistmint(comments_feed_url: str):
     base_headers = {
         "Accept": "application/json",
         "User-Agent": "Mozilla/5.0",
-        "Origin": "https://mistminthaven.com",
-        "Referer": "https://mistminthaven.com/",
+        "Origin": "https://www.mistminthaven.com",
+        "Referer": "https://www.mistminthaven.com/",
     }
 
     def unauth(payload_text: str, payload_json: dict | None) -> bool:
