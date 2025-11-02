@@ -136,6 +136,54 @@ CHAPTERID_RE = re.compile(
     re.I
 )
 
+def match_comment_on_homepage_by_id(novel_id: str, author: str, body_raw: str, posted_at: str) -> tuple[dict|None, str]:
+    """
+    Return (matching_comment_obj, parent_user_name) from the novel homepage thread.
+    parent_user_name is "" if the hit is top-level.
+    """
+    if not novel_id:
+        return None, ""
+
+    # fetch/cached payload
+    if novel_id in _MISTMINT_HOME_CACHE:
+        payload = _MISTMINT_HOME_CACHE[novel_id]
+        diag_ok("homepage-cache-hit", novel_id=novel_id)
+    else:
+        url = f"https://api.mistminthaven.com/api/comments/novel/{novel_id}?skipPage=0&limit=50"
+        payload = _http_get_json(url) or {}
+        _MISTMINT_HOME_CACHE[novel_id] = payload
+        diag_ok("homepage-fetch", novel_id=novel_id)
+
+    want_author = (author or "").strip()
+    want_body   = _norm(body_raw)
+    want_dt     = _iso_dt(posted_at)
+
+    def _time_ok(s):
+        if not want_dt:
+            return True
+        try:
+            got = _iso_dt(s or "")
+            return (not got) or abs((want_dt - got).total_seconds()) <= 300
+        except Exception:
+            return True
+
+    for top in (payload.get("data") or []):
+        # top-level
+        top_user = _user_str(top.get("user"))
+        if top_user == want_author and _norm(top.get("content", "")) == want_body and _time_ok(top.get("createdAt")):
+            diag_ok("homepage-match-top", novel_id=novel_id, comment_id=top.get("id"))
+            return top, ""
+        # replies
+        for rep in (top.get("replies") or []):
+            rep_user = _user_str(rep.get("user"))
+            if rep_user == want_author and _norm(rep.get("content", "")) == want_body and _time_ok(rep.get("createdAt")):
+                parent_user = _user_str(top.get("user"))
+                diag_ok("homepage-match-reply", novel_id=novel_id, comment_id=rep.get("id"), parent=parent_user)
+                return rep, parent_user
+
+    diag_fail("homepage-match-miss", novel_id=novel_id, author=author)
+    return None, ""
+
 def resolve_chapter_id(novel_slug: str, chapter_slug: str) -> str:
     url = f"https://www.mistminthaven.com/novels/{novel_slug}/{chapter_slug}"
     try:
@@ -451,6 +499,20 @@ def enrich_all_comments(client: MistmintClient, records: List[Dict[str, Any]]) -
                 item["commentId"] = hit.get("id") or hit.get("_id")
                 item["is_reply"]  = bool(hit.get("parentId") or hit.get("replyToId"))
                 item["parentId"]  = hit.get("parentId") or hit.get("replyToId")
+        # If it's a homepage comment (no chapter slug), try to match on the homepage thread to get the UUID
+        if not item.get("commentId") and not chapter_slug and novel_id:
+            hit, parent_user = match_comment_on_homepage_by_id(
+                novel_id=novel_id,
+                author=username,
+                body_raw=body_raw,
+                posted_at=created_at
+            )
+            if hit:
+                item["commentId"] = hit.get("id") or hit.get("_id")
+                item["is_reply"]  = bool(hit.get("parentId") or hit.get("replyToId"))
+                item["parentId"]  = hit.get("parentId") or hit.get("replyToId")
+                if item["is_reply"] and parent_user:
+                    item["replyToUser"] = parent_user
                 # NEW: bubble up the parent's username so loader can render reply_chain right away
                 if item["is_reply"] and item["parentId"]:
                     pid = str(item["parentId"])
