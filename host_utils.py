@@ -200,7 +200,8 @@ async def _scrape_paid_chapters_mistmint_from_state(session, novel_url: str, hos
                 "pubDate":     pub_dt,
                 "guid":        guid_val,
                 "coin":        coin_amt,
-                "novel_title": novel_title
+                "novel_title": novel_title,
+                "source":      "manual",
             })
 
         novel_state["last_posted_chapter"] = latest_avail
@@ -1287,6 +1288,7 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
     novel_title, details = _mistmint_find_details_by_url(host, novel_url)
     desc_html = (details.get("custom_description") or "")
     novel_slug = _mistmint_slug_from_url(novel_url)
+    short_code = (details.get("short_code") or "").strip()
     api_url = f"{BASE_API}/novels/slug/{novel_slug}/chapters"
     base = f"{BASE_APP}/novels/{novel_slug}/"
 
@@ -1297,6 +1299,12 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
                 diag_fail("mistmint-paid-scrape-http", url=api_url, code=resp.status)
                 return [], ""
             payload = await resp.json()
+            _gha("notice", "mistmint-paid-scrape-ok", json.dumps({
+                "url": api_url,
+                "status": resp.status,
+                "volumes": len((payload or {}).get("data", []) or []),
+                "chapters": sum(len(v.get("chapters") or []) for v in (payload or {}).get("data", []))
+            })[:300])
     except Exception as e:
         diag_fail("mistmint-paid-scrape-ex", url=api_url, error=str(e))
         return [], ""
@@ -1312,6 +1320,7 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
             nameextend  = (ch.get("title") or "").strip()           # e.g., "1.2"
             slug_tail   = (ch.get("slug") or "").strip()
             link        = base + slug_tail if slug_tail else novel_url
+            api_uuid    = (ch.get("id") or "").strip() 
             guid        = (ch.get("id") or "").strip()
             price       = str(ch.get("price") if ch.get("price") is not None else "")
             created     = (ch.get("createdAt") or "").strip()
@@ -1320,6 +1329,18 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
                 pub_dt = datetime.datetime.fromisoformat(created.replace("Z", "+00:00")).astimezone(datetime.timezone.utc)
             except Exception:
                 pub_dt = datetime.datetime.now(datetime.timezone.utc)
+                
+            # Stable guid matches manual/state, so history merge will collapse duplicates.
+            try:
+                chapter_num_int = int(float(chapter_num))                   # handles "12" or "12.0"
+            except Exception:
+                chapter_num_int = None
+
+            stable_guid = (
+                f"{short_code}-{chapter_num_int}"
+                if short_code and chapter_num_int is not None
+                else (api_uuid or link)                                     # fallback safety
+            )
 
             items.append({
                 "volume":      vol_title,
@@ -1327,9 +1348,11 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
                 "nameextend":  nameextend,
                 "link":        link,
                 "description": desc_html,
-                "pubDate":     pub_dt,
-                "guid":        guid or link,    # safety
+                "pubDate":     pub_dt,                                      # from createdAt
+                "guid":        stable_guid,                                 # NEW: stable, history-friendly
                 "coin":        price,
+                "source":      "api",                                       # NEW: so generator can skip override
+                "api_guid":    api_uuid,                                    # optional: keep real UUID for logs
             })
 
     # Let the caller (paid_feed_generator) handle 7-day trimming and sorting.
