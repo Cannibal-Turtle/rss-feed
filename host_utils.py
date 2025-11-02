@@ -503,6 +503,19 @@ def _resolve_mistmint_cookie() -> str:
         return os.getenv(env_name, "").strip()
     return ""
 
+# ─── Mode helpers (paste after _resolve_mistmint_cookie) ──────────────────────
+def _mistmint_has_creds() -> bool:
+    return bool(os.getenv("MISTMINT_TOKEN", "").strip() or _resolve_mistmint_cookie())
+
+def _mistmint_mode() -> str:
+    return "STATE" if _manual_mode_on() or not _mistmint_has_creds() else "API"
+
+def _log_mistmint_mode(reason: str, novel_url: str = ""):
+    cookie = bool(_resolve_mistmint_cookie())
+    token  = bool(os.getenv("MISTMINT_TOKEN", "").strip())
+    _gha("notice", "mistmint-mode",
+         f"{reason}: mode={_mistmint_mode()} cookie={cookie} token={token} force={_manual_mode_on()} url={novel_url}")
+
 def extract_chapter_mistmint(value: str) -> str:
     """
     Fallback used only when we’re given a URL/URI instead of a human chapter label.
@@ -1265,10 +1278,12 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
       coin        -> price
     Falls back to state-file synthetic exporter if no cookie.
     """
-    cookie = _resolve_mistmint_cookie()
-    if _manual_mode_on() or not cookie:
+
+    _log_mistmint_mode("scrape-paid", novel_url)
+    if _mistmint_mode() == "STATE":
         return await _scrape_paid_chapters_mistmint_from_state(session, novel_url, host)
 
+    # we are in API mode here
     novel_title, details = _mistmint_find_details_by_url(host, novel_url)
     desc_html = (details.get("custom_description") or "")
     novel_slug = _mistmint_slug_from_url(novel_url)
@@ -1322,25 +1337,33 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
 
 
 async def novel_has_paid_update_mistmint_async(session, novel_url: str) -> bool:
-    """
-    Mistmint (API): True if this specific novel has any *paid* (isFree == False)
-    chapter whose createdAt is within the last 7 days. Falls back to state file
-    if no cookie is available.
-    """
-    cookie = _resolve_mistmint_cookie()
-    if _manual_mode_on() or not cookie:
-        # Fallback to old state model (best effort)
+    _log_mistmint_mode("has-paid-check", novel_url)
+
+    if _mistmint_mode() == "STATE":
         block = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("novels", {})
-        # try to find this novel's short_code
         short_code = None
         for _title, det in block.items():
             if (det.get("novel_url") or "").rstrip("/") == (novel_url or "").rstrip("/"):
-                short_code = det.get("short_code")
-                break
+                short_code = det.get("short_code"); break
         if not short_code:
             return False
-        state = _load_mistmint_state()
-        entry = state.get(short_code, {"last_posted_chapter": 0, "latest_available_chapter": 0})
+        st = _load_mistmint_state()
+        entry = st.get(short_code, {"last_posted_chapter": 0, "latest_available_chapter": 0})
+        return int(entry.get("latest_available_chapter", 0)) > int(entry.get("last_posted_chapter", 0))
+        
+    cookie = _resolve_mistmint_cookie()
+
+    # Fallback to state if no cookie or manual mode
+    if _manual_mode_on() or not cookie:
+        block = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("novels", {})
+        short_code = None
+        for _title, det in block.items():
+            if (det.get("novel_url") or "").rstrip("/") == (novel_url or "").rstrip("/"):
+                short_code = det.get("short_code"); break
+        if not short_code:
+            return False
+        st = _load_mistmint_state()
+        entry = st.get(short_code, {"last_posted_chapter": 0, "latest_available_chapter": 0})
         return int(entry.get("latest_available_chapter", 0)) > int(entry.get("last_posted_chapter", 0))
 
     # API path
@@ -1356,20 +1379,43 @@ async def novel_has_paid_update_mistmint_async(session, novel_url: str) -> bool:
         diag_fail("mistmint-paid-check-ex", url=url, error=str(e))
         return False
 
-    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
+    nonfree = []
     for vol in (data or {}).get("data", []) or []:
         for ch in (vol.get("chapters") or []):
-            if ch.get("isFree") is False:
-                s = ch.get("createdAt") or ""
-                try:
-                    dt = datetime.datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(datetime.timezone.utc)
-                    if dt >= cutoff:
-                        return True
-                except Exception:
-                    # if createdAt is weird but paid, be conservative and skip
-                    pass
-    return False
+            if ch.get("isFree") is False and not ch.get("isHidden"):
+                nonfree.append(ch)
+    if not nonfree:
+        return False
 
+    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
+
+    def _dt(s):
+        try:
+            return datetime.datetime.fromisoformat((s or "").replace("Z","+00:00")).astimezone(datetime.timezone.utc)
+        except Exception:
+            return None
+
+    # Recent if createdAt OR updatedAt within 7 days
+    try_recent = any(
+        (lambda ca, ua: (ca and ca >= cutoff) or (ua and ua >= cutoff))(
+            _dt(ch.get("createdAt")), _dt(ch.get("updatedAt"))
+        )
+        for ch in nonfree
+    )
+
+    # Or delta vs state (latest paid chapterNumber > last_posted_chapter)
+    block = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("novels", {})
+    short_code = None
+    for _title, det in block.items():
+        if (det.get("novel_url") or "").rstrip("/") == (novel_url or "").rstrip("/"):
+            short_code = det.get("short_code"); break
+    latest_num = max(int(float(ch.get("chapterNumber") or 0)) for ch in nonfree)
+    last_posted = 0
+    if short_code:
+        st = _load_mistmint_state()
+        last_posted = int((st.get(short_code, {}) or {}).get("last_posted_chapter", 0))
+
+    return try_recent or (latest_num > last_posted)
 
 def split_paid_chapter_mistmint(raw_title: str):
     """
