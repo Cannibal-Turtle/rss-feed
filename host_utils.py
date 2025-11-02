@@ -462,7 +462,7 @@ def match_comment_in_thread(thread_json: Dict[str, Any], username: str, created_
     want_name = _canon_name(username)
     want_dt = _iso_dt(created_at_iso)
 
-    def _time_close(a: str, b: datetime | None) -> bool:
+    def _time_close(a: str, b: Optional[datetime.datetime]) -> bool:
         if want_dt is None:
             # if we don't have a usable target, allow string equality as a last resort
             return (a or "") == (created_at_iso or "")
