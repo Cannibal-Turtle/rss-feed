@@ -45,8 +45,8 @@ def _jwt_expiry_unix(token: str):
 def maybe_dispatch_token_alerts(threshold_days: int = 1):
     """Alert once per (host, token_secret, exp) when a JWT is ≤ threshold from expiry."""
     repo = os.getenv("GITHUB_REPOSITORY", "")
-    pat  = os.getenv("PAT_GITHUB", "")
-    if not repo or not pat:
+    token = os.getenv("PAT_GITHUB") or os.getenv("GITHUB_TOKEN")  # ← prefer PAT, fallback to GITHUB_TOKEN
+    if not repo or not token:
         return
 
     state = _load_alert_state()
@@ -54,7 +54,7 @@ def maybe_dispatch_token_alerts(threshold_days: int = 1):
     url = f"https://api.github.com/repos/{repo}/dispatches"
     headers = {
         "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {pat}",
+        "Authorization": f"Bearer {token}",
         "X-GitHub-Api-Version": "2022-11-28",
     }
 
