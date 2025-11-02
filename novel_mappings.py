@@ -59,11 +59,11 @@ HOSTING_SITE_DATA = {
                 "discord_role_id": "<@&1431675643078250646>",
                 "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught",
                 "featured_image": "https://i.imgur.com/YYx6UbX.jpeg",
-                "pub_date_override": {"hour": 12, "minute": 0, "second": 0},
+                "pub_date_override": {"hour": 12, "minute": 0, "second": 0}, #no longer used for automatic updates
                 "novel_id": "8ebd3484-d5b2-422d-a22d-11404bc8481f", #comment homepage for scraping reply chain
                 # for manually updated paid feed
                 "short_code": "tdlbkgc", #for parsing feed without guid. Also for short_code.
-                "coin_price": 5,
+                "coin_price": 5, #no longer used for automatic updates
 
                 # ─── webhook-only fields ───
                 "chapter_count": "734 chapters + 3 extras",
