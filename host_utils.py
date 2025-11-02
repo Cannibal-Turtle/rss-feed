@@ -274,6 +274,26 @@ def enrich_all_comments(client: MistmintClient, records: List[Dict[str, Any]]) -
                 item["commentId"] = hit.get("id") or hit.get("_id")
                 item["is_reply"]  = bool(hit.get("parentId") or hit.get("replyToId"))
                 item["parentId"]  = hit.get("parentId") or hit.get("replyToId")
+                # NEW: bubble up the parent's username so loader can render reply_chain right away
+                if item["is_reply"] and item["parentId"]:
+                    pid = str(item["parentId"])
+                    parent_user = ""
+                    # parent is top-level on Mistmint, so scan top-level data[]
+                    for top in thread.get("data", []):
+                        if str(top.get("id") or top.get("_id")) == pid:
+                            parent_user = _user_str((top.get("user") or {}))
+                            break
+                    if not parent_user:
+                        # ultra-safe fallback: scan all replies too
+                        for top in thread.get("data", []):
+                            for rep in (top.get("replies") or []):
+                                if str(rep.get("id") or rep.get("_id")) == pid:
+                                    parent_user = _user_str((rep.get("user") or {}))
+                                    break
+                            if parent_user:
+                                break
+                    if parent_user:
+                        item["replyToUser"] = parent_user
 
         out.append(item)
     return out
@@ -721,7 +741,7 @@ def load_comments_mistmint(comments_feed_url: str):
             if prev_author and author and prev_author != author and same_novel and close_in_time:
                 reply_to = prev_author
 
-        body = f"In reply to {reply_to}. {body_raw}" if reply_to else body_raw
+        body = body_raw
 
         out.append({
             "novel_title": novel_title,
