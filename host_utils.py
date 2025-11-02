@@ -649,15 +649,6 @@ def _http_get_json(url: str, headers: dict | None = None):
         print(f"[mistmint] GET {url} failed: {e}")
         return None
 
-def _norm(s: str) -> str:
-    return re.sub(r"\s+", " ", (s or "").strip())
-
-def _iso_dt(s: str):
-    try:
-        return datetime.datetime.fromisoformat((s or "").replace("Z", "+00:00"))
-    except Exception:
-        return None
-
 # let self-replies show up if desired
 ALLOW_SELF_REPLIES = True
 
