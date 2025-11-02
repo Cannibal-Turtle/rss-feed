@@ -15,6 +15,71 @@ import hashlib
 
 from novel_mappings import HOSTING_SITE_DATA
 
+# === GitHub Actions diagnostics helpers ======================================
+import traceback, time
+from collections import Counter
+from contextlib import contextmanager
+
+DIAG = {"counts": Counter(), "errors": [], "events": []}
+
+def _gha(level: str, title: str, msg: str = ""):
+    # levels: error, warning, notice
+    print(f"::{level} title={title}::{msg}")
+
+def diag_ok(kind: str, **ctx):
+    DIAG["counts"][f"ok:{kind}"] += 1
+    if ctx:
+        DIAG["events"].append({"ok": kind, **ctx})
+
+def diag_fail(kind: str, **ctx):
+    DIAG["counts"][f"fail:{kind}"] += 1
+    DIAG["errors"].append({"fail": kind, **ctx})
+    # escalate level by kind
+    level = "warning"
+    if kind.startswith(("api-5xx","api-auth","api-timeout","api-exception")):
+        level = "error"
+    _gha(level, kind, json.dumps(ctx, ensure_ascii=False)[:900])
+
+@contextmanager
+def diag_step(name: str, **ctx):
+    print(f"::group::{name}")
+    t0 = time.time()
+    try:
+        yield
+        diag_ok(f"step:{name}", **ctx)
+    except Exception as e:
+        diag_fail(f"step:{name}", error=str(e), tb=traceback.format_exc(limit=8), **ctx)
+        raise
+    finally:
+        dt = int((time.time() - t0) * 1000)
+        print(f"{name} took {dt} ms")
+        print("::endgroup::")
+
+def diag_snapshot(name: str, obj):
+    try:
+        os.makedirs("snapshots", exist_ok=True)
+        with open(f"snapshots/{name}.json","w",encoding="utf-8") as f:
+            json.dump(obj, f, ensure_ascii=False, indent=2)
+        _gha("notice","snapshot",f"wrote snapshots/{name}.json")
+    except Exception as e:
+        _gha("warning","snapshot-failed",str(e))
+
+def diag_summary(save_json: bool = True):
+    print("::group::diagnostic-summary")
+    for k,v in DIAG["counts"].most_common():
+        print(f"{k}: {v}")
+    if DIAG["errors"]:
+        _gha("error","first-error", json.dumps(DIAG["errors"][0], ensure_ascii=False)[:900])
+    print("::endgroup::")
+    if save_json:
+        try:
+            os.makedirs("snapshots", exist_ok=True)
+            with open("snapshots/diag.json","w",encoding="utf-8") as f:
+                json.dump(DIAG, f, ensure_ascii=False, indent=2)
+            _gha("notice","diag-summary","wrote snapshots/diag.json")
+        except Exception as e:
+            _gha("warning","diag-save-failed",str(e))
+# ==============================================================================
 
 # =============================================================================
 # GLOBAL CONSTANTS
@@ -81,7 +146,24 @@ class MistmintClient:
         headers = {}
         if use_cookie and self.cookie:
             headers["Cookie"] = self.cookie
-        return self.s.get(url, headers=headers, timeout=self.timeout, allow_redirects=True)
+        try:
+            r = self.s.get(url, headers=headers, timeout=self.timeout, allow_redirects=True)
+        except requests.Timeout:
+            diag_fail("api-timeout", url=url, use_cookie=use_cookie)
+            raise
+        except Exception as e:
+            diag_fail("api-exception", url=url, use_cookie=use_cookie, error=str(e))
+            raise
+    
+        if r.status_code >= 500:
+            diag_fail("api-5xx", url=url, code=r.status_code)
+        elif r.status_code in (401, 403):
+            diag_fail("api-auth", url=url, code=r.status_code, use_cookie=use_cookie)
+        elif not r.ok:
+            diag_fail("api-http", url=url, code=r.status_code)
+        else:
+            diag_ok("api-get", url=url, code=r.status_code, use_cookie=use_cookie)
+        return r
 
     def fetch_all_comments(self) -> Dict[str, Any]:
         r = self._get(ALL_COMMENTS_URL)
@@ -95,12 +177,43 @@ class MistmintClient:
         return f"{BASE_APP}/novels/{novel_slug}"
 
     def get_chapter_id(self, novel_slug: str, chapter_slug: str) -> Tuple[Optional[str], bool]:
-        """
-        Returns (chapter_id, gated)
-        gated=True if we couldn't extract chapterId anonymously (and also failed with cookie if provided)
-        """
         if not chapter_slug:
             return None, False
+        key = (novel_slug, chapter_slug)
+        if key in self._chapter_id_cache:
+            cid = self._chapter_id_cache[key]
+            return cid, cid is None
+    
+        url = self.build_url(novel_slug, chapter_slug)
+    
+        # 1) try anonymous
+        with diag_step("chapterId-anon", url=url):
+            r = self._get(url, use_cookie=False)
+            html = r.text or ""
+            m = CHAPTERID_RE.search(html)
+            if m:
+                cid = m.group(1)
+                self._chapter_id_cache[key] = cid
+                diag_ok("chapterid-extract", novel=novel_slug, chapter=chapter_slug, gated=False)
+                return cid, False
+            diag_fail("chapterid-miss-anon", novel=novel_slug, chapter=chapter_slug)
+    
+        # 2) try cookie if available
+        if self.cookie:
+            with diag_step("chapterId-cookie", url=url):
+                r2 = self._get(url, use_cookie=True)
+                m2 = CHAPTERID_RE.search((r2.text or ""))
+                if m2:
+                    cid = m2.group(1)
+                    self._chapter_id_cache[key] = cid
+                    diag_ok("chapterid-extract-cookie", novel=novel_slug, chapter=chapter_slug)
+                    return cid, False
+                diag_fail("chapterid-miss-cookie", novel=novel_slug, chapter=chapter_slug)
+    
+        # gated or unknown
+        self._chapter_id_cache[key] = None
+        diag_fail("chapterid-unavailable", novel=novel_slug, chapter=chapter_slug)
+        return None, True
 
         key = (novel_slug, chapter_slug)
         if key in self._chapter_id_cache:
@@ -133,9 +246,15 @@ class MistmintClient:
 
     def fetch_chapter_comments(self, chapter_id: str, skip_page: int = 0, limit: int = 100) -> Dict[str, Any]:
         u = f"{BASE_API}/comments/chapter/{chapter_id}?skipPage={skip_page}&limit={limit}"
-        r = self._get(u, use_cookie=bool(self.cookie))  # cookie not strictly required for public
-        r.raise_for_status()
-        return r.json()  # keys: data[], paging{}
+        with diag_step("thread-fetch", chapter_id=chapter_id, page=skip_page, limit=limit):
+            r = self._get(u, use_cookie=bool(self.cookie))
+            try:
+                data = r.json()
+                diag_ok("thread-json", chapter_id=chapter_id, count=len(data.get("data", [])))
+                return data
+            except Exception as e:
+                diag_fail("thread-json-parse", chapter_id=chapter_id, error=str(e))
+                raise
 
 def _user_str(v: Any) -> str:
     """
@@ -221,11 +340,14 @@ def match_comment_in_thread(thread_json: Dict[str, Any], username: str, created_
     for c in thread_json.get("data", []):
         u = _user_str(c.get("user"))
         if u == want and c.get("createdAt") == created_at_iso:
+            diag_ok("comment-match", user=want, at=created_at_iso, where="top")
             return c
         for rc in c.get("replies", []):
             ru = _user_str(rc.get("user"))
             if ru == want and rc.get("createdAt") == created_at_iso:
+                diag_ok("comment-match", user=want, at=created_at_iso, where="reply")
                 return rc
+    diag_fail("comment-match-miss", user=want, at=created_at_iso, tops=len(thread_json.get("data", [])))
     return None
 
 def enrich_all_comments(client: MistmintClient, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -299,35 +421,43 @@ def enrich_all_comments(client: MistmintClient, records: List[Dict[str, Any]]) -
     return out
     
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--print", choices=["raw","enriched","both"], default="both")
-    args = parser.parse_args()
+    try:
+        import argparse
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--print", choices=["raw","enriched","both"], default="both")
+        args = parser.parse_args()
 
-    rows = load_comments_mistmint(ALL_COMMENTS_URL)
+        rows = load_comments_mistmint(ALL_COMMENTS_URL)
 
-    if args.print in ("raw","both"):
-        for r in rows:
-            tag = "reply" if r["reply_to"] else "top"
-            print(f"[{r['posted_at']}] {r['author']} → {r['novel_title']} [{tag}]")
-            print(f"   {r['description']}")
-            print(f"   chapter={r['chapter']}\n")
+        if args.print in ("raw","both"):
+            for r in rows:
+                tag = "reply" if r["reply_to"] else "top"
+                print(f"[{r['posted_at']}] {r['author']} → {r['novel_title']} [{tag}]")
+                print(f"   {r['description']}")
+                print(f"   chapter={r['chapter']}\n")
 
-    if args.print in ("enriched","both"):
-        client = MistmintClient()
-        blob = client.fetch_all_comments()
-        enriched = enrich_all_comments(client, blob.get("data", []))
-        for e in enriched:
-            tag = "reply" if e["is_reply"] else ("top" if e["is_reply"] is False else "unknown")
-            novel_name = e.get("novel") or e.get("novelTitle") or "?"
-            print(f"[{e.get('createdAt','?')}] {e.get('user','?')} → {novel_name} [{tag}]")
-            print(f"   {e.get('content','')}")
-            print(f"   {e.get('url','')}")
-            if e.get("chapterId"):
-                print(f"   chapterId={e.get('chapterId')}  commentId={e.get('commentId')} parentId={e.get('parentId')}")
-            if e.get("gated"):
-                print("   gated: true (needed cookie or skip)")
-            print()
+        if args.print in ("enriched","both"):
+            client = MistmintClient()
+            blob = client.fetch_all_comments()
+            enriched = enrich_all_comments(client, blob.get("data", []))
+            for e in enriched:
+                tag = "reply" if e["is_reply"] else ("top" if e["is_reply"] is False else "unknown")
+                novel_name = e.get("novel") or e.get("novelTitle") or "?"
+                print(f"[{e.get('createdAt','?')}] {e.get('user','?')} → {novel_name} [{tag}]")
+                print(f"   {e.get('content','')}")
+                print(f"   {e.get('url','')}")
+                if e.get("chapterId"):
+                    print(f"   chapterId={e.get('chapterId')}  commentId={e.get('commentId')} parentId={e.get('parentId')}")
+                if e.get("gated"):
+                    print("   gated: true (needed cookie or skip)")
+                print()
+    except Exception as e:
+        # record a fatal marker before letting Actions mark the step failed
+        diag_fail("fatal", error=str(e), exc_type=type(e).__name__)
+        raise
+    finally:
+        # ALWAYS emit the roll-up (and a JSON artifact) at the end
+        diag_summary(save_json=True)
         
 # --- Mistmint comment helpers -----------------------------------------------
 
@@ -406,9 +536,53 @@ ALLOW_SELF_REPLIES = True
 
 def resolve_reply_to_on_chapter_by_id(client: MistmintClient, chapter_id: str,
                                       author: str, body_raw: str, posted_at: str) -> str:
+    """
+    Try to resolve who this comment is replying to within a specific chapter thread.
+    Returns "" if it's a top-level comment or if no match is found.
+    """
     if not chapter_id:
         return ""
-    payload = client.fetch_chapter_comments(chapter_id, skip_page=0, limit=100)
+
+    with diag_step("reply-resolve-chapter", chapter_id=chapter_id, author=author):
+        payload = client.fetch_chapter_comments(chapter_id, skip_page=0, limit=100)
+
+        def _name(u):
+            u = u or {}
+            return (u.get("displayName") or u.get("username") or "").strip()
+
+        want_author = (author or "").strip().casefold()
+        want_body   = re.sub(r"\s+", " ", (body_raw or "").strip())
+        try:
+            want_dt = datetime.datetime.fromisoformat((posted_at or "").replace("Z", "+00:00"))
+        except Exception:
+            want_dt = None
+
+        def _is_same(obj) -> bool:
+            rep_user = _name(obj.get("user")).casefold()
+            rep_body = re.sub(r"\s+", " ", (obj.get("content") or "").strip())
+            try:
+                rep_dt = datetime.datetime.fromisoformat((obj.get("createdAt") or "").replace("Z", "+00:00"))
+            except Exception:
+                rep_dt = None
+            if rep_user != want_author or rep_body != want_body:
+                return False
+            # allow up to 5 minutes skew
+            return (not want_dt or not rep_dt or abs((want_dt - rep_dt).total_seconds()) <= 300)
+
+        for top in (payload.get("data") or []):
+            parent_user = _name(top.get("user"))
+            if _is_same(top):
+                diag_ok("reply-resolve-top", chapter_id=chapter_id)
+                return ""  # top-level, not a reply
+
+            for rep in (top.get("replies") or []):
+                if _is_same(rep):
+                    who = parent_user or _name(rep.get("toUser"))
+                    diag_ok("reply-resolve-hit", chapter_id=chapter_id, parent=who)
+                    return (who or "").strip()
+
+        diag_fail("reply-resolve-miss", chapter_id=chapter_id, author=author)
+        return ""
 
     def _name(u):
         u = u or {}
@@ -443,16 +617,22 @@ def resolve_reply_to_on_chapter_by_id(client: MistmintClient, chapter_id: str,
     return ""
                                              
 def resolve_reply_to_on_homepage_by_id(novel_id: str, author: str, body_raw: str, posted_at: str) -> str:
+    """
+    Resolve reply target from the novel homepage thread (not a specific chapter).
+    Returns the parent username or "" if not found.
+    """
     if not novel_id:
         return ""
+
+    # fetch or use cache, and log which path we took
     if novel_id in _MISTMINT_HOME_CACHE:
         payload = _MISTMINT_HOME_CACHE[novel_id]
+        diag_ok("homepage-cache-hit", novel_id=novel_id)
     else:
         url = f"https://api.mistminthaven.com/api/comments/novel/{novel_id}?skipPage=0&limit=50"
         payload = _http_get_json(url) or {}
         _MISTMINT_HOME_CACHE[novel_id] = payload
-
-    print(f"[mistmint] homepage-resolver novel_id={novel_id} author={author!r}")
+        diag_ok("homepage-fetch", novel_id=novel_id)
 
     want_author = (author or "").strip()
     want_body   = _norm(body_raw)
@@ -468,9 +648,10 @@ def resolve_reply_to_on_homepage_by_id(novel_id: str, author: str, body_raw: str
             if rep_user == want_author and rep_body == want_body:
                 skew_ok = (not want_dt or not rep_dt or abs((want_dt - rep_dt).total_seconds()) <= 300)
                 if skew_ok:
-                    print(f"[mistmint] matched reply: child={rep_user!r} → parent={parent_user!r}")
+                    diag_ok("reply-resolve-homepage-hit", novel_id=novel_id, parent=parent_user)
                     return parent_user
-    print("[mistmint] no homepage parent match")
+
+    diag_fail("reply-resolve-homepage-miss", novel_id=novel_id, author=author)
     return ""
     
 def _mistmint_reply_flags_from_raw(raw_text: str) -> list[bool]:
@@ -570,9 +751,13 @@ def load_comments_mistmint(comments_feed_url: str):
 
     def get_with(headers: dict, label: str):
         r = requests.get(comments_feed_url, headers=headers, timeout=20)
-        ctype = r.headers.get("content-type", "?")
+        # tiny snapshot about the HTTP attempt
+        diag_snapshot(f"comments-fetch-{label}", {
+            "status": r.status_code,
+            "ctype": r.headers.get("content-type", "?"),
+            "bytes": len(r.content)
+        })
         raw = r.text
-        print(f"[mistmint] try={label} status={r.status_code} ctype={ctype} bytes={len(r.content)}")
         pj = None
         try:
             pj = r.json()
@@ -583,30 +768,45 @@ def load_comments_mistmint(comments_feed_url: str):
     payload = None
     raw_used = ""
 
-    if token:
-        h1 = dict(base_headers)
-        h1["Authorization"] = f"Bearer {token}"
-        r, raw, pj = get_with(h1, "bearer")
-        if not unauth(raw, pj):
-            payload, raw_used = (pj if pj is not None else {}), raw
-        else:
-            h2 = dict(base_headers)
-            h2["Cookie"] = f"auth._token.local=Bearer%20{token}; auth.strategy=local"
-            r, raw, pj = get_with(h2, "cookie-from-token")
+    # ── FETCH PHASE ────────────────────────────────────────────────────────────
+    with diag_step("comments-fetch", url=comments_feed_url, has_token=bool(token), has_cookie=bool(cookie)):
+        if token:
+            h1 = dict(base_headers)
+            h1["Authorization"] = f"Bearer {token}"
+            r, raw, pj = get_with(h1, "bearer")
             if not unauth(raw, pj):
                 payload, raw_used = (pj if pj is not None else {}), raw
+                diag_ok("comments-fetch-ok", mode="bearer")
+            else:
+                h2 = dict(base_headers)
+                h2["Cookie"] = f"auth._token.local=Bearer%20{token}; auth.strategy=local"
+                r, raw, pj = get_with(h2, "cookie-from-token")
+                if not unauth(raw, pj):
+                    payload, raw_used = (pj if pj is not None else {}), raw
+                    diag_ok("comments-fetch-ok", mode="cookie-from-token")
+                else:
+                    diag_fail("comments-fetch-unauthorized", mode="bearer+cookie-from-token")
 
-    if payload is None and cookie:
-        h3 = dict(base_headers)
-        h3["Cookie"] = cookie
-        r, raw, pj = get_with(h3, "cookie-secret")
-        if not unauth(raw, pj):
-            payload, raw_used = (pj if pj is not None else {}), raw
+        if payload is None and cookie:
+            h3 = dict(base_headers)
+            h3["Cookie"] = cookie
+            r, raw, pj = get_with(h3, "cookie-secret")
+            if not unauth(raw, pj):
+                payload, raw_used = (pj if pj is not None else {}), raw
+                diag_ok("comments-fetch-ok", mode="cookie-secret")
+            else:
+                diag_fail("comments-fetch-unauthorized", mode="cookie-secret")
 
-    if payload is None:
-        print("[mistmint] unauthorized; set MISTMINT_TOKEN or MISTMINT_COOKIE")
-        return out
+        if payload is None:
+            diag_fail("comments-unauthorized")
+            print("[mistmint] unauthorized; set MISTMINT_TOKEN or MISTMINT_COOKIE")
+            return out
 
+        # keep this snapshot light; don’t dump the whole JSON
+        top_keys = list(payload)[:8] if isinstance(payload, dict) else []
+        diag_snapshot("comments-raw", {"type": type(payload).__name__, "top_keys": top_keys})
+
+    # ── ITEM EXTRACTION ───────────────────────────────────────────────────────
     def pick_list(obj):
         if isinstance(obj, list):
             return obj
@@ -624,6 +824,8 @@ def load_comments_mistmint(comments_feed_url: str):
         return []
 
     items = pick_list(payload)
+    diag_snapshot("comments-items", {"count": len(items)})
+
     if not items:
         preview = str(payload)
         preview = preview[:200] + ("…" if len(preview) > 200 else "")
@@ -650,7 +852,12 @@ def load_comments_mistmint(comments_feed_url: str):
             id_to_user[str(cid)] = _user_str(obj.get("user") or pick(obj, *user_keys))
 
     flags = _mistmint_reply_flags_from_raw(raw_used or "")
-    client = MistmintClient(translator_cookie=_resolve_mistmint_cookie())
+
+    # ── ENRICHMENT PHASE ──────────────────────────────────────────────────────
+    with diag_step("comments-enrich"):
+        client = MistmintClient(translator_cookie=_resolve_mistmint_cookie())
+        enriched = enrich_all_comments(client, items)
+        diag_snapshot("comments-enriched", {"count": len(enriched)})
 
     def _parse_when(d):
         s = pick(d, "postedAt", "createdAt", "created_at", "date", "timestamp")
@@ -658,9 +865,6 @@ def load_comments_mistmint(comments_feed_url: str):
             return datetime.datetime.fromisoformat((s or "").replace("Z", "+00:00"))
         except Exception:
             return None
-    
-    # Pre-enrich to get chapterId/slug where possible (for chapter threads)
-    enriched = enrich_all_comments(client, items)
 
     for i, obj in enumerate(enriched):
         novel_title  = pick(obj, "novel", "novelTitle", "title").strip()
@@ -683,29 +887,31 @@ def load_comments_mistmint(comments_feed_url: str):
             if not novel_id:
                 novel_id = meta.get("novel_id", "")
 
-        # Try to discover chapter slug if we only have a label
+        # Try to discover chapter slug if we only have a human label
         if not chapter_slug and chapter_lbl and novel_slug:
             _disp, ch_num = _mistmint_parse_chapter_label(chapter_lbl)
             if ch_num is not None:
                 alt = _find_chapter_slug_live(client, novel_slug, ch_num)
                 if alt:
-                    obj["chapterSlug"] = alt     # ← was item["chapterSlug"]
+                    obj["chapterSlug"] = alt
                     chapter_slug = alt
+                    diag_ok("chapter-slug-discovered", novel=novel_title, novel_slug=novel_slug, chapter_label=chapter_lbl, chapter_slug=alt)
+                else:
+                    diag_fail("chapter-slug-not-found", novel=novel_title, novel_slug=novel_slug, chapter_label=chapter_lbl)
 
         # Canonical chapter field for the feed
         if chapter_slug:
             chapter = f"mm://novel/{novel_slug}/chapter/{chapter_slug}"
         else:
             chapter = normalize_mistmint_chapter_label(chapter_lbl)
-        
-        # --- Resolve reply target ---
+
+        # --- Resolve reply target (multiple fallbacks; each inner function logs) ---
         reply_to = pick(obj, *reply_user_keys)
         if not reply_to:
             pid = pick(obj, *parent_keys)
             if pid and str(pid) in id_to_user:
                 reply_to = id_to_user[str(pid)]
-        
-        # strongest: use enriched chapterId directly
+
         if not reply_to:
             chap_id_enriched = obj.get("chapterId")
             if chap_id_enriched:
@@ -718,8 +924,7 @@ def load_comments_mistmint(comments_feed_url: str):
                 )
                 if who and (ALLOW_SELF_REPLIES or who.strip().casefold() != author.casefold()):
                     reply_to = who
-        
-        # homepage fallback (if we have novel_id)
+
         if not reply_to and novel_id:
             who = resolve_reply_to_on_homepage_by_id(
                 novel_id=novel_id,
@@ -729,7 +934,7 @@ def load_comments_mistmint(comments_feed_url: str):
             )
             if who and (ALLOW_SELF_REPLIES or who.strip().casefold() != author.casefold()):
                 reply_to = who
-        
+
         # adjacency heuristic last
         if not reply_to and flags and i > 0 and i-1 < len(flags) and flags[i-1]:
             prev = enriched[i-1]
@@ -740,6 +945,7 @@ def load_comments_mistmint(comments_feed_url: str):
             close_in_time = (t_cur and t_prev and abs((t_cur - t_prev).total_seconds()) <= 120)
             if prev_author and author and prev_author != author and same_novel and close_in_time:
                 reply_to = prev_author
+                diag_ok("reply-adjacency-heuristic", child=author, parent=prev_author, novel=novel_title)
 
         body = body_raw
 
@@ -753,8 +959,7 @@ def load_comments_mistmint(comments_feed_url: str):
         })
 
     print(f"[mistmint] loaded {len(out)} raw comment(s)")
-    if out:
-        print(f"[mistmint] sample fields -> novel_title='{out[0]['novel_title']}', chapter='{out[0]['chapter']}', author='{out[0]['author']}'")
+    diag_ok("comments-loaded", count=len(out))
     return out
 
 # =============================================================================
