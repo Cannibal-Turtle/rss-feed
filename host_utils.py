@@ -127,11 +127,41 @@ TDLBKGC_ARCS = [
 BASE_APP = "https://www.mistminthaven.com"
 BASE_API = "https://api.mistminthaven.com/api"
 ALL_COMMENTS_URL = f"{BASE_API}/comments/trans/all-comments"
-UA = {"User-Agent": "mistmint-comments-bot/1.0 (+github.com/Cannibal-Turtle)"}
+UA_STR = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
+DEFAULT_HEADERS = {"User-Agent": UA_STR}
 
 CHAPTERID_RE = re.compile(r'"chapterId"\s*:\s*"([0-9a-f-]{36})"', re.I)
 
 UUID_RE = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+
+def resolve_chapter_id(novel_slug: str, chapter_slug: str) -> str:
+    url = f"https://www.mistminthaven.com/novels/{novel_slug}/{chapter_slug}"
+    try:
+        with diag_step("slug-resolve", url=url):
+            r = requests.get(url, headers=DEFAULT_HEADERS, timeout=20)
+            r.raise_for_status()
+            html = r.text
+
+            # Try unescaped pattern first
+            m = re.search(r'"chapterId":"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"', html, re.I)
+            if not m:
+                # Fallback for escaped quotes in inline JSON
+                m = re.search(r'chapterId\\":\\"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\"', html, re.I)
+
+            if not m:
+                diag_fail("slug-resolve-miss", reason="chapterId not found in page")
+                raise ValueError("chapterId not found in page")
+
+            chapter_id = m.group(1)
+            diag_ok("slug-resolve-hit", chapter_id=chapter_id)
+            return chapter_id
+    except Exception as e:
+        diag_fail("slug-resolve-error", error=str(e))
+        raise
+
+def fetch_comments_by_slug(novel_slug: str, chapter_slug: str, skip_page: int = 0, limit: int = 100):
+    chapter_id = resolve_chapter_id(novel_slug, chapter_slug)
+    return fetch_chapter_comments(chapter_id, skip_page=skip_page, limit=limit)
 
 def _extract_chapter_id_from_html(html: str, chapter_slug: str) -> str | None:
     if not html:
@@ -152,7 +182,7 @@ class MistmintClient:
         if translator_cookie is None:
             translator_cookie = _resolve_mistmint_cookie()
         self.s = requests.Session()
-        self.s.headers.update(UA)
+        self.s.headers.update(DEFAULT_HEADERS)
         self.timeout = timeout
         self.cookie = translator_cookie
         self._chapter_id_cache: Dict[Tuple[str, str], Optional[str]] = {}
@@ -672,33 +702,6 @@ def resolve_reply_to_on_chapter_by_id(client: MistmintClient, chapter_id: str,
         diag_fail("reply-resolve-miss", chapter_id=chapter_id, author=author)
         return ""
         
-    want_author = (author or "").strip().casefold()
-    want_body   = re.sub(r"\s+", " ", (body_raw or "").strip())
-    try:
-        want_dt = datetime.datetime.fromisoformat((posted_at or "").replace("Z", "+00:00"))
-    except Exception:
-        want_dt = None
-
-    def _is_same(obj) -> bool:
-        rep_user = _name(obj.get("user")).casefold()
-        rep_body = re.sub(r"\s+", " ", (obj.get("content") or "").strip())
-        try:
-            rep_dt = datetime.datetime.fromisoformat((obj.get("createdAt") or "").replace("Z", "+00:00"))
-        except Exception:
-            rep_dt = None
-        if rep_user != want_author or rep_body != want_body:
-            return False
-        return (not want_dt or not rep_dt or abs((want_dt - rep_dt).total_seconds()) <= 300)
-
-    for top in (payload.get("data") or []):
-        parent_user = _name(top.get("user"))
-        if _is_same(top):
-            return ""  # top-level
-        for rep in (top.get("replies") or []):
-            if _is_same(rep):
-                who = parent_user or _name(rep.get("toUser"))
-                return (who or "").strip()
-    return ""
                                              
 def resolve_reply_to_on_homepage_by_id(novel_id: str, author: str, body_raw: str, posted_at: str) -> str:
     """
@@ -1268,11 +1271,7 @@ def split_paid_chapter_mistmint(raw_title: str):
 
 async def fetch_page(session: aiohttp.ClientSession, url: str) -> str:
     try:
-        async with session.get(
-            url,
-            headers={"User-Agent": UA["User-Agent"]},
-            timeout=AIOHTTP_TIMEOUT,
-        ) as resp:
+        async with session.get(url, headers=DEFAULT_HEADERS, timeout=AIOHTTP_TIMEOUT) as resp:
             if resp.status != 200:
                 print(f"⚠️  {url} returned HTTP {resp.status}")
                 return ""
