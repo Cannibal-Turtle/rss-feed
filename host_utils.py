@@ -209,58 +209,6 @@ class MistmintClient:
         else:
             diag_ok("api-get", url=url, code=r.status_code, use_cookie=use_cookie)
         return r
-    
-    def _novel_id_from_slug(self, novel_slug: str) -> str | None:
-        try:
-            r = self._get(f"{BASE_API}/novels/slug/{novel_slug}", use_cookie=True)
-            if r.ok:
-                j = r.json() or {}
-                return (j.get("data") or {}).get("id") or j.get("id")
-        except Exception:
-            pass
-        return None
-    
-    def _chapter_id_via_novel_listing(self, novel_slug: str, chapter_slug: str) -> str | None:
-        nid = self._novel_id_from_slug(novel_slug)
-        if not nid:
-            return None
-        page, limit = 0, 200
-        while True:
-            url = f"{BASE_API}/chapters/novel/{nid}?skipPage={page}&limit={limit}"
-            r = self._get(url, use_cookie=True)
-            if not r.ok:
-                break
-            j = r.json() or {}
-            for ch in (j.get("data") or []):
-                if str(ch.get("slug","")).lower() == chapter_slug.lower():
-                    return ch.get("id")
-            paging = j.get("paging") or {}
-            total_pages = int(paging.get("totalPages") or 1)
-            page += 1
-            if page >= total_pages:
-                break
-        return None
-
-    def _api_chapter_id_by_slug(self, chapter_slug: str) -> Optional[str]:
-        """Best-effort API probe: resolve chapter id by slug (if backend exposes it)."""
-        candidates = [
-            f"{BASE_API}/chapters/slug/{chapter_slug}",
-            f"{BASE_API}/chapter/{chapter_slug}",
-            f"{BASE_API}/chapters/{chapter_slug}",
-        ]
-        for url in candidates:
-            try:
-                r = self._get(url, use_cookie=True)
-                if r.ok:
-                    j = r.json() or {}
-                    data = j.get("data") if isinstance(j, dict) else None
-                    cid = (data or {}).get("id") or j.get("id")
-                    if cid and re.fullmatch(UUID_RE, cid, re.I):
-                        return cid
-            except Exception:
-                # swallow and try next shape
-                pass
-        return None
 
     def fetch_all_comments(self) -> Dict[str, Any]:
         r = self._get(ALL_COMMENTS_URL, use_cookie=bool(self.cookie))
