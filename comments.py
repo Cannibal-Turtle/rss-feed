@@ -242,9 +242,14 @@ def main():
                     body          = obj.get("description", "").strip()
                     posted_at     = obj.get("posted_at", "")
                     reply_to      = obj.get("reply_to", "")
-        
+    
                     # GUID: prefer the canonical comment id, else hash a stable fingerprint
-                    comment_id = obj.get("commentId") or obj.get("comment_id")
+                    comment_id = (
+                        obj.get("commentId")
+                        or obj.get("comment_id")
+                        or obj.get("id")
+                        or obj.get("_id")
+                    )
                     guid_val = str(comment_id) if comment_id else _guid_from([
                         novel_title,
                         author_name,
