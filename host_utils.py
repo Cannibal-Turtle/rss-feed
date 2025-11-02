@@ -331,19 +331,6 @@ class MistmintClient:
                         self._chapter_id_cache[key] = cid
                         diag_ok("chapterId-cookie-fallback-html-hit", chapter_id=cid)
                         return cid, False
-                    # 2c) try slug→chapter API (often 404)
-                    cid = self._api_chapter_id_by_slug(chapter_slug)
-                    if cid:
-                        self._chapter_id_cache[key] = cid
-                        diag_ok("chapterId-cookie-fallback-api-hit", chapter_id=cid)
-                        return cid, False
-                    # 2d) novel listing fallback (new)
-                    cid = self._chapter_id_via_novel_listing(novel_slug, chapter_slug)
-                    if cid:
-                        self._chapter_id_cache[key] = cid
-                        diag_ok("chapterId-via-listing", novel=novel_slug, chapter=chapter_slug, chapter_id=cid)
-                        return cid, False
-                    diag_fail("chapterId-cookie-miss")
             else:
                 r2 = self._get(url, use_cookie=True)
                 html2 = r2.text or ""
@@ -353,15 +340,6 @@ class MistmintClient:
                     self._chapter_id_cache[key] = cid
                     return cid, False
                 cid = _extract_chapter_id_from_html(html2 or "", chapter_slug)
-                if cid:
-                    self._chapter_id_cache[key] = cid
-                    return cid, False
-                cid = self._api_chapter_id_by_slug(chapter_slug)
-                if cid:
-                    self._chapter_id_cache[key] = cid
-                    return cid, False
-                # novel listing fallback (new)
-                cid = self._chapter_id_via_novel_listing(novel_slug, chapter_slug)
                 if cid:
                     self._chapter_id_cache[key] = cid
                     return cid, False
