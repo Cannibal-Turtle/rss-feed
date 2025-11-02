@@ -4,7 +4,7 @@
     <title>Aggregated Paid Chapters Feed</title>
     <link>https://github.com/cannibal-turtle/</link>
     <description>Aggregated RSS feed for paid chapters across mapped novels.</description>
-    <lastBuildDate>Sun, 02 Nov 2025 17:18:19 +0000</lastBuildDate>
+    <lastBuildDate>Sun, 02 Nov 2025 17:39:30 +0000</lastBuildDate>
     <docs>http://blogs.law.harvard.edu/tech/rss</docs>
     <generator>PyRSS2Gen-1.1.0</generator>
     <item>
@@ -30,7 +30,7 @@ It’s 1v1. Sweet, sweet, sweet.]]></description>
       <pubDate>Sun, 02 Nov 2025 12:04:53 +0000</pubDate>
       <host>Mistmint Haven</host>
       <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <guid isPermaLink="false">tdlbkgc-2</guid>
+      <guid isPermaLink="false">c1312635-0026-491a-8cb0-13aeb7a925cd</guid>
     </item>
   </channel>
 </rss>
