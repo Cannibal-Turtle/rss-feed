@@ -17,6 +17,8 @@ concurrency:
 jobs:
   update_paid_feed:
     runs-on: ubuntu-latest
+    env:
+      MISTMINT_FORCE_STATE: "0"   # single source of truth for the whole job
 
     steps:
       - name: Checkout Repository
