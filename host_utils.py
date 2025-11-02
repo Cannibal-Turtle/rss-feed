@@ -130,9 +130,11 @@ ALL_COMMENTS_URL = f"{BASE_API}/comments/trans/all-comments"
 UA_STR = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
 DEFAULT_HEADERS = {"User-Agent": UA_STR}
 
-CHAPTERID_RE = re.compile(r'"chapterId"\s*:\s*"([0-9a-f-]{36})"', re.I)
-
 UUID_RE = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+CHAPTERID_RE = re.compile(
+    rf'(?:"|\\")chapterId(?:"|\\")\s*:\s*(?:"|\\")({UUID_RE})(?:"|\\")',
+    re.I
+)
 
 def resolve_chapter_id(novel_slug: str, chapter_slug: str) -> str:
     url = f"https://www.mistminthaven.com/novels/{novel_slug}/{chapter_slug}"
