@@ -966,11 +966,19 @@ def load_comments_mistmint(comments_feed_url: str):
 
         body = body_raw
 
-        # Derive a stable comment id even when we couldn't fetch the thread
-        cid = (obj.get("commentId") or obj.get("comment_id")
-               or obj.get("id") or obj.get("_id"))
-        pid = (obj.get("parentId") or obj.get("replyToId")
-               or obj.get("inReplyTo") or obj.get("in_reply_to"))
+        # --- Derive canonical IDs robustly (homepage-friendly) ---
+        def _pick(d, *keys):
+            for k in keys:
+                v = d.get(k)
+                if v not in (None, ""):
+                    return v
+            return None
+        
+        cid = _pick(obj, "commentId", "comment_id", "id", "_id")
+        cid = str(cid).strip() if cid else ""
+        
+        pid = _pick(obj, "parentId", "replyToId", "inReplyTo", "in_reply_to")
+        pid = str(pid).strip() if pid else None
 
         out.append({
             "novel_title": novel_title,
