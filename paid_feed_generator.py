@@ -25,6 +25,9 @@ from novel_mappings import (
 
 # ---------------- History Control ----------------
 HISTORY_PATH = "paid_history.json"
+MISTMINT_STATE_PATH = os.getenv("MISTMINT_STATE_PATH", "rss-feed/manual_scripts/mistmint_state.json")
+PAID_HISTORY_PATH   = os.getenv("PAID_HISTORY_PATH",   "rss-feed/manual_scripts/paid_history.json")
+
 
 def _dt_to_iso(dt: datetime.datetime) -> str:
     return dt.astimezone(datetime.timezone.utc).isoformat()
