@@ -983,6 +983,8 @@ def load_comments_mistmint(comments_feed_url: str):
             # expose id in both styles so comments.py can pick it up
             "comment_id": cid,
             "commentId":  cid,
+            "id":         cid,                
+            "_id":        cid,                 
 
             "parent_id":  pid,
             "is_reply":   bool(obj.get("is_reply") or pid),
