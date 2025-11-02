@@ -221,94 +221,85 @@ def match_comment_in_thread(thread_json: Dict[str, Any], username: str, created_
     return None
 
 def enrich_all_comments(client: MistmintClient, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    For each record from /trans/all-comments, attach:
-      - "url": canonical web URL
-      - "chapterId": if chapter comment and resolvable
-      - "gated": bool (True if chapterId could not be resolved anon or with cookie)
-      - "is_reply": True/False/None
-      - "parentId": str|None
-      - "commentId": str|None
-    """
     out: List[Dict[str, Any]] = []
     thread_cache: Dict[str, Dict[str, Any]] = {}
 
     for rec in records:
-        novel_slug   = rec.get("novelSlug")   or ""
-        chapter_slug = rec.get("chapterSlug") or ""
+        novel_slug    = rec.get("novelSlug")   or ""
+        chapter_slug  = rec.get("chapterSlug") or ""
         chapter_label = rec.get("chapter") or rec.get("chapterLabel") or ""
-        username     = rec.get("user")        or ""
-        created_at   = rec.get("createdAt")   or ""
+        username      = rec.get("user")        or ""
+        created_at    = rec.get("createdAt")   or ""
 
-        # Start item with placeholders; we'll set url after slug discovery
         item = dict(rec)
-        item["url"] = ""
+        item["url"] = client.build_url(novel_slug, chapter_slug)
         item["chapterId"] = None
         item["gated"] = False
         item["is_reply"] = None
         item["parentId"] = None
         item["commentId"] = None
 
-        # ── Resolve chapterId with fallback discovery ─────────────────────────
+        # Resolve chapterId if we have/derive a slug
         cid, gated = (None, False)
-
         if chapter_slug:
             cid, gated = client.get_chapter_id(novel_slug, chapter_slug)
-
-        if not cid:
-            # Try to parse "Chapter ..." → numeric, then discover slug from novel page
-            _lbl, ch_num = _mistmint_parse_chapter_label(chapter_label)
-            if ch_num is not None:
+        else:
+            _, ch_num = _mistmint_parse_chapter_label(chapter_label)
+            if ch_num is not None and novel_slug:
                 alt = _find_chapter_slug_live(client, novel_slug, ch_num)
                 if alt:
                     chapter_slug = alt
+                    item["url"] = client.build_url(novel_slug, alt)
                     cid, gated = client.get_chapter_id(novel_slug, alt)
 
         item["chapterId"] = cid
         item["gated"] = gated
 
-        # Canonical URL (homepage if no slug)
-        item["url"] = client.build_url(novel_slug, chapter_slug)
-
-        # ── If we have a chapterId, try to match this exact comment in the thread ─
+        # If a chapter thread exists, try to match the comment and mark reply info
         if cid:
             if cid not in thread_cache:
-                time.sleep(0.2)  # gentle throttle
+                time.sleep(0.2)
                 thread_cache[cid] = client.fetch_chapter_comments(cid, skip_page=0, limit=100)
-
             thread = thread_cache[cid]
             hit = match_comment_in_thread(thread, username=username, created_at_iso=created_at)
             if hit:
-                # Minimal IDs (support different key spellings)
                 item["commentId"] = hit.get("id") or hit.get("_id")
-                parent_id = hit.get("parentId") or hit.get("parent_id")
-                item["parentId"] = parent_id
-                item["is_reply"] = bool(parent_id)
-            else:
-                # Found thread but not the specific node → treat as top-level unless unknown
-                item["is_reply"] = False
+                item["is_reply"]  = bool(hit.get("parentId") or hit.get("replyToId"))
+                item["parentId"]  = hit.get("parentId") or hit.get("replyToId")
 
         out.append(item)
-
     return out
     
 if __name__ == "__main__":
-    client = MistmintClient() 
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--print", choices=["raw","enriched","both"], default="both")
+    args = parser.parse_args()
 
-    blob = client.fetch_all_comments()
-    enriched = enrich_all_comments(client, blob.get("data", []))
+    rows = load_comments_mistmint(ALL_COMMENTS_URL)
 
-    for e in enriched:
-        tag = "reply" if e["is_reply"] else ("top" if e["is_reply"] is False else "unknown")
-        novel_name = e.get("novel") or e.get("novelTitle") or "?"
-        print(f"[{e.get('createdAt','?')}] {e.get('user','?')} → {novel_name}  [{tag}]")
-        print(f"   {e.get('content','')}")
-        print(f"   {e.get('url','')}")
-        if e.get("chapterId"):
-            print(f"   chapterId={e.get('chapterId')}  commentId={e.get('commentId')} parentId={e.get('parentId')}")
-        if e.get("gated"):
-            print("   gated: true (needed cookie or skip)")
-        print()
+    if args.print in ("raw","both"):
+        for r in rows:
+            tag = "reply" if r["reply_to"] else "top"
+            print(f"[{r['posted_at']}] {r['author']} → {r['novel_title']} [{tag}]")
+            print(f"   {r['description']}")
+            print(f"   chapter={r['chapter']}\n")
+
+    if args.print in ("enriched","both"):
+        client = MistmintClient()
+        blob = client.fetch_all_comments()
+        enriched = enrich_all_comments(client, blob.get("data", []))
+        for e in enriched:
+            tag = "reply" if e["is_reply"] else ("top" if e["is_reply"] is False else "unknown")
+            novel_name = e.get("novel") or e.get("novelTitle") or "?"
+            print(f"[{e.get('createdAt','?')}] {e.get('user','?')} → {novel_name} [{tag}]")
+            print(f"   {e.get('content','')}")
+            print(f"   {e.get('url','')}")
+            if e.get("chapterId"):
+                print(f"   chapterId={e.get('chapterId')}  commentId={e.get('commentId')} parentId={e.get('parentId')}")
+            if e.get("gated"):
+                print("   gated: true (needed cookie or skip)")
+            print()
         
 # --- Mistmint comment helpers -----------------------------------------------
 
@@ -646,9 +637,9 @@ def load_comments_mistmint(comments_feed_url: str):
                 return v
         return default
 
-    id_keys       = ("id", "_id", "commentId", "comment_id")
-    parent_keys   = ("parentId", "parent_id", "inReplyTo", "in_reply_to", "replyToId", "reply_to_id")
-    user_keys     = ("user", "author", "username", "name", "displayName")
+    id_keys         = ("id", "_id", "commentId", "comment_id")
+    parent_keys     = ("parentId", "parent_id", "inReplyTo", "in_reply_to", "replyToId", "reply_to_id")
+    user_keys       = ("user", "author", "username", "name", "displayName")
     reply_user_keys = ("replyToUser", "reply_user", "replyToName", "reply_name", "parentUser", "parent_user", "toUser", "to_user")
 
     id_to_user = {}
@@ -658,6 +649,7 @@ def load_comments_mistmint(comments_feed_url: str):
             id_to_user[str(cid)] = pick(obj, *user_keys)
 
     flags = _mistmint_reply_flags_from_raw(raw_used or "")
+    client = MistmintClient(translator_cookie=_resolve_mistmint_cookie())
 
     def _parse_when(d):
         s = pick(d, "postedAt", "createdAt", "created_at", "date", "timestamp")
@@ -666,7 +658,10 @@ def load_comments_mistmint(comments_feed_url: str):
         except Exception:
             return None
 
-    for i, obj in enumerate(items):
+    # Pre-enrich to get chapterId/slug where possible (for chapter threads)
+    enriched = enrich_all_comments(client, items)
+
+    for i, obj in enumerate(enriched):
         novel_title  = pick(obj, "novel", "novelTitle", "title").strip()
         author       = pick(obj, *user_keys).strip()
         body_raw     = (pick(obj, "content", "body", "text", "message") or "").strip()
@@ -675,13 +670,33 @@ def load_comments_mistmint(comments_feed_url: str):
         novel_id     = pick(obj, "novelId", "novel_id")
         novel_slug   = pick(obj, "novelSlug", "novel_slug")
         chapter_slug = pick(obj, "chapterSlug", "chapter_slug")
+        chapter_lbl  = pick(obj, "chapter", "chapterLabel", "chapterTitle")
 
-        # Chapter label: prefer a lossless mm:// marker so we never have to guess later.
+        # Fill from mappings if missing
+        if not (novel_slug and novel_id):
+            meta = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("novels", {}).get(novel_title, {})
+            if not novel_slug:
+                base = (meta.get("novel_url") or "").rstrip("/")
+                if base:
+                    novel_slug = base.split("/")[-1]
+            if not novel_id:
+                novel_id = meta.get("novel_id", "")
+
+        # Try to discover chapter slug if we only have a label
+        if not chapter_slug and chapter_lbl and novel_slug:
+            _disp, ch_num = _mistmint_parse_chapter_label(chapter_lbl)
+            if ch_num is not None:
+                alt = _find_chapter_slug_live(client, novel_slug, ch_num)
+                if alt:
+                    chapter_slug = alt
+
+        # Canonical chapter field for the feed
         if chapter_slug:
             chapter = f"mm://novel/{novel_slug}/chapter/{chapter_slug}"
         else:
-            chapter = normalize_mistmint_chapter_label(pick(obj, "chapter", "chapterLabel", "chapterTitle"))
+            chapter = normalize_mistmint_chapter_label(chapter_lbl)
 
+        # --- Resolve reply target ---
         reply_to = pick(obj, *reply_user_keys)
         if not reply_to:
             pid = pick(obj, *parent_keys)
@@ -689,17 +704,19 @@ def load_comments_mistmint(comments_feed_url: str):
                 reply_to = id_to_user[str(pid)]
 
         if not reply_to:
-            if chapter_slug:
+            if chapter_slug and novel_slug:
+                # CHAPTER thread
                 who = resolve_reply_to_on_chapter_by_label(
                     novel_title=novel_title,
-                    chapter_label=chapter,  # display not used here
+                    chapter_label=chapter,
                     author=author,
                     body_raw=body_raw,
                     posted_at=posted_at,
-                    novel_slug=novel_slug or None,
-                    chapter_slug_hint=chapter_slug or None,
+                    novel_slug=novel_slug,
+                    chapter_slug_hint=chapter_slug,
                 )
             elif novel_id:
+                # HOMEPAGE thread — uses novel_id from mappings
                 who = resolve_reply_to_on_homepage_by_id(
                     novel_id=novel_id,
                     author=author,
@@ -712,20 +729,16 @@ def load_comments_mistmint(comments_feed_url: str):
             if who and (ALLOW_SELF_REPLIES or who.strip().casefold() != author.casefold()):
                 reply_to = who
 
+        # Adjacency heuristic as a last resort
         if not reply_to and flags and i > 0 and i-1 < len(flags) and flags[i-1]:
-            prev = items[i-1]
+            prev = enriched[i-1]
             prev_author = pick(prev, *user_keys)
-            same_novel  = novel_title == pick(prev, "novel", "novelTitle", "title").strip()
+            same_novel  = novel_title == (pick(prev, "novel", "novelTitle", "title").strip())
             t_cur  = _parse_when(obj)
             t_prev = _parse_when(prev)
             close_in_time = (t_cur and t_prev and abs((t_cur - t_prev).total_seconds()) <= 120)
             if prev_author and author and prev_author != author and same_novel and close_in_time:
                 reply_to = prev_author
-
-        if (not ALLOW_SELF_REPLIES
-            and reply_to
-            and reply_to.strip().casefold() == author.casefold()):
-            reply_to = ""
 
         body = f"In reply to {reply_to}. {body_raw}" if reply_to else body_raw
 
