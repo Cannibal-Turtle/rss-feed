@@ -497,10 +497,6 @@ def extract_volume_mistmint(full_title: str, link: str) -> str:
 
     return ""
 
-if __name__ == "__main__":
-    cli_main()
-
-
 def extract_chapter_mistmint(value: str) -> str:
     """
     Fallback used only when we’re given a URL/URI instead of a human chapter label.
@@ -1474,6 +1470,9 @@ def pick_comment_html_default(entry) -> str:
             return v
     return unescape(entry.get("description", "") or "")
 
+if __name__ == "__main__":
+    cli_main()
+
 # =============================================================================
 # DISPATCH TABLE
 # =============================================================================
@@ -1513,4 +1512,5 @@ MISTMINT_UTILS = {
     "get_nsfw_novels":
         lambda: [],
 }
+
 
