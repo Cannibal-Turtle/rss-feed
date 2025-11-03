@@ -84,7 +84,7 @@ def diag_summary(save_json: bool = True):
 # GLOBAL CONSTANTS
 # =============================================================================
 
-_STATE_PATH = os.getenv("MISTMINT_STATE_PATH", "mistmint_state.json")
+MISTMINT_STATE_PATH = os.getenv("MISTMINT_STATE_PATH", "mistmint_state.json")
 UA_STR = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
 DEFAULT_HEADERS = {"User-Agent": UA_STR}
 _MISTMINT_HOME_CACHE: dict[str, dict] = {}
@@ -1549,6 +1549,7 @@ MISTMINT_UTILS = {
     "get_nsfw_novels":
         lambda: [],
 }
+
 
 
 
