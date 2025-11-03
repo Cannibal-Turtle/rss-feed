@@ -24,16 +24,11 @@ from novel_mappings import (
 )
 
 # ---------------- History Control ----------------
-PAID_HISTORY_PATH = PAID_HISTORY_PATH = os.getenv("PAID_HISTORY_PATH", "paid_history.json")
-
-def _dt_to_iso(dt: datetime.datetime) -> str:
-    return dt.astimezone(datetime.timezone.utc).isoformat()
-
-def _iso_to_dt(s: str) -> datetime.datetime:
-    return datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+PAID_HISTORY_PATH = os.getenv("PAID_HISTORY_PATH", "paid_history.json")
+USE_HISTORY = os.getenv("MISTMINT_FORCE_STATE", "0") == "1"
 
 def load_history():
-    if not os.path.exists(PAID_HISTORY_PATH):
+    if not USE_HISTORY:
         return []
     try:
         with open(PAID_HISTORY_PATH, "r", encoding="utf-8") as f:
@@ -42,8 +37,19 @@ def load_history():
         return []
 
 def save_history(items):
-    with open(PAID_HISTORY_PATH, "w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
+    if not USE_HISTORY:
+        return
+    try:
+        with open(PAID_HISTORY_PATH, "w", encoding="utf-8") as f:
+            json.dump(items, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def _dt_to_iso(dt: datetime.datetime) -> str:
+    return dt.astimezone(datetime.timezone.utc).isoformat()
+
+def _iso_to_dt(s: str) -> datetime.datetime:
+    return datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 def item_to_dict(item: PyRSS2Gen.RSSItem):
     return {
@@ -85,11 +91,12 @@ async def process_novel(session, host, novel_title):
         novel_url = get_novel_url(novel_title, host)
         print(f"Scraping: {novel_url}")
         utils = get_host_utils(host)
-
-        # Only scrape if the host says there was a paid update recently
-        if not await utils["novel_has_paid_update_async"](session, novel_url):
-            print(f"Skipping {novel_title}: no recent paid update found.")
-            return []
+        api_mode = os.getenv("MISTMINT_FORCE_STATE", "0") != "1"
+        
+        if not api_mode:
+            if not await utils["novel_has_paid_update_async"](session, novel_url):
+                print(f"Skipping {novel_title}: no recent paid update found.")
+                return []
 
         paid_chapters, _main_desc = await utils["scrape_paid_chapters_async"](session, novel_url, host)
         items = []
