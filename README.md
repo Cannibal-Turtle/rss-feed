@@ -136,7 +136,7 @@ Each generated .xml feed (free or paid) will contain structured <item> entries e
 ## 🆕 Mistmint Haven (Quick Setup) [UPDATE 4.0]
 
 ### Modes
-- **API mode** when `MISTMINT_FORCE_STATE="0". Runs on schedule
+- **API mode** when `MISTMINT_FORCE_STATE="0"`. Runs on schedule
 - **STATE mode** when `MISTMINT_FORCE_STATE="1"` **or** no cookie. Accepts manual paid chapter entry via `manual_scripts/mistmint_state.json` and updates `manual_scripts/paid_history.json`. If mode is switched, clear `paid_history.json` and update `mistmint_state.json`.
 
 ### Mapping (`novel_mappings.py`)
