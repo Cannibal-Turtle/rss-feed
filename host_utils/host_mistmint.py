@@ -84,11 +84,10 @@ def diag_summary(save_json: bool = True):
 # GLOBAL CONSTANTS
 # =============================================================================
 
-MISTMINT_STATE_PATH = os.getenv("MISTMINT_STATE_PATH", "mistmint_state.json")
-
-
+_STATE_PATH = os.getenv("MISTMINT_STATE_PATH", "mistmint_state.json")
+UA_STR = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
+DEFAULT_HEADERS = {"User-Agent": UA_STR}
 _MISTMINT_HOME_CACHE: dict[str, dict] = {}
-
 AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=20)
 
 # All arcs for [Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught
@@ -116,6 +115,46 @@ TDLBKGC_ARCS = [
     {"arc_num": 20, "title": "Tentacled Alien Gong × Passerby Doctor Shou",                 "start": 701, "end": 734},
 ]
 
+# ─── Mode & state helpers required by async paid functions ───────────────────
+
+def _manual_mode_on() -> bool:
+    # When set to "1" we force STATE mode (no live API scraping)
+    return (os.getenv("MISTMINT_FORCE_STATE", "0") or "0").strip() == "1"
+
+def _mistmint_mode() -> str:
+    # If manual override is on or we have no cookie, use STATE; else API.
+    return "STATE" if _manual_mode_on() or not _resolve_mistmint_cookie() else "API"
+
+def _log_mistmint_mode(phase: str, novel_url: str = ""):
+    try:
+        _gha("notice", "mistmint-mode", json.dumps({
+            "phase": phase,
+            "mode": _mistmint_mode(),
+            "has_cookie": bool(_resolve_mistmint_cookie()),
+            "novel_url": (novel_url or "")[:200]
+        })[:300])
+    except Exception:
+        # keep it non-fatal
+        print(f"[mistmint] mode={_mistmint_mode()} phase={phase} url={novel_url}")
+
+def _load_mistmint_state() -> dict:
+    try:
+        with open(MISTMINT_STATE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _mistmint_slug_from_url(novel_url: str) -> str:
+    return (novel_url or "").rstrip("/").split("/")[-1]
+
+def _mistmint_find_details_by_url(host: str, novel_url: str):
+    block = HOSTING_SITE_DATA.get(host, {}).get("novels", {}) or {}
+    want = (novel_url or "").rstrip("/")
+    for title, det in block.items():
+        if (det.get("novel_url") or "").rstrip("/") == want:
+            return title, det
+    return "", {}
+
 # =============================================================================
 # API-based Mistmint paid scraper + detector (fallback to state)
 # =============================================================================
@@ -123,8 +162,6 @@ TDLBKGC_ARCS = [
 BASE_APP = "https://www.mistminthaven.com"
 BASE_API = "https://api.mistminthaven.com/api"
 ALL_COMMENTS_URL = f"{BASE_API}/comments/trans/all-comments"
-UA_STR = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
-DEFAULT_HEADERS = {"User-Agent": UA_STR}
 
 UUID_RE = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 CHAPTERID_RE = re.compile(
@@ -1512,5 +1549,6 @@ MISTMINT_UTILS = {
     "get_nsfw_novels":
         lambda: [],
 }
+
 
 
