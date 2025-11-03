@@ -133,11 +133,32 @@ Each generated .xml feed (free or paid) will contain structured <item> entries e
 </item>
 ```
 
-## NEW: `mistmint_state.json` & `paid_history.json`
+## 🆕 Mistmint Haven (Quick Setup) [UPDATE 4.0]
 
-- `mistmint_state.json` is a file to manually update all premium chapters of the novels in Mistmint Haven, as the site cannot be scraped nor does it have a paid feed.
-- `paid_history.json` is a premature file that keeps track of the last 7-day paid chapters before it merges with the final feed. Necessary due to mistmint's volatile feed log.
+### Modes
+- **API mode** when `MISTMINT_COOKIE` is set.  
+- **STATE mode** when `MISTMINT_FORCE_STATE="1"` **or** no cookie. Otherwise set to `MISTMINT_FORCE_STATE="0"`
 
+### Mapping (`novel_mappings.py`)
+Add:
+```python
+HOSTING_SITE_DATA["Mistmint Haven"] = {
+  "token_secret": "MISTMINT_COOKIE",   # name of the repo secret to read at runtime
+}
+```
 
+### Required repo secrets
+- `MISTMINT_COOKIE` – logged-in cookie string  
+- `PAT_GITHUB` – for repo dispatch to other bots  
+- `DISCORD_BOT_TOKEN`, `DISCORD_MOD_CHANNEL_ID` – for alert posts
 
+---
 
+## Token-Expiry Alerts
+
+1. Hourly job runs `comments.py` → calls `maybe_dispatch_token_alerts` if token is expiring → `send_token_alert.yml` → scripts/`send_token_alert.py`.
+2. For each host with `token_secret`, it reads that env var, decodes JWT `exp`, and if `≤ 1 day`, fires:
+   `repository_dispatch` → `event_type: token-expiring`.
+3. `.token_alert_state.json` stores the last `exp` per `(host, token_secret)` so you aren’t spammed hourly.
+
+---
