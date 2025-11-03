@@ -227,24 +227,33 @@ def main():
         if loader:
             try:
                 norm_items = loader(comments_feed_url)
+        
+                # ---- NEW: treat empty as a notice, not a failure ----
+                if not norm_items:
+                    try:
+                        from host_utils import _gha  # optional; falls back to print
+                        _gha("notice", "mistmint-empty", f"{host} returned 0 items; skipping.")
+                    except Exception:
+                        print(f"[{host}] empty; skipping host.")
+                    continue  # go to next host without error
+                # -----------------------------------------------------
+        
                 print(f"[loader] {host}: {len(norm_items)} items from loader (url={comments_feed_url})")
                 for obj in norm_items:
                     novel_title   = obj.get("novel_title", "").strip()
                     if not novel_title:
                         continue
-                    # known mapping?
                     novel_details = utils.get("get_novel_details", lambda h, nt: {})(host, novel_title)
                     if not novel_details:
                         print("Skipping item (novel not found in mapping):", novel_title)
                         continue
         
-                    chapter_label = obj.get("chapter", "")            # may be "" for homepage
+                    chapter_label = obj.get("chapter", "")
                     author_name   = obj.get("author", "")
                     body          = obj.get("description", "").strip()
                     posted_at     = obj.get("posted_at", "")
                     reply_to      = obj.get("reply_to", "")
-    
-                    # Prefer an explicit guid from loader, else any id field, else stable hash
+        
                     guid_val = (
                         str(obj.get("guid") or "") or
                         next((str(obj.get(k)) for k in ("commentId", "comment_id", "id", "_id") if obj.get(k)), "") or
@@ -253,11 +262,11 @@ def main():
                     label = (chapter_label or "").strip()
                     where = "homepage" if (not label or label.lower() == "homepage") else label
                     print(f"[loader] using guid={guid_val} for {novel_title} ({where})")
-                                                
+        
                     item = MyCommentRSSItem(
                         novel_title=novel_title,
                         title=novel_title,
-                        link=chapter_label,  # label or URL; writexml will fix it per-host
+                        link=chapter_label,  # label or URL; writexml will fix per-host
                         author=author_name,
                         description=body,
                         reply_chain=reply_to,
@@ -267,8 +276,8 @@ def main():
                         host=host
                     )
                     all_rss_items.append(item)
-                # go to next host
-                continue
+        
+                continue  # next host
             except Exception as e:
                 print(f"[{host}] load_comments failed, falling back to generic: {e}")
 
