@@ -9,6 +9,15 @@ from bs4 import BeautifulSoup
 from novel_mappings import HOSTING_SITE_DATA
 
 # =============================================================================
+# GLOBAL CONSTANTS
+# =============================================================================
+
+APPROVED_COMMENTS_FEED = (
+    "https://script.google.com/macros/s/"
+    "AKfycbxx6YrbuG1WVqc5uRmmQBw3Z8s8k29RS0sgK9ivhbaTUYTp-8t76mzLo0IlL1LlqinY/exec"
+)
+
+# =============================================================================
 # DRAGONHOLIC PAID UPDATE CHECK / SCRAPE
 # =============================================================================
 
@@ -461,4 +470,5 @@ DRAGONHOLIC_UTILS = {
 def get_host_utils(host: str):
     if host == "Dragonholic":
         return DRAGONHOLIC_UTILS
+
     return {}
