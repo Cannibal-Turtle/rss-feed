@@ -24,7 +24,7 @@ from novel_mappings import (
 )
 
 # ---------------- History Control ----------------
-HISTORY_PATH = "paid_history.json"
+PAID_HISTORY_PATH = PAID_HISTORY_PATH = os.getenv("PAID_HISTORY_PATH", "paid_history.json")
 
 def _dt_to_iso(dt: datetime.datetime) -> str:
     return dt.astimezone(datetime.timezone.utc).isoformat()
@@ -33,16 +33,16 @@ def _iso_to_dt(s: str) -> datetime.datetime:
     return datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 def load_history():
-    if not os.path.exists(HISTORY_PATH):
+    if not os.path.exists(PAID_HISTORY_PATH):
         return []
     try:
-        with open(HISTORY_PATH, "r", encoding="utf-8") as f:
+        with open(PAID_HISTORY_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return []
 
 def save_history(items):
-    with open(HISTORY_PATH, "w", encoding="utf-8") as f:
+    with open(PAID_HISTORY_PATH, "w", encoding="utf-8") as f:
         json.dump(items, f, ensure_ascii=False, indent=2)
 
 def item_to_dict(item: PyRSS2Gen.RSSItem):
