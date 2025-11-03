@@ -16,7 +16,6 @@ from novel_mappings import (
     get_featured_image,
     get_host_translator,
     get_host_logo,
-    get_novel_details,
     get_novel_discord_role,
     get_nsfw_novels,
     get_pub_date_override,  # If you have pub_date overrides
