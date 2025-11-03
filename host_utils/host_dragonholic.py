@@ -17,6 +17,12 @@ APPROVED_COMMENTS_FEED = (
     "AKfycbxx6YrbuG1WVqc5uRmmQBw3Z8s8k29RS0sgK9ivhbaTUYTp-8t76mzLo0IlL1LlqinY/exec"
 )
 
+# --- shared HTTP defaults (Dragonholic) ---
+import aiohttp  # if you use aiohttp there
+UA_STR = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
+DEFAULT_HEADERS = {"User-Agent": UA_STR}
+AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=20)  # if using aiohttp
+
 # =============================================================================
 # DRAGONHOLIC PAID UPDATE CHECK / SCRAPE
 # =============================================================================
@@ -472,3 +478,4 @@ def get_host_utils(host: str):
         return DRAGONHOLIC_UTILS
 
     return {}
+
