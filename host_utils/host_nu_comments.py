@@ -7,12 +7,13 @@ Usage (in CI after comments.py):
 
 What it does:
 - Scans HOSTING_SITE_DATA[*].novels[*].novelupdates_feed_url
-- Fetches NU items via feedparser
-- Builds items with your exact mapping rules and appends to existing XML
+- Fetches Novel Updates comment items via feedparser
+- Builds items with your mapping rules and appends to existing XML
 - De-dups by GUID, sorts by pubDate desc, preserves your RSS shape
 """
 
 from __future__ import annotations
+
 import re
 import html
 import argparse
@@ -25,10 +26,12 @@ from xml.sax.saxutils import escape as _xesc, quoteattr as _xqa
 
 from novel_mappings import HOSTING_SITE_DATA
 try:
-    from novel_mappings import get_nsfw_novels  # if defined
+    from novel_mappings import get_nsfw_novels  # optional
 except Exception:
     def get_nsfw_novels() -> List[str]:
         return []
+
+# ---------------------------------------------------------------------------
 
 NU_HOST_NAME  = "Novel Updates"
 NU_HOST_LOGO  = "https://www.novelupdates.com/appicon.png"
@@ -43,6 +46,10 @@ RSS_OPEN = (
     'xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" '
     'version="2.0">'
 )
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _guid_from(parts) -> str:
     h = hashlib.sha1()
@@ -65,11 +72,12 @@ def _parse_pubdate(entry) -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
 def _strip_by_prefix(s: str) -> str:
+    """NU often uses 'By: username' in title; strip 'By:' if present."""
     m = re.match(r'^\s*by:\s*(.+)$', (s or "").strip(), re.I)
     return m.group(1).strip() if m else (s or "").strip()
 
 def _compact_cdata(xml_str: str) -> str:
-    # Compact <description><![CDATA[ ... ]]></description>
+    """Compact whitespace inside <description><![CDATA[...]]></description>."""
     pat = re.compile(r'(<description><!\[CDATA\[)(.*?)(\]\]></description>)', re.DOTALL)
     def repl(m):
         start, body, end = m.groups()
@@ -77,21 +85,27 @@ def _compact_cdata(xml_str: str) -> str:
     return pat.sub(repl, xml_str)
 
 # XML 1.0 legal char filter: tab, LF, CR, U+0020–U+D7FF, U+E000–U+FFFD, U+10000–U+10FFFF
-_XML10_BAD = re.compile(
-    r"[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]"
-)
+_XML10_BAD = re.compile(r"[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]")
 def _xml10(s: str) -> str:
     return _XML10_BAD.sub("", s or "")
 
-# ---------- read & lightly-parse your existing aggregated XML ----------
+def _safe_cdata(s: str) -> str:
+    # prevent ']]>' from breaking CDATA
+    return (s or "").replace("]]>", "]]&gt;")
+
+# ---------------------------------------------------------------------------
+# Existing feed reader (lightweight)
+# ---------------------------------------------------------------------------
+
 def _parse_existing_aggregated(xml_text: str) -> List[Dict[str, Any]]:
     items: List[Dict[str, Any]] = []
-    for block in re.findall(r"<item>(.*?)</item>", xml_text, flags=re.DOTALL|re.IGNORECASE):
+    for block in re.findall(r"<item>(.*?)</item>", xml_text, flags=re.DOTALL | re.IGNORECASE):
         def _get(tag, default=""):
-            m = re.search(rf"<{tag}[^>]*>(.*?)</{tag}>", block, re.DOTALL|re.IGNORECASE)
+            m = re.search(rf"<{tag}[^>]*>(.*?)</{tag}>", block, re.DOTALL | re.IGNORECASE)
             return m.group(1).strip() if m else default
+
         def _geta(tag, attr):
-            m = re.search(rf"<{tag}\s+[^>]*{attr}=\"([^\"]+)\"[^>]*/?>", block, re.DOTALL|re.IGNORECASE)
+            m = re.search(rf"<{tag}\s+[^>]*{attr}=\"([^\"]+)\"[^>]*/?>", block, re.DOTALL | re.IGNORECASE)
             return m.group(1) if m else ""
 
         title      = _get("title")
@@ -107,16 +121,16 @@ def _parse_existing_aggregated(xml_text: str) -> List[Dict[str, Any]]:
             pub_dt = dt.datetime.strptime(pub_s, "%a, %d %b %Y %H:%M:%S +0000").replace(tzinfo=dt.timezone.utc)
         except Exception:
             pub_dt = dt.datetime.now(dt.timezone.utc)
-        g = re.search(r'<guid\s+isPermaLink="([^"]+)">(.*?)</guid>', block, re.DOTALL|re.IGNORECASE)
+        g = re.search(r'<guid\s+isPermaLink="([^"]+)">(.*?)</guid>', block, re.DOTALL | re.IGNORECASE)
         is_perma = (g.group(1).lower() == "true") if g else False
-        guid     = g.group(2).strip() if g else _guid_from([title, creator, link, desc[:80]])
+        guid     = g.group(2).strip() if g else _guid_from([title, creator, link, (desc or "")[:80]])
         translator   = _get("translator")
         discord_role = _get("discord_role_id")
         chapter      = _get("chapter")  # keep if present
 
         # strip CDATA if any
-        creator = re.sub(r"^\s*<!\[CDATA\[|\]\]>\s*$", "", creator)
-        desc    = re.sub(r"^\s*<!\[CDATA\[|\]\]>\s*$", "", desc)
+        creator = re.sub(r"^\s*<!\[CDATA\[|\]\]>\s*$", "", creator or "")
+        desc    = re.sub(r"^\s*<!\[CDATA\[|\]\]>\s*$", "", desc or "")
 
         items.append({
             "novel_title": title,
@@ -136,7 +150,10 @@ def _parse_existing_aggregated(xml_text: str) -> List[Dict[str, Any]]:
         })
     return items
 
-# ---------- collect NU items from mappings ----------
+# ---------------------------------------------------------------------------
+# Collect NU items from mappings
+# ---------------------------------------------------------------------------
+
 def _collect_nu_items_from_mappings() -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for host, cfg in (HOSTING_SITE_DATA or {}).items():
@@ -148,6 +165,7 @@ def _collect_nu_items_from_mappings() -> List[Dict[str, Any]]:
                 continue
             parsed = feedparser.parse(nu_url)
             for e in getattr(parsed, "entries", []) or []:
+                # creator: take 'By: NAME' from title if present, else author field
                 author = _strip_by_prefix(e.get("title", "") or e.get("author", "") or "")
                 desc   = html.unescape(e.get("description", "") or "")
                 pub_dt = _parse_pubdate(e)
@@ -172,14 +190,13 @@ def _collect_nu_items_from_mappings() -> List[Dict[str, Any]]:
                     "pubDate": pub_dt,
                     "guid": guid_v,
                     "isPermaLink": is_perm,
-                    "chapter": "",  # force empty
+                    "chapter": "",  # force empty for NU
                 })
     return out
 
-# ---------- emit full aggregated feed (same shape, escaped safely) ----------
-def _safe_cdata(s: str) -> str:
-    # prevent ']]>' from breaking CDATA
-    return (s or "").replace("]]>", "]]&gt;")
+# ---------------------------------------------------------------------------
+# Emit merged XML (escaped & sanitized)
+# ---------------------------------------------------------------------------
 
 def _emit_aggregated(path: str, items: List[Dict[str, Any]]) -> None:
     with open(path, "w", encoding="utf-8") as f:
@@ -191,7 +208,7 @@ def _emit_aggregated(path: str, items: List[Dict[str, Any]]) -> None:
         f.write("    <description>Aggregated RSS feed for comments across hosting sites.</description>\n")
         f.write(f"    <lastBuildDate>{_to_rfc2822(dt.datetime.now(dt.timezone.utc))}</lastBuildDate>\n")
 
-        for it in items:          
+        for it in items:
             title_txt   = _xesc(_xml10(it.get('novel_title', '')))
             link_txt    = _xesc(_xml10(it.get('link', '')))
             trans_txt   = _xesc(_xml10(it.get('translator', '')))
@@ -199,17 +216,9 @@ def _emit_aggregated(path: str, items: List[Dict[str, Any]]) -> None:
             cat_txt     = _xesc(_xml10(it.get('category', 'SFW')))
             guid_txt    = _xesc(_xml10(it.get('guid', '')))
             chapter_txt = _xesc(_xml10(it.get('chapter', '') or ''))
-            
+
             creator_cdata = f"<![CDATA[ {_safe_cdata(_xml10(it.get('author','')))} ]]>"
             desc_cdata    = f"<![CDATA[ {_safe_cdata(_xml10(it.get('description','')))} ]]>"
-            
-            # also sanitize attributes:
-            feat = it.get("featured_image")
-            if feat:
-                f.write(f"      <featuredImage url={_xqa(_xml10(str(feat)))}/>\n")
-            host_logo = it.get("host_logo")
-            if host_logo:
-                f.write(f"      <hostLogo url={_xqa(_xml10(str(host_logo)))}/>\n")
 
             f.write("    <item>\n")
             f.write(f"      <title>{title_txt}</title>\n")
@@ -228,12 +237,12 @@ def _emit_aggregated(path: str, items: List[Dict[str, Any]]) -> None:
 
             feat = it.get("featured_image")
             if feat:
-                f.write(f"      <featuredImage url={_xqa(str(feat))}/>\n")
+                f.write(f"      <featuredImage url={_xqa(_xml10(str(feat)))}/>\n")
 
             f.write(f"      <host>{host_txt}</host>\n")
             host_logo = it.get("host_logo")
             if host_logo:
-                f.write(f"      <hostLogo url={_xqa(str(host_logo))}/>\n")
+                f.write(f"      <hostLogo url={_xqa(_xml10(str(host_logo)))}/>\n")
 
             f.write(f"      <category>{cat_txt}</category>\n")
             f.write(f"      <pubDate>{_to_rfc2822(it['pubDate'])}</pubDate>\n")
@@ -244,18 +253,24 @@ def _emit_aggregated(path: str, items: List[Dict[str, Any]]) -> None:
         f.write("  </channel>\n")
         f.write("</rss>\n")
 
-    # pretty-print + compact CDATA (unchanged)
+    # pretty-print; if it fails, keep compact version
     with open(path, "r", encoding="utf-8") as rf:
-        xml_text = rf.read()
+        xml_text = _xml10(rf.read())
 
-    xml_text = _xml10(xml_text)
+    try:
+        pretty = xml.dom.minidom.parseString(xml_text).toprettyxml(indent="  ")
+        xml_text = "\n".join([line for line in pretty.splitlines() if line.strip()])
+    except Exception:
+        # keep non-pretty (already valid) XML
+        pass
 
-    xml_text = "\n".join(
-        [line for line in xml.dom.minidom.parseString(xml_text).toprettyxml(indent="  ").splitlines() if line.strip()]
-    )
     xml_text = _compact_cdata(xml_text)
     with open(path, "w", encoding="utf-8") as wf:
         wf.write(xml_text)
+
+# ---------------------------------------------------------------------------
+# Merge flow
+# ---------------------------------------------------------------------------
 
 def merge_into_aggregated(aggregated_path: str) -> None:
     with open(aggregated_path, "r", encoding="utf-8") as f:
@@ -275,9 +290,11 @@ def merge_into_aggregated(aggregated_path: str) -> None:
     _emit_aggregated(aggregated_path, merged)
     print(f"[nu-merge] appended {len(nu_items)} NU items → {aggregated_path} (total {len(merged)})")
 
-# ---------- CLI ----------
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
 def main() -> int:
-    import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--merge", metavar="AGG_XML", help="Path to aggregated_comments_feed.xml")
     args = ap.parse_args()
