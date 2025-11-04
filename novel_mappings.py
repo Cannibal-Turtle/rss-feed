@@ -25,6 +25,7 @@ HOSTING_SITE_DATA = {
         "coin_emoji": "🔥",
         "novels": {
             "Quick Transmigration: The Villain Is Too Pampered and Alluring": {
+                "novelupdates_feed_url": "https://www.novelupdates.com/series/quick-transmigration-the-villain-is-too-pampered-and-alluring/feed/", #if you want to combine your host's comment feed with NU's.
                 "discord_role_id": "<@&1329391480435114005>",
                 "novel_url": "https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/",
                 "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/177838.jpg",
@@ -55,6 +56,7 @@ HOSTING_SITE_DATA = {
         "token_secret": "MISTMINT_COOKIE",
         "novels": {
             "[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught": {
+                "novelupdates_feed_url": "https://www.novelupdates.com/series/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/chapters",
                 "discord_role_id": "<@&1431675643078250646>",
                 "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught",
