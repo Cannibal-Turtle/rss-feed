@@ -46,6 +46,12 @@ jobs:
           MISTMINT_COOKIE:   ${{ secrets.MISTMINT_COOKIE }}
         run: python comments.py
 
+      - name: Merge NovelUpdates comments (post-merge)
+        env:
+          GITHUB_TOKEN:      ${{ github.token }} 
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python -m host_utils.host_nu_comments --merge aggregated_comments_feed.xml
+
       - name: Commit and Push Changes (feed + token state)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
