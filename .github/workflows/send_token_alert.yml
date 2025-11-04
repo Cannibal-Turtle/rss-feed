@@ -3,6 +3,7 @@ name: Send Token Alert to Discord
 on:
   repository_dispatch:
     types: [token-expiring]
+  workflow_dispatch:
 
 permissions:
   contents: read
