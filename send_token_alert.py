@@ -50,11 +50,7 @@ def main():
 
     # Fancy header outside embed (as you wanted)
     header = (
-        "⌢⌢⌢⌢⌢⌢⌢⌢⌢⌢⌢⌢⌢⌢⌢⌢\n"
-        "﹉﹉﹉﹉﹉﹉˚₊‧ ଳ ‧₊˚﹉﹉﹉﹉﹉﹉\n"
-        "## <a:2891_RedAlert:1435281549074628618> token expiration alert\n"
-        "﹉﹉﹉﹉﹉﹉˚₊‧ ଳ ‧₊˚﹉﹉﹉﹉﹉﹉\n"
-        "⌢⌢⌢⌢⌢⌢⌢⌢⌢⌢⌢⌢⌢⌢⌢⌢"
+        "## -ˏˋଳ‧₊˚██ token expiring *___*ˊˎ  <a:2891_RedAlert:1435281549074628618>"
     )
     content = header
     if GLOBAL_MENTION:
