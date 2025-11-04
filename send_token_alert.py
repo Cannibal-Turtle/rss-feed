@@ -50,9 +50,9 @@ def main():
 
     # Fancy header outside embed (as you wanted)
     header = (
-        "╔˚₊‧ ଳ ‧₊˚ ⋅══════════════╗\n"
-        "     <:alertpink2:1365567099480707173>    *token expiration alert*\n"
-        "╚══════════════˚₊‧ ଳ ‧₊˚ ⋅╝"
+        "╔˚₊‧ ଳ ‧₊˚ ⋅═══════════╗\n"
+        "##     <:alertpink2:1365567099480707173>    *token expiration alert*\n"
+        "╚═══════════˚₊‧ ଳ ‧₊˚ ⋅╝"
     )
     content = header
     if GLOBAL_MENTION:
