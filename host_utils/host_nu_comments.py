@@ -169,8 +169,7 @@ def _collect_nu_items_from_mappings() -> List[Dict[str, Any]]:
                 })
     return out
 
-# ---------- emit full aggregated feed (same shape) ----------
-
+# ---------- emit full aggregated feed (same shape, escaped safely) ----------
 def _safe_cdata(s: str) -> str:
     # prevent ']]>' from breaking CDATA
     return (s or "").replace("]]>", "]]&gt;")
@@ -214,7 +213,6 @@ def _emit_aggregated(path: str, items: List[Dict[str, Any]]) -> None:
 
             feat = it.get("featured_image")
             if feat:
-                # quoteattr returns a full quoted+escaped attribute value, e.g. "https://...&amp;x=1"
                 f.write(f"      <featuredImage url={_xqa(str(feat))}/>\n")
 
             f.write(f"      <host>{host_txt}</host>\n")
@@ -241,8 +239,27 @@ def _emit_aggregated(path: str, items: List[Dict[str, Any]]) -> None:
     with open(path, "w", encoding="utf-8") as wf:
         wf.write(xml_text)
 
+def merge_into_aggregated(aggregated_path: str) -> None:
+    with open(aggregated_path, "r", encoding="utf-8") as f:
+        existing = f.read()
+
+    base_items = _parse_existing_aggregated(existing)
+    nu_items   = _collect_nu_items_from_mappings()
+
+    seen = {it["guid"] for it in base_items}
+    merged = list(base_items)
+    for it in nu_items:
+        if it["guid"] not in seen:
+            merged.append(it)
+            seen.add(it["guid"])
+
+    merged.sort(key=lambda x: x["pubDate"], reverse=True)
+    _emit_aggregated(aggregated_path, merged)
+    print(f"[nu-merge] appended {len(nu_items)} NU items → {aggregated_path} (total {len(merged)})")
+
 # ---------- CLI ----------
-def main():
+def main() -> int:
+    import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--merge", metavar="AGG_XML", help="Path to aggregated_comments_feed.xml")
     args = ap.parse_args()
