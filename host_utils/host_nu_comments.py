@@ -279,17 +279,24 @@ def merge_into_aggregated(aggregated_path: str) -> None:
     base_items = _parse_existing_aggregated(existing)
     nu_items   = _collect_nu_items_from_mappings()
 
-    seen = {it["guid"] for it in base_items}
-    merged = list(base_items)
-    for it in nu_items:
-        if it["guid"] not in seen:
-            merged.append(it)
-            seen.add(it["guid"])
+    # nothing fetched from NU at all → skip writing
+    if not nu_items:
+        print("[nu-merge] no NU items; skipping rewrite")
+        return
 
+    seen = {it["guid"] for it in base_items}
+    new_items = [it for it in nu_items if it["guid"] not in seen]
+
+    # no new GUIDs → skip writing
+    if not new_items:
+        print("[nu-merge] no new NU items; skipping rewrite")
+        return
+
+    merged = base_items + new_items
     merged.sort(key=lambda x: x["pubDate"], reverse=True)
     _emit_aggregated(aggregated_path, merged)
-    print(f"[nu-merge] appended {len(nu_items)} NU items → {aggregated_path} (total {len(merged)})")
-
+    print(f"[nu-merge] appended {len(new_items)} NU items → {aggregated_path} (total {len(merged)})")
+  
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
