@@ -1,41 +1,48 @@
 # -*- coding: utf-8 -*-
 """
-host_utils/host_nu_comments.py
+Post-merge-only NU appender for aggregated_comments_feed.xml
 
-Helpers to collect NovelUpdates *comment* items for novels that define
-'novelupdates_feed_url' in HOSTING_SITE_DATA[<host>].novels[*].
+Usage (in CI after comments.py):
+  python -m host_utils.host_nu_comments --merge aggregated_comments_feed.xml
 
-These are intentionally shaped to match comments.py's loader expectations
-so you can simply `items.extend(collect_nu_items_for_host("Dragonholic"))`
-inside your existing host loader without changing comments.py.
-
-Returned dict keys per item:
-  - novel_title     (str)  : from mappings' novel key
-  - chapter         (str)  : ""   (force empty chapter as requested)
-  - author          (str)  : parsed from NU item title "By: name" (case-insensitive)
-  - description     (str)  : NU description (HTML already unescaped)
-  - posted_at       (str)  : ISO8601 UTC (Z) time string
-  - reply_to        (str)  : ""   (NU has no reply chains)
-  - guid            (str)  : NU id/guid/link or fallback SHA1
-  - link            (str)  : NU item link (left as-is)
-
-Optional helpers:
-  - is_nu_link(url)                 -> bool
-  - extract_chapter_for_nu(url)     -> "" (so your host's extract_chapter can short-circuit)
-  - passthrough_comment_link_for_nu(novel_title, host, link) -> link unchanged for NU
+What it does:
+- Scans HOSTING_SITE_DATA[*].novels[*].novelupdates_feed_url
+- Fetches NU items via feedparser
+- Builds items with your exact mapping rules and appends to existing XML
+- De-dups by GUID, sorts by pubDate desc, preserves your RSS shape
 """
 
 from __future__ import annotations
 import re
 import html
+import argparse
 import hashlib
 import datetime as dt
 from typing import List, Dict, Any
-
 import feedparser
-from novel_mappings import HOSTING_SITE_DATA
+import xml.dom.minidom
 
-# ──────────────────────────────────────────────────────────────────────────────
+from novel_mappings import HOSTING_SITE_DATA
+try:
+    from novel_mappings import get_nsfw_novels  # if defined
+except Exception:
+    def get_nsfw_novels() -> List[str]:
+        return []
+
+NU_HOST_NAME  = "Novel Updates"
+NU_HOST_LOGO  = "https://www.novelupdates.com/appicon.png"
+
+XMLDECL = '<?xml version="1.0" encoding="utf-8"?>'
+RSS_OPEN = (
+    '<rss xmlns:content="http://purl.org/rss/1.0/modules/content/" '
+    'xmlns:dc="http://purl.org/dc/elements/1.1/" '
+    'xmlns:atom="http://www.w3.org/2005/Atom" '
+    'xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" '
+    'xmlns:georss="http://www.georss.org/georss" '
+    'xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" '
+    'version="2.0">'
+)
+
 def _guid_from(parts) -> str:
     h = hashlib.sha1()
     for p in parts:
@@ -43,10 +50,12 @@ def _guid_from(parts) -> str:
         h.update(b"\x1f")
     return h.hexdigest()
 
-def _strip_by_prefix(s: str) -> str:
-    """Strip leading 'By: ' (any case) from creator/title field."""
-    m = re.match(r'^\s*by:\s*(.+)$', (s or "").strip(), re.I)
-    return m.group(1).strip() if m else (s or "").strip()
+def _to_rfc2822(t: dt.datetime) -> str:
+    if t.tzinfo is None:
+        t = t.replace(tzinfo=dt.timezone.utc)
+    else:
+        t = t.astimezone(dt.timezone.utc)
+    return t.strftime("%a, %d %b %Y %H:%M:%S +0000")
 
 def _parse_pubdate(entry) -> dt.datetime:
     pp = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
@@ -54,69 +63,191 @@ def _parse_pubdate(entry) -> dt.datetime:
         return dt.datetime(*pp[:6], tzinfo=dt.timezone.utc)
     return dt.datetime.now(dt.timezone.utc)
 
-def _to_iso_utc_z(t: dt.datetime) -> str:
-    if t.tzinfo is None:
-        t = t.replace(tzinfo=dt.timezone.utc)
-    else:
-        t = t.astimezone(dt.timezone.utc)
-    return t.isoformat().replace("+00:00", "Z")
+def _strip_by_prefix(s: str) -> str:
+    m = re.match(r'^\s*by:\s*(.+)$', (s or "").strip(), re.I)
+    return m.group(1).strip() if m else (s or "").strip()
 
-# ───────────────── helpers you can call from your host modules ───────────────
-def collect_nu_items_for_host(host_name: str) -> List[Dict[str, Any]]:
-    """
-    Look up HOSTING_SITE_DATA[host_name].novels[*].novelupdates_feed_url
-    and return normalized comment items for comments.py's loader path.
-    """
+def _compact_cdata(xml_str: str) -> str:
+    # Compact <description><![CDATA[ ... ]]></description>
+    pat = re.compile(r'(<description><!\[CDATA\[)(.*?)(\]\]></description>)', re.DOTALL)
+    def repl(m):
+        start, body, end = m.groups()
+        return f"{start}{re.sub(r'\\s+', ' ', body.strip())}{end}"
+    return pat.sub(repl, xml_str)
+
+# ---------- read & lightly-parse your existing aggregated XML ----------
+def _parse_existing_aggregated(xml_text: str) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+    for block in re.findall(r"<item>(.*?)</item>", xml_text, flags=re.DOTALL|re.IGNORECASE):
+        def _get(tag, default=""):
+            m = re.search(rf"<{tag}[^>]*>(.*?)</{tag}>", block, re.DOTALL|re.IGNORECASE)
+            return m.group(1).strip() if m else default
+        def _geta(tag, attr):
+            m = re.search(rf"<{tag}\s+[^>]*{attr}=\"([^\"]+)\"[^>]*/?>", block, re.DOTALL|re.IGNORECASE)
+            return m.group(1) if m else ""
+
+        title      = _get("title")
+        link       = _get("link")
+        creator    = _get("dc:creator") or _get("creator")
+        desc       = _get("description")
+        host       = _get("host")
+        host_logo  = _geta("hostLogo", "url")
+        featured   = _geta("featuredImage", "url")
+        category   = _get("category") or "SFW"
+        pub_s      = _get("pubDate")
+        try:
+            pub_dt = dt.datetime.strptime(pub_s, "%a, %d %b %Y %H:%M:%S +0000").replace(tzinfo=dt.timezone.utc)
+        except Exception:
+            pub_dt = dt.datetime.now(dt.timezone.utc)
+        g = re.search(r'<guid\s+isPermaLink="([^"]+)">(.*?)</guid>', block, re.DOTALL|re.IGNORECASE)
+        is_perma = (g.group(1).lower() == "true") if g else False
+        guid     = g.group(2).strip() if g else _guid_from([title, creator, link, desc[:80]])
+        translator   = _get("translator")
+        discord_role = _get("discord_role_id")
+        chapter      = _get("chapter")  # keep if present
+
+        # strip CDATA if any
+        creator = re.sub(r"^\s*<!\[CDATA\[|\]\]>\s*$", "", creator)
+        desc    = re.sub(r"^\s*<!\[CDATA\[|\]\]>\s*$", "", desc)
+
+        items.append({
+            "novel_title": title,
+            "host": host,
+            "translator": translator,
+            "discord_role_id": discord_role,
+            "featured_image": featured,
+            "category": category,
+            "host_logo": host_logo,
+            "link": link,
+            "author": creator,
+            "description": desc,
+            "pubDate": pub_dt,
+            "guid": guid,
+            "isPermaLink": is_perma,
+            "chapter": chapter,
+        })
+    return items
+
+# ---------- collect NU items from mappings ----------
+def _collect_nu_items_from_mappings() -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
-    host_cfg = (HOSTING_SITE_DATA.get(host_name) or {})
-    novels = (host_cfg.get("novels") or {})
+    for host, cfg in (HOSTING_SITE_DATA or {}).items():
+        novels = (cfg.get("novels") or {})
+        translator = cfg.get("translator", "")
+        for novel_title, nd in novels.items():
+            nu_url = (nd.get("novelupdates_feed_url") or "").strip()
+            if not nu_url:
+                continue
+            parsed = feedparser.parse(nu_url)
+            for e in getattr(parsed, "entries", []) or []:
+                author = _strip_by_prefix(e.get("title", "") or e.get("author", "") or "")
+                desc   = html.unescape(e.get("description", "") or "")
+                pub_dt = _parse_pubdate(e)
+                guid_v = getattr(e, "id", "") or e.get("guid") or e.get("link") or _guid_from(
+                    [novel_title, author, e.get("link", ""), desc[:80]]
+                )
+                is_perm = bool(getattr(e, "guidislink", False))
+                link_v  = e.get("link", "") or ""
+                category_value = "NSFW" if novel_title in get_nsfw_novels() else "SFW"
 
-    for novel_title, nd in novels.items():
-        nu_url = (nd.get("novelupdates_feed_url") or "").strip()
-        if not nu_url:
-            continue
-
-        parsed = feedparser.parse(nu_url)
-        for e in getattr(parsed, "entries", []) or []:
-            author = _strip_by_prefix(e.get("title", "") or e.get("author", "") or "")
-            desc = html.unescape(e.get("description", "") or "")
-            pub_dt = _parse_pubdate(e)
-
-            guid_val = getattr(e, "id", "") or e.get("guid") or e.get("link") or _guid_from(
-                [novel_title, author, e.get("link", ""), desc[:80]]
-            )
-            link_val = e.get("link", "") or ""
-
-            out.append({
-                "novel_title": novel_title,
-                "chapter": "",                         # force empty <chapter>
-                "author": author,                      # parsed username
-                "description": desc,                   # NU description
-                "posted_at": _to_iso_utc_z(pub_dt),    # ISO UTC Z
-                "reply_to": "",                        # NU has no reply chains
-                "guid": guid_val,                      # from feed or fallback
-                "link": link_val,                      # NU link as-is
-            })
+                out.append({
+                    "novel_title": novel_title,
+                    "host": NU_HOST_NAME,
+                    "translator": translator,
+                    "discord_role_id": (nd.get("discord_role_id") or ""),
+                    "featured_image": (nd.get("featured_image") or ""),
+                    "category": category_value,
+                    "host_logo": NU_HOST_LOGO,
+                    "link": link_v,
+                    "author": author,
+                    "description": desc,
+                    "pubDate": pub_dt,
+                    "guid": guid_v,
+                    "isPermaLink": is_perm,
+                    "chapter": "",  # force empty
+                })
     return out
 
-def is_nu_link(url: str) -> bool:
-    return isinstance(url, str) and "novelupdates.com" in url.lower()
+# ---------- emit full aggregated feed (same shape) ----------
+def _emit_aggregated(path: str, items: List[Dict[str, Any]]) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(XMLDECL + "\n")
+        f.write(RSS_OPEN + "\n")
+        f.write("  <channel>\n")
+        f.write("    <title>Aggregated Comments Feed</title>\n")
+        f.write("    <link>https://github.com/Cannibal-Turtle</link>\n")
+        f.write("    <description>Aggregated RSS feed for comments across hosting sites.</description>\n")
+        f.write(f"    <lastBuildDate>{_to_rfc2822(dt.datetime.now(dt.timezone.utc))}</lastBuildDate>\n")
 
-def extract_chapter_for_nu(url: str) -> str:
-    """
-    Return empty string for NU so comments.py emits <chapter></chapter>
-    via your host's extract_chapter short-circuit.
-    Use from your host's extract_chapter like:
+        for it in items:
+            creator_cdata = f"<![CDATA[ {it.get('author','')} ]]>"
+            desc_cdata    = f"<![CDATA[ {it.get('description','')} ]]>"
 
-        if is_nu_link(link): return extract_chapter_for_nu(link)
-    """
-    return ""
+            f.write("    <item>\n")
+            f.write(f"      <title>{it['novel_title']}</title>\n")
+            f.write(f"      <chapter>{it.get('chapter','') or ''}</chapter>\n")
+            f.write(f"      <link>{it['link']}</link>\n")
+            f.write("      <dc:creator>\n")
+            f.write(f"        {creator_cdata}\n")
+            f.write("      </dc:creator>\n")
+            f.write("      <description>\n")
+            f.write(f"        {desc_cdata}\n")
+            f.write("      </description>\n")
+            f.write(f"      <translator>{it.get('translator','')}</translator>\n")
+            f.write("      <discord_role_id>\n")
+            f.write(f"        <![CDATA[ {it.get('discord_role_id','')} ]]>\n")
+            f.write("      </discord_role_id>\n")
+            if it.get("featured_image"):
+                f.write(f'      <featuredImage url="{it["featured_image"]}"/>\n')
+            f.write(f"      <host>{it.get('host','')}</host>\n")
+            if it.get("host_logo"):
+                f.write(f'      <hostLogo url="{it["host_logo"]}"/>\n')
+            f.write(f"      <category>{it.get('category','SFW')}</category>\n")
+            f.write(f"      <pubDate>{_to_rfc2822(it['pubDate'])}</pubDate>\n")
+            f.write(f'      <guid isPermaLink="{str(bool(it.get("isPermaLink"))).lower()}">{it["guid"]}</guid>\n')
+            f.write("    </item>\n")
 
-def passthrough_comment_link_for_nu(novel_title: str, host: str, link: str) -> str:
-    """
-    Return NU links unchanged so your host-specific build_comment_link()
-    can early-return for NU:
+        f.write("  </channel>\n")
+        f.write("</rss>\n")
 
-        if is_nu_link(link): return passthrough_comment_link_for_nu(nt, host, link)
-    """
-    return link
+    # pretty + compact CDATA like your generator
+    with open(path, "r", encoding="utf-8") as rf:
+        xml_text = rf.read()
+    xml_text = "\n".join(
+        [line for line in xml.dom.minidom.parseString(xml_text).toprettyxml(indent="  ").splitlines() if line.strip()]
+    )
+    xml_text = _compact_cdata(xml_text)
+    with open(path, "w", encoding="utf-8") as wf:
+        wf.write(xml_text)
+
+def merge_into_aggregated(aggregated_path: str) -> None:
+    with open(aggregated_path, "r", encoding="utf-8") as f:
+        existing = f.read()
+
+    base_items = _parse_existing_aggregated(existing)
+    nu_items   = _collect_nu_items_from_mappings()
+
+    seen = {it["guid"] for it in base_items}
+    merged = list(base_items)
+    for it in nu_items:
+        if it["guid"] not in seen:
+            merged.append(it)
+            seen.add(it["guid"])
+
+    merged.sort(key=lambda x: x["pubDate"], reverse=True)
+    _emit_aggregated(aggregated_path, merged)
+    print(f"[nu-merge] appended {len(nu_items)} NU items → {aggregated_path} (total {len(merged)})")
+
+# ---------- CLI ----------
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--merge", metavar="AGG_XML", help="Path to aggregated_comments_feed.xml")
+    args = ap.parse_args()
+    if not args.merge:
+        ap.print_help()
+        return 2
+    merge_into_aggregated(args.merge)
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())
