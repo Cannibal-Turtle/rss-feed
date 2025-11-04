@@ -473,9 +473,3 @@ DRAGONHOLIC_UTILS = {
         lambda: [],
 }
 
-def get_host_utils(host: str):
-    if host == "Dragonholic":
-        return DRAGONHOLIC_UTILS
-
-    return {}
-
