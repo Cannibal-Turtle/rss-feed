@@ -21,6 +21,7 @@ import datetime as dt
 from typing import List, Dict, Any
 import feedparser
 import xml.dom.minidom
+from xml.sax.saxutils import escape as _xesc, quoteattr as _xqa
 
 from novel_mappings import HOSTING_SITE_DATA
 try:
@@ -169,6 +170,11 @@ def _collect_nu_items_from_mappings() -> List[Dict[str, Any]]:
     return out
 
 # ---------- emit full aggregated feed (same shape) ----------
+
+def _safe_cdata(s: str) -> str:
+    # prevent ']]>' from breaking CDATA
+    return (s or "").replace("]]>", "]]&gt;")
+
 def _emit_aggregated(path: str, items: List[Dict[str, Any]]) -> None:
     with open(path, "w", encoding="utf-8") as f:
         f.write(XMLDECL + "\n")
@@ -180,37 +186,52 @@ def _emit_aggregated(path: str, items: List[Dict[str, Any]]) -> None:
         f.write(f"    <lastBuildDate>{_to_rfc2822(dt.datetime.now(dt.timezone.utc))}</lastBuildDate>\n")
 
         for it in items:
-            creator_cdata = f"<![CDATA[ {it.get('author','')} ]]>"
-            desc_cdata    = f"<![CDATA[ {it.get('description','')} ]]>"
+            title_txt   = _xesc(it.get('novel_title', ''))
+            link_txt    = _xesc(it.get('link', ''))
+            trans_txt   = _xesc(it.get('translator', ''))
+            host_txt    = _xesc(it.get('host', ''))
+            cat_txt     = _xesc(it.get('category', 'SFW'))
+            guid_txt    = _xesc(it.get('guid', ''))
+            chapter_txt = _xesc(it.get('chapter', '') or '')
+
+            creator_cdata = f"<![CDATA[ {_safe_cdata(it.get('author',''))} ]]>"
+            desc_cdata    = f"<![CDATA[ {_safe_cdata(it.get('description',''))} ]]>"
 
             f.write("    <item>\n")
-            f.write(f"      <title>{it['novel_title']}</title>\n")
-            f.write(f"      <chapter>{it.get('chapter','') or ''}</chapter>\n")
-            f.write(f"      <link>{it['link']}</link>\n")
+            f.write(f"      <title>{title_txt}</title>\n")
+            f.write(f"      <chapter>{chapter_txt}</chapter>\n")
+            f.write(f"      <link>{link_txt}</link>\n")
             f.write("      <dc:creator>\n")
             f.write(f"        {creator_cdata}\n")
             f.write("      </dc:creator>\n")
             f.write("      <description>\n")
             f.write(f"        {desc_cdata}\n")
             f.write("      </description>\n")
-            f.write(f"      <translator>{it.get('translator','')}</translator>\n")
+            f.write(f"      <translator>{trans_txt}</translator>\n")
             f.write("      <discord_role_id>\n")
             f.write(f"        <![CDATA[ {it.get('discord_role_id','')} ]]>\n")
             f.write("      </discord_role_id>\n")
-            if it.get("featured_image"):
-                f.write(f'      <featuredImage url="{it["featured_image"]}"/>\n')
-            f.write(f"      <host>{it.get('host','')}</host>\n")
-            if it.get("host_logo"):
-                f.write(f'      <hostLogo url="{it["host_logo"]}"/>\n')
-            f.write(f"      <category>{it.get('category','SFW')}</category>\n")
+
+            feat = it.get("featured_image")
+            if feat:
+                # quoteattr returns a full quoted+escaped attribute value, e.g. "https://...&amp;x=1"
+                f.write(f"      <featuredImage url={_xqa(str(feat))}/>\n")
+
+            f.write(f"      <host>{host_txt}</host>\n")
+            host_logo = it.get("host_logo")
+            if host_logo:
+                f.write(f"      <hostLogo url={_xqa(str(host_logo))}/>\n")
+
+            f.write(f"      <category>{cat_txt}</category>\n")
             f.write(f"      <pubDate>{_to_rfc2822(it['pubDate'])}</pubDate>\n")
-            f.write(f'      <guid isPermaLink="{str(bool(it.get("isPermaLink"))).lower()}">{it["guid"]}</guid>\n')
+            is_perm = str(bool(it.get("isPermaLink"))).lower()
+            f.write(f"      <guid isPermaLink=\"{is_perm}\">{guid_txt}</guid>\n")
             f.write("    </item>\n")
 
         f.write("  </channel>\n")
         f.write("</rss>\n")
 
-    # pretty + compact CDATA like your generator
+    # pretty-print + compact CDATA (unchanged)
     with open(path, "r", encoding="utf-8") as rf:
         xml_text = rf.read()
     xml_text = "\n".join(
@@ -219,24 +240,6 @@ def _emit_aggregated(path: str, items: List[Dict[str, Any]]) -> None:
     xml_text = _compact_cdata(xml_text)
     with open(path, "w", encoding="utf-8") as wf:
         wf.write(xml_text)
-
-def merge_into_aggregated(aggregated_path: str) -> None:
-    with open(aggregated_path, "r", encoding="utf-8") as f:
-        existing = f.read()
-
-    base_items = _parse_existing_aggregated(existing)
-    nu_items   = _collect_nu_items_from_mappings()
-
-    seen = {it["guid"] for it in base_items}
-    merged = list(base_items)
-    for it in nu_items:
-        if it["guid"] not in seen:
-            merged.append(it)
-            seen.add(it["guid"])
-
-    merged.sort(key=lambda x: x["pubDate"], reverse=True)
-    _emit_aggregated(aggregated_path, merged)
-    print(f"[nu-merge] appended {len(nu_items)} NU items → {aggregated_path} (total {len(merged)})")
 
 # ---------- CLI ----------
 def main():
