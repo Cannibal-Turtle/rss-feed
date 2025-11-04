@@ -1,27 +1,31 @@
 # -*- coding: utf-8 -*-
 """
-Post-merge-only NU appender for aggregated_comments_feed.xml
+Post-merge Novel Updates appender for aggregated_comments_feed.xml
 
-Usage (in CI after comments.py):
+Usage (CI step after comments.py):
   python -m host_utils.host_nu_comments --merge aggregated_comments_feed.xml
 
-What it does:
-- Scans HOSTING_SITE_DATA[*].novels[*].novelupdates_feed_url
-- Fetches Novel Updates comment items via feedparser
-- Builds items with your mapping rules and appends to existing XML
-- De-dups by GUID, sorts by pubDate desc, preserves your RSS shape
+Behavior:
+- Read existing aggregated XML as raw text
+- Extract existing <item>...</item> blocks verbatim
+- Fetch NU comment items from mappings (novelupdates_feed_url)
+- Build NU items as raw <item> blocks (role mention normalized)
+- De-duplicate by GUID
+- Sort ALL blocks by <pubDate> DESC
+- Write header + sorted blocks + footer (existing blocks unchanged byte-for-byte)
 """
 
 from __future__ import annotations
 
-import re
-import html
 import argparse
-import hashlib
 import datetime as dt
-from typing import List, Dict, Any
+import hashlib
+import html
+import re
+from email.utils import parsedate_to_datetime
+from typing import Any, Dict, List
+
 import feedparser
-import xml.dom.minidom
 from xml.sax.saxutils import escape as _xesc, quoteattr as _xqa
 
 from novel_mappings import HOSTING_SITE_DATA
@@ -31,25 +35,25 @@ except Exception:
     def get_nsfw_novels() -> List[str]:
         return []
 
-# ---------------------------------------------------------------------------
+# ---------------------------- constants --------------------------------
 
 NU_HOST_NAME  = "Novel Updates"
 NU_HOST_LOGO  = "https://www.novelupdates.com/appicon.png"
 
-XMLDECL = '<?xml version="1.0" encoding="utf-8"?>'
-RSS_OPEN = (
-    '<rss xmlns:content="http://purl.org/rss/1.0/modules/content/" '
-    'xmlns:dc="http://purl.org/dc/elements/1.1/" '
-    'xmlns:atom="http://www.w3.org/2005/Atom" '
-    'xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" '
-    'xmlns:georss="http://www.georss.org/georss" '
-    'xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" '
-    'version="2.0">'
-)
+# XML 1.0 legal char filter: tab, LF, CR, U+0020–U+D7FF, U+E000–U+FFFD, U+10000–U+10FFFF
+_XML10_BAD = re.compile(r"[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]")
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+_ITEM_RE = re.compile(r"(<item>.*?</item>)", re.DOTALL | re.IGNORECASE)
+_PUB_RE  = re.compile(r"<pubDate>(.*?)</pubDate>", re.IGNORECASE | re.DOTALL)
+_GUID_RE = re.compile(r"<guid[^>]*>(.*?)</guid>", re.IGNORECASE | re.DOTALL)
+
+# accepts 123 or <@&123>
+_ROLE_RE = re.compile(r"^\s*(?:<@&)?(\d+)>?\s*$", re.ASCII)
+
+# ---------------------------- helpers ----------------------------------
+
+def _xml10(s: str) -> str:
+    return _XML10_BAD.sub("", s or "")
 
 def _guid_from(parts) -> str:
     h = hashlib.sha1()
@@ -58,6 +62,17 @@ def _guid_from(parts) -> str:
         h.update(b"\x1f")
     return h.hexdigest()
 
+def _parse_pubdate_rfc2822(s: str) -> dt.datetime:
+    try:
+        d = parsedate_to_datetime(s)
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=dt.timezone.utc)
+        else:
+            d = d.astimezone(dt.timezone.utc)
+        return d
+    except Exception:
+        return dt.datetime.now(dt.timezone.utc)
+
 def _to_rfc2822(t: dt.datetime) -> str:
     if t.tzinfo is None:
         t = t.replace(tzinfo=dt.timezone.utc)
@@ -65,94 +80,58 @@ def _to_rfc2822(t: dt.datetime) -> str:
         t = t.astimezone(dt.timezone.utc)
     return t.strftime("%a, %d %b %Y %H:%M:%S +0000")
 
-def _parse_pubdate(entry) -> dt.datetime:
-    pp = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
-    if pp:
-        return dt.datetime(*pp[:6], tzinfo=dt.timezone.utc)
-    return dt.datetime.now(dt.timezone.utc)
+def _cdata(s: str) -> str:
+    """Safe CDATA wrapper that splits any ']]>'."""
+    s = s or ""
+    s = s.replace("]]>", "]]]]><![CDATA[>")
+    return "<![CDATA[" + s + "]]>"
 
 def _strip_by_prefix(s: str) -> str:
-    """NU often uses 'By: username' in title; strip 'By:' if present."""
-    m = re.match(r'^\s*by:\s*(.+)$', (s or "").strip(), re.I)
+    """NU often has 'By: username' in title; strip if present."""
+    m = re.match(r"^\s*by:\s*(.+)$", (s or "").strip(), re.I)
     return m.group(1).strip() if m else (s or "").strip()
 
-def _compact_cdata(xml_str: str) -> str:
-    """Compact whitespace inside <description><![CDATA[...]]></description>."""
-    pat = re.compile(r'(<description><!\[CDATA\[)(.*?)(\]\]></description>)', re.DOTALL)
-    def repl(m):
-        start, body, end = m.groups()
-        return f"{start}{re.sub(r'\\s+', ' ', body.strip())}{end}"
-    return pat.sub(repl, xml_str)
+def _role_mention(val: str) -> str:
+    """
+    Accept '12345' or '<@&12345>' (with or without whitespace / CDATA).
+    Return '<@&12345>' or ''.
+    """
+    if not val:
+        return ""
+    # unescape & strip CDATA if fed from XML
+    v = html.unescape(val).strip()
+    v = re.sub(r"^\s*<!\[CDATA\[|\]\]>\s*$", "", v).strip()
+    m = _ROLE_RE.match(v)
+    return f"<@&{m.group(1)}>" if m else ""
 
-# XML 1.0 legal char filter: tab, LF, CR, U+0020–U+D7FF, U+E000–U+FFFD, U+10000–U+10FFFF
-_XML10_BAD = re.compile(r"[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]")
-def _xml10(s: str) -> str:
-    return _XML10_BAD.sub("", s or "")
+def _parse_existing_aggregated(xml_text: str) -> List[str]:
+    """Return list of raw <item>...</item> blocks verbatim."""
+    return _ITEM_RE.findall(xml_text)
 
-def _safe_cdata(s: str) -> str:
-    # prevent ']]>' from breaking CDATA
-    return (s or "").replace("]]>", "]]&gt;")
+def _split_header_items_footer(xml_text: str):
+    """Return (header, [item blocks], footer) without altering bytes."""
+    items = _parse_existing_aggregated(xml_text)
+    if not items:
+        # Try to split around </channel> so footer carries closing tags
+        m = re.search(r"(.*?<channel>)(.*)(</channel>.*)", xml_text, re.DOTALL | re.IGNORECASE)
+        if m:
+            return m.group(1), [], m.group(3)
+        return xml_text, [], ""  # extreme fallback
+    first = xml_text.find(items[0])
+    last  = xml_text.rfind(items[-1]) + len(items[-1])
+    header = xml_text[:first]
+    footer = xml_text[last:]
+    return header, items, footer
 
-# ---------------------------------------------------------------------------
-# Existing feed reader (lightweight)
-# ---------------------------------------------------------------------------
+def _block_pubdate(block: str) -> dt.datetime:
+    m = _PUB_RE.search(block)
+    return _parse_pubdate_rfc2822(m.group(1).strip()) if m else dt.datetime.now(dt.timezone.utc)
 
-def _parse_existing_aggregated(xml_text: str) -> List[Dict[str, Any]]:
-    items: List[Dict[str, Any]] = []
-    for block in re.findall(r"<item>(.*?)</item>", xml_text, flags=re.DOTALL | re.IGNORECASE):
-        def _get(tag, default=""):
-            m = re.search(rf"<{tag}[^>]*>(.*?)</{tag}>", block, re.DOTALL | re.IGNORECASE)
-            return m.group(1).strip() if m else default
+def _block_guid(block: str) -> str:
+    m = _GUID_RE.search(block)
+    return (m.group(1).strip() if m else "") or ""
 
-        def _geta(tag, attr):
-            m = re.search(rf"<{tag}\s+[^>]*{attr}=\"([^\"]+)\"[^>]*/?>", block, re.DOTALL | re.IGNORECASE)
-            return m.group(1) if m else ""
-
-        title      = _get("title")
-        link       = _get("link")
-        creator    = _get("dc:creator") or _get("creator")
-        desc       = _get("description")
-        host       = _get("host")
-        host_logo  = _geta("hostLogo", "url")
-        featured   = _geta("featuredImage", "url")
-        category   = _get("category") or "SFW"
-        pub_s      = _get("pubDate")
-        try:
-            pub_dt = dt.datetime.strptime(pub_s, "%a, %d %b %Y %H:%M:%S +0000").replace(tzinfo=dt.timezone.utc)
-        except Exception:
-            pub_dt = dt.datetime.now(dt.timezone.utc)
-        g = re.search(r'<guid\s+isPermaLink="([^"]+)">(.*?)</guid>', block, re.DOTALL | re.IGNORECASE)
-        is_perma = (g.group(1).lower() == "true") if g else False
-        guid     = g.group(2).strip() if g else _guid_from([title, creator, link, (desc or "")[:80]])
-        translator   = _get("translator")
-        discord_role = _get("discord_role_id")
-        chapter      = _get("chapter")  # keep if present
-
-        # strip CDATA if any
-        creator = re.sub(r"^\s*<!\[CDATA\[|\]\]>\s*$", "", creator or "")
-        desc    = re.sub(r"^\s*<!\[CDATA\[|\]\]>\s*$", "", desc or "")
-
-        items.append({
-            "novel_title": title,
-            "host": host,
-            "translator": translator,
-            "discord_role_id": discord_role,
-            "featured_image": featured,
-            "category": category,
-            "host_logo": host_logo,
-            "link": link,
-            "author": creator,
-            "description": desc,
-            "pubDate": pub_dt,
-            "guid": guid,
-            "isPermaLink": is_perma,
-            "chapter": chapter,
-        })
-    return items
-
-# ---------------------------------------------------------------------------
-# Collect NU items from mappings
-# ---------------------------------------------------------------------------
+# -------------------- NU collection and item building -------------------
 
 def _collect_nu_items_from_mappings() -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
@@ -165,10 +144,14 @@ def _collect_nu_items_from_mappings() -> List[Dict[str, Any]]:
                 continue
             parsed = feedparser.parse(nu_url)
             for e in getattr(parsed, "entries", []) or []:
-                # creator: take 'By: NAME' from title if present, else author field
-                author = _strip_by_prefix(e.get("title", "") or e.get("author", "") or "")
+                author = _strip_by_prefix(
+                    e.get("title", "") or e.get("author", "") or ""
+                )
                 desc   = html.unescape(e.get("description", "") or "")
-                pub_dt = _parse_pubdate(e)
+                # prefer published_parsed/updated_parsed; fallback now
+                pp = getattr(e, "published_parsed", None) or getattr(e, "updated_parsed", None)
+                pub_dt = (dt.datetime(*pp[:6], tzinfo=dt.timezone.utc)
+                          if pp else dt.datetime.now(dt.timezone.utc))
                 guid_v = getattr(e, "id", "") or e.get("guid") or e.get("link") or _guid_from(
                     [novel_title, author, e.get("link", ""), desc[:80]]
                 )
@@ -190,116 +173,111 @@ def _collect_nu_items_from_mappings() -> List[Dict[str, Any]]:
                     "pubDate": pub_dt,
                     "guid": guid_v,
                     "isPermaLink": is_perm,
-                    "chapter": "",  # force empty for NU
+                    "chapter": "",  # NU doesn't provide per-chapter label
                 })
     return out
 
-# ---------------------------------------------------------------------------
-# Emit merged XML (escaped & sanitized)
-# ---------------------------------------------------------------------------
+def _build_nu_item_block(it: Dict[str, Any]) -> str:
+    """Build a single NU <item> block with normalized role mention."""
+    title       = _xml10(it.get("novel_title", ""))
+    link        = _xml10(it.get("link", ""))
+    translator  = _xml10(it.get("translator", ""))
+    host        = _xml10(it.get("host", NU_HOST_NAME))
+    category    = _xml10(it.get("category", "SFW"))
+    guid        = _xml10(it.get("guid", ""))
+    is_perm     = "true" if it.get("isPermaLink") else "false"
+    pub         = _to_rfc2822(it["pubDate"])
+    chapter     = _xml10(it.get("chapter", "") or "")
+    featured    = it.get("featured_image") or ""
+    host_logo   = it.get("host_logo") or ""
+    author      = _xml10(it.get("author", ""))
+    desc        = _xml10(it.get("description", ""))
 
-def _emit_aggregated(path: str, items: List[Dict[str, Any]]) -> None:
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(XMLDECL + "\n")
-        f.write(RSS_OPEN + "\n")
-        f.write("  <channel>\n")
-        f.write("    <title>Aggregated Comments Feed</title>\n")
-        f.write("    <link>https://github.com/Cannibal-Turtle</link>\n")
-        f.write("    <description>Aggregated RSS feed for comments across hosting sites.</description>\n")
-        f.write(f"    <lastBuildDate>{_to_rfc2822(dt.datetime.now(dt.timezone.utc))}</lastBuildDate>\n")
+    # role mention normalized to '<@&digits>' or ''
+    role_raw   = it.get("discord_role_id", "")
+    role_fixed = _role_mention(role_raw)
 
-        for it in items:
-            title_txt   = _xesc(_xml10(it.get('novel_title', '')))
-            link_txt    = _xesc(_xml10(it.get('link', '')))
-            trans_txt   = _xesc(_xml10(it.get('translator', '')))
-            host_txt    = _xesc(_xml10(it.get('host', '')))
-            cat_txt     = _xesc(_xml10(it.get('category', 'SFW')))
-            guid_txt    = _xesc(_xml10(it.get('guid', '')))
-            chapter_txt = _xesc(_xml10(it.get('chapter', '') or ''))
+    lines = []
+    lines.append("    <item>")
+    lines.append(f"      <title>{_xesc(title)}</title>")
+    lines.append(f"      <chapter>{_xesc(chapter)}</chapter>")
+    lines.append(f"      <link>{_xesc(link)}</link>")
+    lines.append("      <dc:creator>")
+    lines.append(f"        {_cdata(author)}")
+    lines.append("      </dc:creator>")
+    lines.append("      <description>")
+    lines.append(f"        {_cdata(desc)}")
+    lines.append("      </description>")
+    lines.append(f"      <translator>{_xesc(translator)}</translator>")
+    lines.append("      <discord_role_id>")
+    lines.append(f"        {_cdata(role_fixed)}")
+    lines.append("      </discord_role_id>")
+    if featured:
+        lines.append(f"      <featuredImage url={_xqa(_xml10(str(featured)))}/>")
+    lines.append(f"      <host>{_xesc(host)}</host>")
+    if host_logo:
+        lines.append(f"      <hostLogo url={_xqa(_xml10(str(host_logo)))}/>")
+    lines.append(f"      <category>{_xesc(category)}</category>")
+    lines.append(f"      <pubDate>{pub}</pubDate>")
+    lines.append(f"      <guid isPermaLink=\"{is_perm}\">{_xesc(guid)}</guid>")
+    lines.append("    </item>")
 
-            creator_cdata = f"<![CDATA[ {_safe_cdata(_xml10(it.get('author','')))} ]]>"
-            desc_cdata    = f"<![CDATA[ {_safe_cdata(_xml10(it.get('description','')))} ]]>"
+    # ensure trailing newline for nice concatenation
+    return "\n".join(lines) + "\n"
 
-            f.write("    <item>\n")
-            f.write(f"      <title>{title_txt}</title>\n")
-            f.write(f"      <chapter>{chapter_txt}</chapter>\n")
-            f.write(f"      <link>{link_txt}</link>\n")
-            f.write("      <dc:creator>\n")
-            f.write(f"        {creator_cdata}\n")
-            f.write("      </dc:creator>\n")
-            f.write("      <description>\n")
-            f.write(f"        {desc_cdata}\n")
-            f.write("      </description>\n")
-            f.write(f"      <translator>{trans_txt}</translator>\n")
-            f.write("      <discord_role_id>\n")
-            f.write(f"        <![CDATA[ {it.get('discord_role_id','')} ]]>\n")
-            f.write("      </discord_role_id>\n")
-
-            feat = it.get("featured_image")
-            if feat:
-                f.write(f"      <featuredImage url={_xqa(_xml10(str(feat)))}/>\n")
-
-            f.write(f"      <host>{host_txt}</host>\n")
-            host_logo = it.get("host_logo")
-            if host_logo:
-                f.write(f"      <hostLogo url={_xqa(_xml10(str(host_logo)))}/>\n")
-
-            f.write(f"      <category>{cat_txt}</category>\n")
-            f.write(f"      <pubDate>{_to_rfc2822(it['pubDate'])}</pubDate>\n")
-            is_perm = str(bool(it.get("isPermaLink"))).lower()
-            f.write(f"      <guid isPermaLink=\"{is_perm}\">{guid_txt}</guid>\n")
-            f.write("    </item>\n")
-
-        f.write("  </channel>\n")
-        f.write("</rss>\n")
-
-    # pretty-print; if it fails, keep compact version
-    with open(path, "r", encoding="utf-8") as rf:
-        xml_text = _xml10(rf.read())
-
-    try:
-        pretty = xml.dom.minidom.parseString(xml_text).toprettyxml(indent="  ")
-        xml_text = "\n".join([line for line in pretty.splitlines() if line.strip()])
-    except Exception:
-        # keep non-pretty (already valid) XML
-        pass
-
-    xml_text = _compact_cdata(xml_text)
-    with open(path, "w", encoding="utf-8") as wf:
-        wf.write(xml_text)
-
-# ---------------------------------------------------------------------------
-# Merge flow
-# ---------------------------------------------------------------------------
+# ------------------------------- merge ---------------------------------
 
 def merge_into_aggregated(aggregated_path: str) -> None:
+    # 1) read existing XML
     with open(aggregated_path, "r", encoding="utf-8") as f:
-        existing = f.read()
+        original = f.read()
 
-    base_items = _parse_existing_aggregated(existing)
-    nu_items   = _collect_nu_items_from_mappings()
+    header, existing_blocks, footer = _split_header_items_footer(original)
 
-    # nothing fetched from NU at all → skip writing
+    # 2) pull NU items
+    nu_items = _collect_nu_items_from_mappings()
     if not nu_items:
         print("[nu-merge] no NU items; skipping rewrite")
         return
 
-    seen = {it["guid"] for it in base_items}
-    new_items = [it for it in nu_items if it["guid"] not in seen]
+    # 3) collect existing GUIDs for de-dup
+    existing_guids = set()
+    for blk in existing_blocks:
+        mg = _GUID_RE.search(blk)
+        if mg:
+            existing_guids.add(mg.group(1).strip())
 
-    # no new GUIDs → skip writing
-    if not new_items:
+    # 4) create NU blocks to append (only new GUIDs)
+    nu_blocks: List[str] = []
+    nu_blocks_with_dates: List[tuple[str, dt.datetime]] = []
+    for it in nu_items:
+        if it["guid"] in existing_guids:
+            continue
+        blk = _build_nu_item_block(it)
+        nu_blocks.append(blk)
+        nu_blocks_with_dates.append((blk, it["pubDate"]))
+
+    if not nu_blocks:
         print("[nu-merge] no new NU items; skipping rewrite")
         return
 
-    merged = base_items + new_items
-    merged.sort(key=lambda x: x["pubDate"], reverse=True)
-    _emit_aggregated(aggregated_path, merged)
-    print(f"[nu-merge] appended {len(new_items)} NU items → {aggregated_path} (total {len(merged)})")
-  
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
+    # 5) prepare sortable list: existing (use their own pubDate inside block) + new NU ones
+    sortable: List[tuple[str, dt.datetime]] = [(blk, _block_pubdate(blk)) for blk in existing_blocks]
+    sortable.extend(nu_blocks_with_dates)
+
+    # 6) sort by pubDate DESC, concatenate blocks as-is
+    sortable.sort(key=lambda t: t[1], reverse=True)
+    new_body = "".join(blk if blk.endswith("\n") else blk + "\n" for blk, _ in sortable)
+
+    # 7) write back header + body + footer (header/footer unchanged)
+    with open(aggregated_path, "w", encoding="utf-8") as f:
+        f.write(header)
+        f.write(new_body)
+        f.write(footer)
+
+    print(f"[nu-merge] appended {len(nu_blocks)} NU items and re-ordered by pubDate (existing items left byte-for-byte)")
+
+# -------------------------------- CLI ----------------------------------
 
 def main() -> int:
     ap = argparse.ArgumentParser()
