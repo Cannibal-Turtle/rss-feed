@@ -156,7 +156,7 @@ HOSTING_SITE_DATA["Mistmint Haven"] = {
 
 ## Token-Expiry Alerts
 
-1. Hourly job runs `comments.py` → calls `maybe_dispatch_token_alerts` if token is expiring → `send_token_alert.yml` → scripts/`send_token_alert.py`.
+1. Hourly job runs `comments.py` → calls `maybe_dispatch_token_alerts` if token is expiring → `send_token_alert.yml` → `send_token_alert.py`.
 2. For each host with `token_secret`, it reads that env var, decodes JWT `exp`, and if `≤ 1 day`, fires:
    `repository_dispatch` → `event_type: token-expiring`.
 3. `.token_alert_state.json` stores the last `exp` per `(host, token_secret)` so you aren’t spammed hourly.
