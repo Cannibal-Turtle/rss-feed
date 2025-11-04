@@ -76,6 +76,13 @@ def _compact_cdata(xml_str: str) -> str:
         return f"{start}{re.sub(r'\\s+', ' ', body.strip())}{end}"
     return pat.sub(repl, xml_str)
 
+# XML 1.0 legal char filter: tab, LF, CR, U+0020–U+D7FF, U+E000–U+FFFD, U+10000–U+10FFFF
+_XML10_BAD = re.compile(
+    r"[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]"
+)
+def _xml10(s: str) -> str:
+    return _XML10_BAD.sub("", s or "")
+
 # ---------- read & lightly-parse your existing aggregated XML ----------
 def _parse_existing_aggregated(xml_text: str) -> List[Dict[str, Any]]:
     items: List[Dict[str, Any]] = []
@@ -184,17 +191,25 @@ def _emit_aggregated(path: str, items: List[Dict[str, Any]]) -> None:
         f.write("    <description>Aggregated RSS feed for comments across hosting sites.</description>\n")
         f.write(f"    <lastBuildDate>{_to_rfc2822(dt.datetime.now(dt.timezone.utc))}</lastBuildDate>\n")
 
-        for it in items:
-            title_txt   = _xesc(it.get('novel_title', ''))
-            link_txt    = _xesc(it.get('link', ''))
-            trans_txt   = _xesc(it.get('translator', ''))
-            host_txt    = _xesc(it.get('host', ''))
-            cat_txt     = _xesc(it.get('category', 'SFW'))
-            guid_txt    = _xesc(it.get('guid', ''))
-            chapter_txt = _xesc(it.get('chapter', '') or '')
-
-            creator_cdata = f"<![CDATA[ {_safe_cdata(it.get('author',''))} ]]>"
-            desc_cdata    = f"<![CDATA[ {_safe_cdata(it.get('description',''))} ]]>"
+        for it in items:          
+            title_txt   = _xesc(_xml10(it.get('novel_title', '')))
+            link_txt    = _xesc(_xml10(it.get('link', '')))
+            trans_txt   = _xesc(_xml10(it.get('translator', '')))
+            host_txt    = _xesc(_xml10(it.get('host', '')))
+            cat_txt     = _xesc(_xml10(it.get('category', 'SFW')))
+            guid_txt    = _xesc(_xml10(it.get('guid', '')))
+            chapter_txt = _xesc(_xml10(it.get('chapter', '') or ''))
+            
+            creator_cdata = f"<![CDATA[ {_safe_cdata(_xml10(it.get('author','')))} ]]>"
+            desc_cdata    = f"<![CDATA[ {_safe_cdata(_xml10(it.get('description','')))} ]]>"
+            
+            # also sanitize attributes:
+            feat = it.get("featured_image")
+            if feat:
+                f.write(f"      <featuredImage url={_xqa(_xml10(str(feat)))}/>\n")
+            host_logo = it.get("host_logo")
+            if host_logo:
+                f.write(f"      <hostLogo url={_xqa(_xml10(str(host_logo)))}/>\n")
 
             f.write("    <item>\n")
             f.write(f"      <title>{title_txt}</title>\n")
@@ -232,6 +247,9 @@ def _emit_aggregated(path: str, items: List[Dict[str, Any]]) -> None:
     # pretty-print + compact CDATA (unchanged)
     with open(path, "r", encoding="utf-8") as rf:
         xml_text = rf.read()
+
+    xml_text = _xml10(xml_text)
+
     xml_text = "\n".join(
         [line for line in xml.dom.minidom.parseString(xml_text).toprettyxml(indent="  ").splitlines() if line.strip()]
     )
