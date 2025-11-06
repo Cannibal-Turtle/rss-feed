@@ -11,7 +11,7 @@ DISCORD_TOKEN   = os.environ["DISCORD_BOT_TOKEN"]
 CHANNEL_ID      = int(os.environ["DISCORD_MOD_CHANNEL_ID"])
 EVENT_PATH      = os.environ["GITHUB_EVENT_PATH"]
 REPO_SLUG       = os.environ.get("GITHUB_REPOSITORY", "")
-GLOBAL_MENTION  = "<@&1329392448798982214>"
+GLOBAL_MENTION  = "||<@&1329392448798982214>||"
 
 def _human_delta(secs: int) -> str:
     secs = max(0, int(secs))
