@@ -171,6 +171,40 @@ CHAPTERID_RE = re.compile(
     re.I
 )
 
+def _extract_chapter_id_from_html(html: str, chapter_slug: str) -> Optional[str]:
+    """
+    Fallback: scan inline JSON for the specific chapter slug, then pull its id (UUID).
+    Works whether the JSON is escaped or not.
+    """
+    if not html or not chapter_slug:
+        return None
+
+    # unescaped JSON path
+    pat1 = re.compile(
+        rf'"slug"\s*:\s*"{re.escape(chapter_slug)}"(?s).*?"id"\s*:\s*"({UUID_RE})"',
+        re.I | re.S
+    )
+    m = pat1.search(html)
+    if m:
+        return m.group(1)
+
+    # escaped-quote JSON path
+    pat2 = re.compile(
+        rf'slug\\\"\s*:\s*\\\"{re.escape(chapter_slug)}\\\"(?s).*?id\\\"\s*:\s*\\\"({UUID_RE})\\\"',
+        re.I | re.S
+    )
+    m = pat2.search(html)
+    if m:
+        return m.group(1)
+
+    return None
+
+def _get_arc_for_ch(ch: int) -> Optional[dict]:
+    for arc in TDLBKGC_ARCS:
+        if arc["start"] <= ch <= arc["end"]:
+            return arc
+    return None
+
 async def _scrape_paid_chapters_mistmint_from_state(session, novel_url: str, host: str):
     # === this is your original synthetic implementation, unchanged ===
     # (copied from your current scrape_paid_chapters_mistmint_async)
@@ -1551,6 +1585,7 @@ MISTMINT_UTILS = {
     "get_nsfw_novels":
         lambda: [],
 }
+
 
 
 
