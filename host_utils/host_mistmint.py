@@ -19,6 +19,8 @@ from novel_mappings import HOSTING_SITE_DATA
 
 # === GitHub Actions diagnostics helpers ======================================
 
+COIN_MANUAL_DEFAULT = os.getenv("MISTMINT_MANUAL_COIN", "5").strip()
+
 DIAG = {"counts": Counter(), "errors": [], "events": []}
 
 def _gha(level: str, title: str, msg: str = ""):
@@ -216,7 +218,7 @@ async def _scrape_paid_chapters_mistmint_from_state(session, novel_url: str, hos
             link = f"{BASE_APP}/novels/{novel_slug}/{arc_slug}-chapter-{ch}"
 
             guid_val = f"{details.get('short_code','')}-{ch}"
-            coin_amt = str(details.get("coin_price") or "")
+            coin_amt = COIN_MANUAL_DEFAULT
 
             all_items.append({
                 "volume":      volume,
@@ -1549,6 +1551,7 @@ MISTMINT_UTILS = {
     "get_nsfw_novels":
         lambda: [],
 }
+
 
 
 
