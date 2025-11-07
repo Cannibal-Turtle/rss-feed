@@ -31,12 +31,20 @@ AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=20)  # if using aiohttp
 # =============================================================================
 
 def tune_paid_pubdate(source: str, dt: datetime.datetime) -> datetime.datetime:
-    # Apply 12:00:00 UTC only to HTML-scraped (state) items
+    # Apply override only to HTML-scraped (state) items
     if DH_PUBDATE_OVERRIDE and source == "html":
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=datetime.timezone.utc)
         dt = dt.astimezone(datetime.timezone.utc)
-        return dt.replace(hour=12, minute=0, second=0, microsecond=0)
+        return dt.replace(
+            hour=DH_PUBDATE_OVERRIDE.get("hour", dt.hour),
+            minute=DH_PUBDATE_OVERRIDE.get("minute", dt.minute),
+            second=DH_PUBDATE_OVERRIDE.get("second", dt.second),
+            microsecond=0,
+        )
+    # still normalize tz to UTC for safety if you like (optional):
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
     return dt
     
 async def fetch_page(session: aiohttp.ClientSession, url: str) -> str:
@@ -489,5 +497,6 @@ DRAGONHOLIC_UTILS = {
     "get_nsfw_novels":
         lambda: [],
 }
+
 
 
