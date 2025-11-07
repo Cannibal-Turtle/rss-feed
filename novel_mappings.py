@@ -29,7 +29,6 @@ HOSTING_SITE_DATA = {
                 "discord_role_id": "<@&1329391480435114005>",
                 "novel_url": "https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/",
                 "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/177838.jpg",
-                "pub_date_override": {"hour": 12, "minute": 0, "second": 0},
 
                 # ─── webhook-only fields ───
                 "chapter_count": "1184 chapters + 8 extras",
@@ -132,14 +131,6 @@ def get_nsfw_novels():
     return [
         # e.g. "Some NSFW Novel Title"
     ]
-
-def get_pub_date_override(novel_title, host):
-    """
-    Returns a dict like {"hour": 12, "minute": 0, "second": 0}
-    or None if not set.
-    """
-    details = get_novel_details(host, novel_title)
-    return details.get("pub_date_override", None)
 
 def get_coin_emoji(host):
     """Emoji string used in <coin> for paid feed."""
