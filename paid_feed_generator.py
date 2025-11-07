@@ -18,7 +18,6 @@ from novel_mappings import (
     get_host_logo,
     get_novel_discord_role,
     get_nsfw_novels,
-    get_pub_date_override,  # If you have pub_date overrides
     get_coin_emoji
 )
 
@@ -115,12 +114,6 @@ async def process_novel(session, host, novel_title):
                 pub_date = chap["pubDate"]
                 if pub_date.tzinfo is None:
                     pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
-
-                override = get_pub_date_override(novel_title, host)
-                # Only apply override to manual/state items. API items keep their true createdAt.
-                # Hosts signal source by setting chap["source"].
-                if override and (chap.get("source") != "api"):
-                    pub_date = pub_date.replace(**override)
 
                 item = MyRSSItem(
                     title=novel_title,
