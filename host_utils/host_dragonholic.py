@@ -352,16 +352,6 @@ def build_comment_link_dragonholic(novel_title: str, host: str, placeholder_link
 
     return coerce_to_new_if_dh(f"{base_url}{chapter_slug}/#comment-{cid}")
 
-    cid = m.group(1)
-    chapter_label = extract_chapter_dragonholic(placeholder_link)
-    chapter_slug = slug(chapter_label)
-
-    base_url = HOSTING_SITE_DATA[host]["novels"][novel_title]["novel_url"]
-    if not base_url.endswith("/"):
-        base_url += "/"
-
-    return f"{base_url}{chapter_slug}/#comment-{cid}"
-
 def split_reply_chain_dragonholic(raw: str) -> tuple[str, str]:
     from html import unescape
     import re
@@ -552,6 +542,28 @@ def coerce_to_new_if_dh(url: str) -> str:
         return normalize_trailing_slash(urlunparse(p._replace(path=new_path)))
     return url
 
+# --- Transparent link bridge for Dragonholic feeds (Lumina) ---
+
+if not getattr(feedparser, "_dh_link_bridge_installed", False):
+    _orig_parse = feedparser.parse
+
+    def _parse_and_bridge(url, *args, **kwargs):
+        feed = _orig_parse(url, *args, **kwargs)
+        try:
+            # Only touch Dragonholic feeds
+            if isinstance(url, str) and ("dragonholic.com" in url or "dragonholictranslations.com" in url):
+                for e in getattr(feed, "entries", []):
+                    link = getattr(e, "link", "")
+                    if link:
+                        e.link = coerce_to_new_if_dh(link)
+        except Exception:
+            # Never break caller on patch issues
+            pass
+        return feed
+
+    feedparser.parse = _parse_and_bridge
+    feedparser._dh_link_bridge_installed = True
+    
 # =============================================================================
 # DISPATCH TABLE
 # =============================================================================
@@ -594,5 +606,6 @@ DRAGONHOLIC_UTILS = {
     "get_nsfw_novels":
         lambda: [],
 }
+
 
 
