@@ -21,7 +21,6 @@ APPROVED_COMMENTS_FEED = (
 )
 
 # --- shared HTTP defaults (Dragonholic) ---
-import aiohttp  # if you use aiohttp there
 UA_STR = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
 DEFAULT_HEADERS = {"User-Agent": UA_STR}
 AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=20)  # if using aiohttp
@@ -455,6 +454,94 @@ def format_volume_from_url(url: str) -> str:
 
     return ""
 
+# ===== Dragonholic URL Bridge (Lumina theme) ================================
+
+from urllib.parse import urlparse, urlunparse
+
+_OLD_HOST = "dragonholic.com"
+_NEW_HOST = "dragonholictranslations.com"
+
+def _with_host(parsed, host):
+    return parsed._replace(netloc=host)
+
+def _swap_segment(path, old_seg, new_seg):
+    # Expect paths beginning with /novel/<slug>/... or /series/<slug>/...
+    parts = [p for p in path.split("/") if p != ""]
+    if not parts:
+        return path
+    if parts[0] == old_seg:
+        parts[0] = new_seg
+    return "/" + "/".join(parts) + ("/" if path.endswith("/") else "")
+
+def normalize_trailing_slash(url: str) -> str:
+    # keep a trailing slash for series/chapter URLs (your code expects that)
+    p = urlparse(url)
+    path = p.path
+    if not path.endswith("/"):
+        path = path + "/"
+    return urlunparse(p._replace(path=path))
+
+def dh_old_to_new(url: str) -> str:
+    """
+    Translate any old Dragonholic URL to the new domain & path structure.
+    - domain:  dragonholic.com  -> dragonholictranslations.com
+    - segment: /novel/...       -> /series/...
+    Leaves other URLs untouched. Keeps tail slug (e.g., extra-8) intact.
+    """
+    if not url:
+        return url
+    p = urlparse(url)
+    if p.netloc != _OLD_HOST:
+        return url  # not an old DH URL; leave as-is
+
+    # Swap host
+    p2 = _with_host(p, _NEW_HOST)
+    # Swap leading path segment /novel -> /series
+    new_path = _swap_segment(p2.path, "novel", "series")
+    # Normalize trailing slash
+    return normalize_trailing_slash(urlunparse(p2._replace(path=new_path)))
+
+def dh_new_to_old(url: str) -> str:
+    """
+    Reverse mapping if you need it (optional).
+    - domain:  dragonholictranslations.com -> dragonholic.com
+    - segment: /series/...                 -> /novel/...
+    """
+    if not url:
+        return url
+    p = urlparse(url)
+    if p.netloc != _NEW_HOST:
+        return url
+    p2 = _with_host(p, _OLD_HOST)
+    old_path = _swap_segment(p2.path, "series", "novel")
+    return normalize_trailing_slash(urlunparse(p2._replace(path=old_path)))
+
+def is_dh_old(url: str) -> bool:
+    try:
+        return urlparse(url).netloc == _OLD_HOST
+    except Exception:
+        return False
+
+def is_dh_new(url: str) -> bool:
+    try:
+        return urlparse(url).netloc == _NEW_HOST
+    except Exception:
+        return False
+
+def coerce_to_new_if_dh(url: str) -> str:
+    """
+    Convenience: if URL is from either DH domain, return the 'new' equivalent.
+    Otherwise return it unchanged.
+    """
+    if is_dh_old(url):
+        return dh_old_to_new(url)
+    if is_dh_new(url):
+        # still normalize /novel -> /series if someone pasted a weird path
+        p = urlparse(url)
+        new_path = _swap_segment(p.path, "novel", "series")
+        return normalize_trailing_slash(urlunparse(p._replace(path=new_path)))
+    return url
+
 # =============================================================================
 # DISPATCH TABLE
 # =============================================================================
@@ -497,6 +584,4 @@ DRAGONHOLIC_UTILS = {
     "get_nsfw_novels":
         lambda: [],
 }
-
-
 
