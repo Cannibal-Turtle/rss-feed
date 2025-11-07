@@ -206,18 +206,17 @@ def _get_arc_for_ch(ch: int) -> Optional[dict]:
     return None
 
 async def _scrape_paid_chapters_mistmint_from_state(session, novel_url: str, host: str):
-    # === this is your original synthetic implementation, unchanged ===
-    # (copied from your current scrape_paid_chapters_mistmint_async)
     all_items = []
     state = _load_mistmint_state()
     now_utc = datetime.datetime.now(datetime.timezone.utc)
 
-    mistmint_block = HOSTING_SITE_DATA.get(host, {}).get("novels", {})
+    mistmint_block = HOSTING_SITE_DATA.get(host, {}).get("novels", {}) or {}
 
     for novel_title, details in mistmint_block.items():
-        short_code = details.get("short_code")
+        short_code = (details.get("short_code") or "").strip()
         if not short_code:
             continue
+
         novel_state = state.get(short_code, {
             "last_posted_chapter": 0,
             "latest_available_chapter": 0
@@ -229,17 +228,13 @@ async def _scrape_paid_chapters_mistmint_from_state(session, novel_url: str, hos
 
         novel_slug = details["novel_url"].rstrip("/").split("/")[-1]
         desc_html  = details.get("custom_description", "")
-        
-        override   = details.get("pub_date_override", None)
 
-        pub_dt = now_utc
-        if override:
-            pub_dt = pub_dt.replace(**override)
-        
-        for ch in range(last_posted + 1, latest_avail + 1):
+        # Deterministic timestamps: +1s per item
+        for idx, ch in enumerate(range(last_posted + 1, latest_avail + 1), start=0):
             arc = _get_arc_for_ch(ch)
             if not arc:
                 continue
+
             arc_num   = arc["arc_num"]
             arc_title = arc["title"]
             arc_local_index = ch - arc["start"] + 1
@@ -251,7 +246,10 @@ async def _scrape_paid_chapters_mistmint_from_state(session, novel_url: str, hos
             arc_slug = _slug_arc(arc_num, arc_title)
             link = f"{BASE_APP}/novels/{novel_slug}/{arc_slug}-chapter-{ch}"
 
-            guid_val = f"{details.get('short_code','')}-{ch}"
+            # STATE policy: always short_code-N
+            guid_val = f"{short_code}-{ch}"
+
+            pub_dt = now_utc + datetime.timedelta(seconds=idx)
             coin_amt = COIN_MANUAL_DEFAULT
 
             all_items.append({
@@ -267,6 +265,7 @@ async def _scrape_paid_chapters_mistmint_from_state(session, novel_url: str, hos
                 "source":      "manual",
             })
 
+        # advance state
         novel_state["last_posted_chapter"] = latest_avail
         state[short_code] = novel_state
 
@@ -283,6 +282,9 @@ def _iso_dt(s: str):
         return d.astimezone(datetime.timezone.utc).replace(microsecond=0)
     except Exception:
         return None
+
+def _now_utc():
+    return datetime.datetime.now(datetime.timezone.utc)
         
 def _norm(s: str) -> str:
     # stronger normalization for Mistmint text bodies
@@ -1329,6 +1331,7 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
                 continue  # skip free
             if ch.get("isHidden"):
                 continue
+                
             chapter_num = str(ch.get("chapterNumber") or "").strip()
             nameextend  = (ch.get("title") or "").strip()           # e.g., "1.2"
             slug_tail   = (ch.get("slug") or "").strip()
@@ -1343,18 +1346,9 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
             except Exception:
                 pub_dt = datetime.datetime.now(datetime.timezone.utc)
                 
-            # Stable guid matches manual/state, so history merge will collapse duplicates.
-            try:
-                chapter_num_int = int(float(chapter_num))                   # handles "12" or "12.0"
-            except Exception:
-                chapter_num_int = None
-
-            stable_guid = (
-                f"{short_code}-{chapter_num_int}"
-                if short_code and chapter_num_int is not None
-                else (api_uuid or link)                                     # fallback safety
-            )
-
+            # API policy: always prefer real UUID; if missing (shouldn’t happen), fall back to link
+            guid_val = api_uuid or link
+        
             items.append({
                 "volume":      vol_title,
                 "chaptername": f"Chapter {chapter_num}" if chapter_num else "Chapter",
@@ -1362,10 +1356,10 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
                 "link":        link,
                 "description": desc_html,
                 "pubDate":     pub_dt,                                      # from createdAt
-                "guid":        api_uuid,
+                "guid":        guid_val,                                    # <- UUID when present
                 "coin":        price,
                 "source":      "api",                                       # NEW: so generator can skip override
-                "api_guid":    api_uuid,                                    # optional: keep real UUID for logs
+                "api_guid":    api_uuid,                                    # keep explicit for logs
             })
 
     # Let the caller (paid_feed_generator) handle 7-day trimming and sorting.
@@ -1585,9 +1579,3 @@ MISTMINT_UTILS = {
     "get_nsfw_novels":
         lambda: [],
 }
-
-
-
-
-
-
