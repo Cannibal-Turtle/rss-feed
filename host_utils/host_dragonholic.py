@@ -12,6 +12,9 @@ from novel_mappings import HOSTING_SITE_DATA
 # GLOBAL CONSTANTS
 # =============================================================================
 
+# Dragonholic paid pubdate override (UTC)
+DH_PUBDATE_OVERRIDE = {"hour": 12, "minute": 0, "second": 0}  # set to None to disable
+
 APPROVED_COMMENTS_FEED = (
     "https://script.google.com/macros/s/"
     "AKfycbxx6YrbuG1WVqc5uRmmQBw3Z8s8k29RS0sgK9ivhbaTUYTp-8t76mzLo0IlL1LlqinY/exec"
@@ -27,6 +30,15 @@ AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=20)  # if using aiohttp
 # DRAGONHOLIC PAID UPDATE CHECK / SCRAPE
 # =============================================================================
 
+def tune_paid_pubdate(source: str, dt: datetime.datetime) -> datetime.datetime:
+    # Apply 12:00:00 UTC only to HTML-scraped (state) items
+    if DH_PUBDATE_OVERRIDE and source == "html":
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        dt = dt.astimezone(datetime.timezone.utc)
+        return dt.replace(hour=12, minute=0, second=0, microsecond=0)
+    return dt
+    
 async def fetch_page(session: aiohttp.ClientSession, url: str) -> str:
     try:
         async with session.get(url, headers=DEFAULT_HEADERS, timeout=AIOHTTP_TIMEOUT) as resp:
@@ -125,6 +137,7 @@ async def scrape_paid_chapters_async(session, novel_url: str, host: str):
             chap, ext = split_paid_chapter_dragonholic(e.title)
             pub_dt = datetime.datetime(*e.published_parsed[:6], tzinfo=datetime.timezone.utc)
             paid.append({
+                "source":      "rss", 
                 "volume":      "",
                 "chaptername": chap,
                 "nameextend":  ext,
@@ -198,13 +211,16 @@ async def scrape_paid_chapters_async(session, novel_url: str, host: str):
         coin_el = li.select_one("span.coin")
         coin_val = coin_el.get_text(strip=True) if coin_el else ""
 
+        tuned_pub = tune_paid_pubdate("html", pub_dt)
+
         return {
+            "source": "html", 
             "volume":      vol_label,
             "chaptername": chap_name,
             "nameextend":  nameext,
             "link":        link,
             "description": main_desc,
-            "pubDate":     pub_dt,
+            "pubDate":     tuned_pub,
             "guid":        guid,
             "coin":        coin_val
         }
@@ -446,6 +462,7 @@ DRAGONHOLIC_UTILS = {
     "chapter_num": chapter_num,
     "novel_has_paid_update_async": novel_has_paid_update_async,
     "scrape_paid_chapters_async": scrape_paid_chapters_async,
+    "tune_paid_pubdate": tune_paid_pubdate,
 
     # Comments / misc
     "clean_description": clean_description,
@@ -472,4 +489,5 @@ DRAGONHOLIC_UTILS = {
     "get_nsfw_novels":
         lambda: [],
 }
+
 
