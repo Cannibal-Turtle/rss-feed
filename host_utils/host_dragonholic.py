@@ -200,7 +200,7 @@ async def scrape_paid_chapters_async(session, novel_url: str, host: str):
 
         href = a.get("href", "").strip()
         if href and href != "#":
-            link = href
+            link = coerce_to_new_if_dh(href)
         else:
             if vol_label:
                 link = f"{novel_url}{slug(vol_label)}/{slug(chap_name)}/"
@@ -340,7 +340,17 @@ def extract_chapter_dragonholic(link: str) -> str:
 def build_comment_link_dragonholic(novel_title: str, host: str, placeholder_link: str) -> str:
     m = re.search(r"#comment-(\d+)", placeholder_link)
     if not m:
-        return placeholder_link
+        return coerce_to_new_if_dh(placeholder_link)  # <- simple bridge
+
+    cid = m.group(1)
+    chapter_label = extract_chapter_dragonholic(placeholder_link)
+    chapter_slug = slug(chapter_label)
+
+    base_url = HOSTING_SITE_DATA[host]["novels"][novel_title]["novel_url"]
+    if not base_url.endswith("/"):
+        base_url += "/"
+
+    return coerce_to_new_if_dh(f"{base_url}{chapter_slug}/#comment-{cid}")
 
     cid = m.group(1)
     chapter_label = extract_chapter_dragonholic(placeholder_link)
@@ -584,4 +594,5 @@ DRAGONHOLIC_UTILS = {
     "get_nsfw_novels":
         lambda: [],
 }
+
 
