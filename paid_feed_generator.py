@@ -24,11 +24,10 @@ from novel_mappings import (
 
 # ---------------- History Control ----------------
 PAID_HISTORY_PATH = os.getenv("PAID_HISTORY_PATH", "paid_history.json")
-USE_HISTORY = os.getenv("MISTMINT_FORCE_STATE", "0") == "1"
+USE_HISTORY = os.getenv("PAID_USE_HISTORY", "1") == "1"
 
 def load_history():
-    if not USE_HISTORY:
-        return []
+    if not USE_HISTORY: return []
     try:
         with open(PAID_HISTORY_PATH, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -90,13 +89,18 @@ async def process_novel(session, host, novel_title):
         novel_url = get_novel_url(novel_title, host)
         print(f"Scraping: {novel_url}")
         utils = get_host_utils(host)
-        api_mode = os.getenv("MISTMINT_FORCE_STATE", "0") != "1"
         
-        if not api_mode:
-            if not await utils["novel_has_paid_update_async"](session, novel_url):
-                print(f"Skipping {novel_title}: no recent paid update found.")
-                return []
-
+        # Host-agnostic: if the host exposes a cheap update check, use it.
+        if "novel_has_paid_update_async" in utils:
+            try:
+                has = await utils["novel_has_paid_update_async"](session, novel_url)
+                if not has:
+                    print(f"Skipping {novel_title}: no recent paid update found.")
+                    return []
+            except Exception:
+                # If a host-specific check fails, fall back to scraping attempt.
+                pass
+        
         paid_chapters, _main_desc = await utils["scrape_paid_chapters_async"](session, novel_url, host)
         items = []
         if paid_chapters:
@@ -114,7 +118,8 @@ async def process_novel(session, host, novel_title):
 
                 override = get_pub_date_override(novel_title, host)
                 # Only apply override to manual/state items. API items keep their true createdAt.
-                if override and (chap.get("source") != "api"):   # NEW
+                # Hosts signal source by setting chap["source"].
+                if override and (chap.get("source") != "api"):
                     pub_date = pub_date.replace(**override)
 
                 item = MyRSSItem(
