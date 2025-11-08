@@ -59,7 +59,7 @@ HOSTING_SITE_DATA = {
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/chapters",
                 "discord_role_id": "<@&1431675643078250646>",
                 "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught",
-                "featured_image": "https://web-novel-mistmint.s3.ap-southeast-1.amazonaws.com/novels/dd6947d3-dd7f-4c5b-a42c-aaba5363502b.png",
+                "featured_image": "https://i.imgur.com/vqvVVz9.png",
                 "novel_id": "8ebd3484-d5b2-422d-a22d-11404bc8481f", #comment homepage for scraping reply chain
                 # for manually updated paid feed
                 "short_code": "tdlbkgc", #for parsing feed without guid. Also for short_code.
