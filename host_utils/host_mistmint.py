@@ -1571,11 +1571,12 @@ MISTMINT_UTILS = {
     "get_host_logo":
         lambda host: HOSTING_SITE_DATA.get(host, {}).get("host_logo", ""),
     "get_featured_image":
-        lambda title, host: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}).get("featured_image", ""),
+        lambda host, title: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}).get("featured_image", ""),
     "get_novel_discord_role":
-        lambda title, host: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}).get("discord_role_id", ""),
+        lambda host, title: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}).get("discord_role_id", ""),
     "get_comments_feed_url":
         lambda host: HOSTING_SITE_DATA.get(host, {}).get("comments_feed_url", ""),
     "get_nsfw_novels":
         lambda: [],
 }
+
