@@ -100,7 +100,7 @@ It’s 1v1. Sweet, sweet, sweet."""
                 "discord_role_id": "<@&1437846306625290260>",
                 "novel_url": "",
                 "featured_image": "https://talesinthevalley.com/wp-content/uploads/2025/11/穿成反派后，我跟女主她哥HE了.png",
-                "novel_id": "10804", #comment homepage for scraping reply chain
+                "novel_id": "10804",
                 # for manually updated paid feed
                 "short_code": "atvhe",
 
