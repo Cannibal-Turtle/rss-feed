@@ -164,7 +164,7 @@ CHAPTER_SUBTITLES = {
     75: "Infinite Save-Load Countdown",
     76: "Did He Lose Someone Very Important",
     77: "Called the Wrong Name—Say It Again",
-    78: "Your little mouth is quite sweet",
+    78: "Your Mouth’s Quite Sweet",
     79: "I’m Right Here",
     80: "Can’t Smile Anymore",
     81: "This Kind Is the Easiest to Soothe",
