@@ -92,7 +92,7 @@ It’s 1v1. Sweet, sweet, sweet."""
         "feed_url": "https://talesinthevalley.com/feed/",
         "comments_feed_url": "",
         "translator": "cannibalturtle",
-        "host_logo": "https://www.mistminthaven.com/images/mascot_mistmint.png",
+        "host_logo": "https://i0.wp.com/talesinthevalley.com/wp-content/uploads/2025/07/cropped-Untitled-design-1-1.png",
         "coin_emoji": "<:QiEssence:1437848372399837194>",
         "novels": {
             "[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught": {
