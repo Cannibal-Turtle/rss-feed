@@ -18,7 +18,7 @@ from novel_mappings import (
     get_nsfw_novels,
 )
 
-NSFW_PAREN_RE = re.compile(r'\(\s*(?:nsfw|18\+|h{1,3})\s*\)', re.I)
+NSFW_PAREN_RE = re.compile(r'\([^)]*\b(?:nsfw|r-?18|18\+|h{1,3})\b[^)]*\)', re.I)
 
 def has_nsfw_marker(*texts: str) -> bool:
     for t in texts:
