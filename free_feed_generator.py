@@ -18,6 +18,14 @@ from novel_mappings import (
     get_nsfw_novels,
 )
 
+NSFW_PAREN_RE = re.compile(r'\(\s*(?:nsfw|18\+|h{1,3})\s*\)', re.I)
+
+def has_nsfw_marker(*texts: str) -> bool:
+    for t in texts:
+        if t and NSFW_PAREN_RE.search(t):
+            return True
+    return False
+
 def compact_cdata(xml_str):
     """
     Finds <description><![CDATA[ ... ]]></description> sections and replaces
@@ -33,11 +41,12 @@ def compact_cdata(xml_str):
     return pattern.sub(repl, xml_str)
 
 class MyRSSItem(PyRSS2Gen.RSSItem):
-    def __init__(self, *args, volume="", chaptername="", nameextend="", host="", **kwargs):
+    def __init__(self, *args, volume="", chaptername="", nameextend="", host="", is_nsfw=None, **kwargs):
         self.volume = volume
         self.chaptername = chaptername
         self.nameextend = nameextend
-        self.host = host  # e.g., "Dragonholic", "Mistmint Haven"
+        self.host = host
+        self.is_nsfw = is_nsfw
         super().__init__(*args, **kwargs)
     
     def writexml(self, writer, indent="", addindent="", newl=""):
@@ -58,10 +67,10 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         # description goes in CDATA
         writer.write(indent + "    <description><![CDATA[%s]]></description>" % self.description + newl)
         
-        # Category is SFW/NSFW based on title being in your nsfw list
+        # ── category: per-chapter detection OR whole-novel mapping
         nsfw_list = get_nsfw_novels()
-        category_value = "NSFW" if self.title in nsfw_list else "SFW"
-        writer.write(indent + "    <category>%s</category>" % escape(category_value) + newl)
+        is_nsfw = bool(self.is_nsfw) or (self.title in nsfw_list)
+        writer.write(indent + "    <category>%s</category>" % ("NSFW" if is_nsfw else "SFW") + newl)
         
         translator = get_host_translator(self.host)
         writer.write(indent + "    <translator>%s</translator>" % escape(translator) + newl)
@@ -157,6 +166,7 @@ def main():
             volume = utils.get("extract_volume", lambda _t, _l: "")(entry.title, entry.link)
 
             # description (prefer custom, else cleaned RSS)
+            entry_title = getattr(entry, "title", "") or ""
             raw_desc = getattr(entry, "description", "") or ""
             cleaner = utils.get("clean_description", lambda s: s)
             cleaned_desc = cleaner(raw_desc)
@@ -170,6 +180,14 @@ def main():
             else:
                 # very rare: some feeds omit dates — fall back to "now" so we don't crash
                 pub_date = datetime.datetime.now(datetime.timezone.utc)
+
+            # Case-insensitive detection for "(NSFW)", "(18+)", "(H)", "(HH)", "(HHH)"
+            is_nsfw = has_nsfw_marker(
+                chaptername,
+                nameextend,
+                entry_title,
+                raw_desc
+            )
             
             # Build RSS item object
             item = MyRSSItem(
@@ -181,7 +199,8 @@ def main():
                 volume=volume,
                 chaptername=chaptername,
                 nameextend=nameextend,
-                host=host
+                host=host,
+                is_nsfw=is_nsfw,
             )
             rss_items.append(item)
 
