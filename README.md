@@ -162,3 +162,14 @@ HOSTING_SITE_DATA["Mistmint Haven"] = {
 3. `.token_alert_state.json` stores the last `exp` per `(host, token_secret)` so you aren’t spammed hourly.
 
 ---
+
+## NSFW Catch Update
+
+Now also updates `<category>` if `<chaptername>` and `<nameextend>` has these keywords:
+
+### Will match (✅) - Not case sensitive
+
+- (NSFW) , (nsfw scene) , (extended nsfw)
+- (R-18) , (r18) , (ver. R-18+ patch) , (R-18+)
+- (18+)
+- (H) , (HH) , (HHH) , (bonus H chapter)
