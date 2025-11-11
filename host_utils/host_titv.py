@@ -295,9 +295,13 @@ def chapter_num(chaptername: str):
     out = [float(n) if "." in n else int(n) for n in nums]
     return tuple(out)
 
+async def scrape_paid_chapters_async(session, novel_url, host):
+    return [], ""  # no paid items yet
+
 TALES_IN_THE_VALLEY_UTILS = {
     "split_title": split_title_titv,
     "extract_volume": extract_volume_titv,
     "clean_description": clean_description_titv,
     "chapter_num": chapter_num,
+    "scrape_paid_chapters_async": scrape_paid_chapters_async,
 }
