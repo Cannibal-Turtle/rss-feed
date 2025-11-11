@@ -47,7 +47,7 @@ HOSTING_SITE_DATA = {
     },
 
     "Mistmint Haven": {
-        "feed_url": "https://www.mistminthaven.com/feed",
+        "feed_url": "https://www.mistminthaven.com/feed/",
         "comments_feed_url": "https://api.mistminthaven.com/api/comments/trans/all-comments",
         "translator": "CannibalTurtle",
         "host_logo": "https://www.mistminthaven.com/images/mascot_mistmint.png",
@@ -86,6 +86,46 @@ The chieftain of a beautiful sea-serpent race coils around his trembling, tearfu
 It’s 1v1. Sweet, sweet, sweet."""
             },
             # Add more Mistmint novels you translate, if any.
+        },
+    },
+    "Tales in the Valley": {
+        "feed_url": "https://talesinthevalley.com/feed/",
+        "comments_feed_url": "",
+        "translator": "cannibalturtle",
+        "host_logo": "https://www.mistminthaven.com/images/mascot_mistmint.png",
+        "coin_emoji": "<:QiEssence:1437848372399837194>",
+        "novels": {
+            "[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught": {
+                "novelupdates_feed_url": "",
+                "discord_role_id": "<@&1437846306625290260>",
+                "novel_url": "",
+                "featured_image": "https://talesinthevalley.com/wp-content/uploads/2025/11/穿成反派后，我跟女主她哥HE了.png",
+                "novel_id": "10804", #comment homepage for scraping reply chain
+                # for manually updated paid feed
+                "short_code": "atvhe",
+
+                # ─── webhook-only fields ───
+                "chapter_count": "130 chapters",
+                "last_chapter": "Chapter 130",
+                "start_date": "",
+                "free_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml",
+                "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
+                "comments_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml",
+                "custom_emoji": "<:hashigarakiheartlove:1437849521991454830>",
+                "extra_ping_roles": "<@&1329500516304158901> <@&1437070570582708345> <@&1330469077784727562>",
+                "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
+                "custom_description": """Steady, domineering CEO gong × quick-witted transmigrated shou【Transmigration + 1v1 + double clean + sweet pampering】
+Song Wan died after a failed resuscitation from a severe illness. When he opened his eyes again, he had entered a dog blood tragic romance and become the villain with his exact name, the shit-stirrer who keeps blocking the male and female leads from being together.
+To avoid the villain’s miserable ending falling on his own head, Song Wan decides to turn over a new leaf.
+Just like the system Siri says, the original met a bad end because he did too many evil deeds. If he stops sabotaging the leads’ relationship and stops targeting the male lead, then he can… Like hell!
+Other people transmigrate at the beginning or at least the middle. He nearly landed right at the finale!
+The original has done every bad thing under the sun and even drugged the male lead to ruin his reputation.
+He’s doomed. Song Wan blacks out for a second, then sprints a hundred meters. Even if he has to kick the door down, he will pull the male lead out of that hotel room laced with an aphrodisiac.
+But the moment the door opens and he pitches headfirst onto the sofa, Song Wan is dumbfounded.
+What is going on?
+The one drugged in the room is not the male lead. Why is it the heroine’s older brother!!!"""
+            },
+            # Add more Tales in the Valley novels you translate, if any.
         },
     },
 }
