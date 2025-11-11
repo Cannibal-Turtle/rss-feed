@@ -1,15 +1,15 @@
 import re
 from html import unescape
-from typing import Optional, Tuple
+from typing import Tuple
 
 import feedparser
 from novel_mappings import HOSTING_SITE_DATA
 
 # ===============================================================
-# Tales in the Valley (free feed) host utils
+# Tales in the Valley (free feed) host utils — multi-series
 # ===============================================================
 
-# --- shortcode -> full title map (built from your mapping)
+# 1) Build shortcode -> full title map from your mapping (case-insensitive)
 def _build_code_map() -> dict:
     out = {}
     titv = HOSTING_SITE_DATA.get("Tales in the Valley", {})
@@ -21,7 +21,8 @@ def _build_code_map() -> dict:
 
 CODE_TO_TITLE = _build_code_map()
 
-# --- Per-series subtitles keyed by short_code (lowercase)
+# 2) Optional per-series subtitles.
+#    Add more series by shortcode key, e.g., "rsg": {1: "The End"}
 CHAPTER_SUBTITLES = {
     "atvhe": {
         1: "Why Is It the Heroine’s Brother?!",
@@ -157,7 +158,21 @@ CHAPTER_SUBTITLES = {
     },
 }
 
-# --- Feedparser patch: prefix first series category to entry.title on TitV feeds
+# Optional subtitles for extras/side stories
+EXTRA_SUBTITLES = {
+    # example:
+    # "rsg": {1: "The End"}
+}
+
+# Optional per-series canonicalization of <chaptername> wording:
+#   "feed"   → keep whatever the feed says (default)
+#   "chapter"→ force "Chapter N" / "Chapter Extra N"
+SERIES_CANON = {
+    # "rsg": "chapter",
+    # "atvhe": "feed",
+}
+
+# 3) Feedparser patch: prefix first series category to title so split stays consistent
 def _pick_series_category(entry) -> str:
     try:
         tags = getattr(entry, "tags", []) or []
@@ -167,8 +182,7 @@ def _pick_series_category(entry) -> str:
             if term and term not in GENERIC:
                 return term
         # fallback: longest term
-        longest = max((getattr(t, "term", "") or str(t)).strip() for t in tags) if tags else ""
-        return longest
+        return max(((getattr(t, "term", "") or str(t)).strip() for t in tags), key=len, default="")
     except Exception:
         return ""
 
@@ -182,7 +196,8 @@ if not getattr(feedparser, "_titv_series_prefix_installed", False):
                     series = _pick_series_category(e)
                     if series:
                         title_now = str(getattr(e, "title", "") or "")
-                        if not title_now.startswith(series + " "):
+                        # guard against duplicates regardless of dash character
+                        if not re.match(rf'^{re.escape(series)}\s*[–-]\s*', title_now):
                             e.title = f"{series} – {title_now}"
         except Exception:
             pass
@@ -190,57 +205,67 @@ if not getattr(feedparser, "_titv_series_prefix_installed", False):
     feedparser.parse = _parse_and_prefix
     feedparser._titv_series_prefix_installed = True
 
-# --- Parsing helpers ---------------------------------------------------------
-# normalize dash-like chars
-DASH_RE = re.compile(r'[\u2010-\u2015\u2212-]+')
-# support | / bullet • etc. but make it OPTIONAL
-SEP_CLASS = r"[|/\u2010-\u2015\u2212\u2022•]+"
-CH_NUM_PATTERNS = [
-    re.compile(r'(?i)\bchapter\s+extra\s+(\d+(?:\.\d+)?)'),
-    re.compile(r'(?i)\bchapter\s+(\d+(?:\.\d+)?)'),
-    re.compile(r'(?i)\bch(?:apter)?\s+(\d+(?:\.\d+)?)'),
+# 4) Parsing helpers
+DASH_RE = re.compile(r'[\u2010-\u2015\u2212\-]+')
+LABEL_PATTERNS = [
+    (re.compile(r'(?i)\bchapter\s+extra\s+(\d+(?:\.\d+)?)'), 'extra'),
+    (re.compile(r'(?i)\bextra\s+(\d+(?:\.\d+)?)'),           'extra'),
+    (re.compile(r'(?i)\bside\s*story\s*[:\- ]*(\d+(?:\.\d+)?)'), 'extra'),
+    (re.compile(r'(?i)\bss\s*[:\- ]*(\d+(?:\.\d+)?)'),       'extra'),
+    (re.compile(r'(?i)\bchapter\s+(\d+(?:\.\d+)?)'),         'main'),
+    (re.compile(r'(?i)\bch(?:apter)?\s+(\d+(?:\.\d+)?)'),    'main'),
 ]
+
+def _canonize_chaptername(short_code: str, kind: str, chapnum_txt: str, original_label: str) -> str:
+    """Keep feed wording unless SERIES_CANON says to force 'Chapter' wording."""
+    mode = SERIES_CANON.get(short_code, "feed")
+    if mode == "chapter" and chapnum_txt:
+        return f"Chapter {'Extra ' if kind == 'extra' else ''}{chapnum_txt}"
+    # default: preserve feed’s wording (normalized whitespace)
+    return " ".join(original_label.split())
 
 def split_title_titv(full_title: str) -> Tuple[str, str, str]:
     """
     Returns (main_title, chaptername, nameextend).
-    - main_title: series (via category prefix) or shortcode map fallback
-    - chaptername: 'Chapter N' or 'Chapter Extra N'
-    - nameextend: per-series subtitle from CHAPTER_SUBTITLES[short_code][N], if any
+      main_title: series (from category prefix) or shortcode→title fallback
+      chaptername: either preserved from feed or forced to 'Chapter...' per SERIES_CANON
+      nameextend: subtitle from CHAPTER_SUBTITLES/EXTRA_SUBTITLES when available
     """
     s = (full_title or "").strip()
     s = DASH_RE.sub(" – ", s)
     s = re.sub(r"\s{2,}", " ", s).strip()
 
-    # Try "Series – rest"
+    # "Series – rest" if present
     main_title, rest = (s.split(" – ", 1) + [""])[:2] if " – " in s else ("", s)
 
-    # Leading shortcode with OPTIONAL separator (or none): e.g. "ATVHE Chapter 2"
-    m_code = re.match(rf"^\s*([A-Z0-9]{{2,}})\b(?:\s*{SEP_CLASS}\s*)?", rest)
+    # Shortcode at start of 'rest' (separator optional)
+    m_code = re.match(r'^\s*([A-Z0-9]{2,})\b(?:\s*[|–-]\s*)?', rest)
     short_code = (m_code.group(1).lower() if m_code else "")
 
-    # Chapter number extraction
-    chapnum_txt: Optional[str] = None
-    is_extra = False
-    for pat in CH_NUM_PATTERNS:
+    # Find first recognizable chapter label
+    chaptername, chapnum_txt, kind = "", None, None
+    for pat, k in LABEL_PATTERNS:
         m = pat.search(rest)
         if m:
             chapnum_txt = m.group(1)
-            is_extra = ("extra" in pat.pattern.lower())
+            kind = k
+            chaptername = _canonize_chaptername(short_code, kind, chapnum_txt, m.group(0))
             break
 
-    chaptername = f"Chapter {'Extra ' if is_extra else ''}{chapnum_txt}" if chapnum_txt else ""
-
-    # Nameextend from table (only for integer chapters)
+    # Subtitle lookup (main vs extra), only if integer N
     nameextend = ""
-    if short_code and chapnum_txt and chapnum_txt.isdigit():
-        nameextend = CHAPTER_SUBTITLES.get(short_code, {}).get(int(chapnum_txt), "") or ""
+    if chapnum_txt and chapnum_txt.isdigit():
+        n = int(chapnum_txt)
+        if kind == "main":
+            nameextend = CHAPTER_SUBTITLES.get(short_code, {}).get(n, "")
+        elif kind == "extra":
+            nameextend = EXTRA_SUBTITLES.get(short_code, {}).get(n, "")
 
-    # Fallback: if no category prefix gave a title, map shortcode -> full title
-    if not main_title and short_code and short_code in CODE_TO_TITLE:
+    # Fallback for series title via shortcode mapping
+    if not main_title and short_code in CODE_TO_TITLE:
         main_title = CODE_TO_TITLE[short_code]
 
-    return main_title.strip(), (chaptername.strip()), nameextend.strip()
+    return main_title.strip(), chaptername.strip(), nameextend.strip()
 
 def extract_volume_titv(_full_title: str, _link: str) -> str:
     return ""  # TitV RSS exposes no volume
@@ -253,16 +278,21 @@ def clean_description_titv(raw_desc: str) -> str:
     return s
 
 def chapter_num(chaptername: str):
-    s = (chaptername or "").lower()
-    m = re.search(r'chapter\s+extra\s+(\d+)', s) or re.search(r'\bextra\s+(\d+)', s)
+    s = (chaptername or '').lower()
+    # Put extras/side stories after normal chapters
+    m = (re.search(r'\bchapter\s+extra\s+(\d+)', s) or
+         re.search(r'\bextra\s+(\d+)', s) or
+         re.search(r'\bside\s*story\s*[:\- ]*(\d+)', s) or
+         re.search(r'\bss\s*[:\- ]*(\d+)', s) or
+         re.search(r'\bgaiden\s+(\d+)', s) or
+         re.search(r'\bspecial\s+(\d+)', s))
     if m:
-        return (10**9, int(m.group(1)))  # extras after normal chapters
+        return (10**9, int(m.group(1)))
+
     nums = re.findall(r"\d+(?:\.\d+)?", chaptername)
     if not nums:
         return (0,)
-    out = []
-    for n in nums:
-        out.append(float(n) if "." in n else int(n))
+    out = [float(n) if "." in n else int(n) for n in nums]
     return tuple(out)
 
 TALES_IN_THE_VALLEY_UTILS = {
