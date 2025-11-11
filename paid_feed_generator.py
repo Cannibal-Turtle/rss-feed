@@ -24,7 +24,7 @@ from novel_mappings import (
 # ---------------- History Control ----------------
 PAID_HISTORY_PATH = os.getenv("PAID_HISTORY_PATH", "paid_history.json")
 USE_HISTORY = os.getenv("PAID_USE_HISTORY", "1") == "1"
-NSFW_PAREN_RE = re.compile(r'\(\s*(?:nsfw|18\+|h{1,3})\s*\)', re.I)
+NSFW_PAREN_RE = re.compile(r'\([^)]*\b(?:nsfw|r-?18|18\+|h{1,3})\b[^)]*\)', re.I)
 
 def load_history():
     if not USE_HISTORY: return []
