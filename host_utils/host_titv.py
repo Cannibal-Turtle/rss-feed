@@ -30,7 +30,7 @@ CHAPTER_SUBTITLES = {
         3: "Song Wan Ran Away",
         4: "Here to Catch You",
         5: "Won’t Run Anymore",
-        6: "Call Me Brother",
+        6: "Quick, Call Brother",
         7: "Am I in the Closet?",
         8: "Put It Here",
         9: "This Good-for-Nothing Kid",
