@@ -4,7 +4,7 @@
     <title>Aggregated Paid Chapters Feed</title>
     <link>https://github.com/cannibal-turtle/</link>
     <description>Aggregated RSS feed for paid chapters across mapped novels.</description>
-    <lastBuildDate>Thu, 13 Nov 2025 04:20:07 +0000</lastBuildDate>
+    <lastBuildDate>Thu, 13 Nov 2025 05:14:51 +0000</lastBuildDate>
     <docs>http://blogs.law.harvard.edu/tech/rss</docs>
     <generator>PyRSS2Gen-1.1.0</generator>
     <item>
@@ -206,31 +206,6 @@ It’s 1v1. Sweet, sweet, sweet.]]></description>
       <host>Mistmint Haven</host>
       <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
       <guid isPermaLink="false">4902c6a2-ba03-40df-bfbc-f59ef227a0d1</guid>
-    </item>
-    <item>
-      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
-      <volume>Arc 1: Tycoon Boss Gong × Pure Little Male Servant Shou</volume>
-      <chaptername>Chapter 6</chaptername>
-      <nameextend>***1.6***</nameextend>
-      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-6</link>
-      <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
-Dark room, forced confinement, obsessive pampering.
-Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
-He’s been completing the missions beautifully, except… the process seems a bit off—
-A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
-A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
-The sound of metal chains clatters—
-The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
-It’s 1v1. Sweet, sweet, sweet.]]></description>
-      <category>SFW</category>
-      <translator>CannibalTurtle</translator>
-      <discord_role_id><![CDATA[<@&1431675643078250646>]]></discord_role_id>
-      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
-      <coin>&lt;:mistmint_currency:1433046707121422487&gt; 5</coin>
-      <pubDate>Thu, 06 Nov 2025 04:46:26 +0000</pubDate>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <guid isPermaLink="false">21ae8536-3a6d-4e1b-96fe-7d29370beb2f</guid>
     </item>
   </channel>
 </rss>
