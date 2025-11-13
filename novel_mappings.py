@@ -77,7 +77,7 @@ HOSTING_SITE_DATA = {
                 "history_file": "tdlbkgc_history.json",
                 "custom_description": """【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
 Dark room, forced confinement, obsessive pampering.
-Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
+Shen Yu is bound to a system. His task is to enter various mission worlds and stop anomalous data from causing the worlds' collapse.
 He’s been completing the missions beautifully, except… the process seems a bit off—
 A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
 A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
