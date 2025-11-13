@@ -1,17 +1,18 @@
-
-<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
+<?xml version="1.0" ?>
+<rss xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:wfw="http://wellformedweb.org/CommentAPI/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" xmlns:slash="http://purl.org/rss/1.0/modules/slash/" xmlns:webfeeds="http://www.webfeeds.org/rss/1.0" xmlns:georss="http://www.georss.org/georss" xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" version="2.0">
   <channel>
-    <title>Temp Mistmint C1 Feed</title>
-    <link>https://github.com/cannibal-turtle</link>
-    <description>Temp feed for C1 announcement</description>
-
+    <title>Aggregated Paid Chapters Feed</title>
+    <link>https://github.com/cannibal-turtle/</link>
+    <description>Aggregated RSS feed for paid chapters across mapped novels.</description>
+    <lastBuildDate>Thu, 13 Nov 2025 09:16:51 +0000</lastBuildDate>
+    <docs>http://blogs.law.harvard.edu/tech/rss</docs>
+    <generator>PyRSS2Gen-1.1.0</generator>
     <item>
       <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
       <volume>Arc 1: Tycoon Boss Gong × Pure Little Male Servant Shou</volume>
-      <chaptername>Chapter 2</chaptername>
-      <nameextend>***1.2***</nameextend>
-      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-2</link>
+      <chaptername>Chapter 16</chaptername>
+      <nameextend>***1.16***</nameextend>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-16</link>
       <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
 Dark room, forced confinement, obsessive pampering.
 Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
@@ -25,17 +26,18 @@ It’s 1v1. Sweet, sweet, sweet.]]></description>
       <translator>CannibalTurtle</translator>
       <discord_role_id><![CDATA[<@&1431675643078250646>]]></discord_role_id>
       <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
-      <pubDate>Sat, 08 Nov 2025 05:00:00 +0000</pubDate>
+      <coin>&lt;:mistmint_currency:1433046707121422487&gt; 5</coin>
+      <pubDate>Thu, 13 Nov 2025 08:13:36 +0000</pubDate>
       <host>Mistmint Haven</host>
       <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <guid isPermaLink="false">c1312635-0026-491a-8cb0-13aeb7a925cd</guid>
+      <guid isPermaLink="false">a1fd8547-a70d-493d-b45a-b1ec7a835413</guid>
     </item>
     <item>
       <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
       <volume>Arc 1: Tycoon Boss Gong × Pure Little Male Servant Shou</volume>
-      <chaptername>Chapter 1</chaptername>
-      <nameextend>***1.1***</nameextend>
-      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-1</link>
+      <chaptername>Chapter 15</chaptername>
+      <nameextend>***1.15***</nameextend>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-15</link>
       <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
 Dark room, forced confinement, obsessive pampering.
 Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
@@ -49,11 +51,310 @@ It’s 1v1. Sweet, sweet, sweet.]]></description>
       <translator>CannibalTurtle</translator>
       <discord_role_id><![CDATA[<@&1431675643078250646>]]></discord_role_id>
       <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
-      <pubDate>Sat, 01 Nov 2025 05:00:00 +0000</pubDate>
+      <coin>&lt;:mistmint_currency:1433046707121422487&gt; 5</coin>
+      <pubDate>Thu, 13 Nov 2025 08:11:26 +0000</pubDate>
       <host>Mistmint Haven</host>
       <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <guid isPermaLink="false">b602ce57-c9af-46ae-b25d-5c66c8b040e6</guid>
+      <guid isPermaLink="false">676660cd-5824-4f13-90d2-a2758dd5fdef</guid>
     </item>
-
+    <item>
+      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
+      <volume>Arc 1: Tycoon Boss Gong × Pure Little Male Servant Shou</volume>
+      <chaptername>Chapter 14</chaptername>
+      <nameextend>***1.14***</nameextend>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-14</link>
+      <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
+Dark room, forced confinement, obsessive pampering.
+Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
+He’s been completing the missions beautifully, except… the process seems a bit off—
+A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
+A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
+The sound of metal chains clatters—
+The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
+It’s 1v1. Sweet, sweet, sweet.]]></description>
+      <category>SFW</category>
+      <translator>CannibalTurtle</translator>
+      <discord_role_id><![CDATA[<@&1431675643078250646>]]></discord_role_id>
+      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
+      <coin>&lt;:mistmint_currency:1433046707121422487&gt; 5</coin>
+      <pubDate>Wed, 12 Nov 2025 05:34:47 +0000</pubDate>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <guid isPermaLink="false">6374cb0a-def3-4a99-b4a3-5b81d8aae42b</guid>
+    </item>
+    <item>
+      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
+      <volume>Arc 1: Tycoon Boss Gong × Pure Little Male Servant Shou</volume>
+      <chaptername>Chapter 13</chaptername>
+      <nameextend>***1.13***</nameextend>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-13</link>
+      <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
+Dark room, forced confinement, obsessive pampering.
+Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
+He’s been completing the missions beautifully, except… the process seems a bit off—
+A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
+A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
+The sound of metal chains clatters—
+The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
+It’s 1v1. Sweet, sweet, sweet.]]></description>
+      <category>SFW</category>
+      <translator>CannibalTurtle</translator>
+      <discord_role_id><![CDATA[<@&1431675643078250646>]]></discord_role_id>
+      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
+      <coin>&lt;:mistmint_currency:1433046707121422487&gt; 5</coin>
+      <pubDate>Wed, 12 Nov 2025 05:34:01 +0000</pubDate>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <guid isPermaLink="false">cb9f9157-fd6e-4d68-983a-073a440556a7</guid>
+    </item>
+    <item>
+      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
+      <volume>Arc 1: Tycoon Boss Gong × Pure Little Male Servant Shou</volume>
+      <chaptername>Chapter 12</chaptername>
+      <nameextend>***1.12***</nameextend>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-12</link>
+      <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
+Dark room, forced confinement, obsessive pampering.
+Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
+He’s been completing the missions beautifully, except… the process seems a bit off—
+A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
+A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
+The sound of metal chains clatters—
+The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
+It’s 1v1. Sweet, sweet, sweet.]]></description>
+      <category>SFW</category>
+      <translator>CannibalTurtle</translator>
+      <discord_role_id><![CDATA[<@&1431675643078250646>]]></discord_role_id>
+      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
+      <coin>&lt;:mistmint_currency:1433046707121422487&gt; 5</coin>
+      <pubDate>Tue, 11 Nov 2025 09:10:11 +0000</pubDate>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <guid isPermaLink="false">5734df35-fa96-4b2d-99e8-13aab5676bb1</guid>
+    </item>
+    <item>
+      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
+      <volume>Arc 1: Tycoon Boss Gong × Pure Little Male Servant Shou</volume>
+      <chaptername>Chapter 11</chaptername>
+      <nameextend>***1.11***</nameextend>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-11</link>
+      <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
+Dark room, forced confinement, obsessive pampering.
+Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
+He’s been completing the missions beautifully, except… the process seems a bit off—
+A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
+A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
+The sound of metal chains clatters—
+The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
+It’s 1v1. Sweet, sweet, sweet.]]></description>
+      <category>SFW</category>
+      <translator>CannibalTurtle</translator>
+      <discord_role_id><![CDATA[<@&1431675643078250646>]]></discord_role_id>
+      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
+      <coin>&lt;:mistmint_currency:1433046707121422487&gt; 5</coin>
+      <pubDate>Tue, 11 Nov 2025 06:31:27 +0000</pubDate>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <guid isPermaLink="false">d03a6795-af7e-4a00-8a1d-20083f9d8727</guid>
+    </item>
+    <item>
+      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
+      <volume>Arc 1: Tycoon Boss Gong × Pure Little Male Servant Shou</volume>
+      <chaptername>Chapter 10</chaptername>
+      <nameextend>***1.10***</nameextend>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-10</link>
+      <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
+Dark room, forced confinement, obsessive pampering.
+Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
+He’s been completing the missions beautifully, except… the process seems a bit off—
+A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
+A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
+The sound of metal chains clatters—
+The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
+It’s 1v1. Sweet, sweet, sweet.]]></description>
+      <category>SFW</category>
+      <translator>CannibalTurtle</translator>
+      <discord_role_id><![CDATA[<@&1431675643078250646>]]></discord_role_id>
+      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
+      <coin>&lt;:mistmint_currency:1433046707121422487&gt; 5</coin>
+      <pubDate>Mon, 10 Nov 2025 09:35:52 +0000</pubDate>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <guid isPermaLink="false">67d2e535-2ade-4004-aca9-e2b4d31c7414</guid>
+    </item>
+    <item>
+      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
+      <volume>Arc 1: Tycoon Boss Gong × Pure Little Male Servant Shou</volume>
+      <chaptername>Chapter 9</chaptername>
+      <nameextend>***1.9***</nameextend>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-9</link>
+      <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
+Dark room, forced confinement, obsessive pampering.
+Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
+He’s been completing the missions beautifully, except… the process seems a bit off—
+A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
+A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
+The sound of metal chains clatters—
+The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
+It’s 1v1. Sweet, sweet, sweet.]]></description>
+      <category>SFW</category>
+      <translator>CannibalTurtle</translator>
+      <discord_role_id><![CDATA[<@&1431675643078250646>]]></discord_role_id>
+      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
+      <coin>&lt;:mistmint_currency:1433046707121422487&gt; 5</coin>
+      <pubDate>Sun, 09 Nov 2025 02:59:47 +0000</pubDate>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <guid isPermaLink="false">63fd25bb-d26e-4d6d-aacc-5a4439eb2bf2</guid>
+    </item>
+    <item>
+      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
+      <volume>Arc 1: Tycoon Boss Gong × Pure Little Male Servant Shou</volume>
+      <chaptername>Chapter 8</chaptername>
+      <nameextend>***1.8***</nameextend>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-8</link>
+      <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
+Dark room, forced confinement, obsessive pampering.
+Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
+He’s been completing the missions beautifully, except… the process seems a bit off—
+A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
+A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
+The sound of metal chains clatters—
+The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
+It’s 1v1. Sweet, sweet, sweet.]]></description>
+      <category>SFW</category>
+      <translator>CannibalTurtle</translator>
+      <discord_role_id><![CDATA[<@&1431675643078250646>]]></discord_role_id>
+      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
+      <coin>&lt;:mistmint_currency:1433046707121422487&gt; 5</coin>
+      <pubDate>Sat, 08 Nov 2025 13:08:57 +0000</pubDate>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <guid isPermaLink="false">e08b9a79-95e6-4744-8406-fce545e0dba2</guid>
+    </item>
+    <item>
+      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
+      <volume>Arc 1: Tycoon Boss Gong × Pure Little Male Servant Shou</volume>
+      <chaptername>Chapter 7</chaptername>
+      <nameextend>***1.7***</nameextend>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-7</link>
+      <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
+Dark room, forced confinement, obsessive pampering.
+Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
+He’s been completing the missions beautifully, except… the process seems a bit off—
+A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
+A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
+The sound of metal chains clatters—
+The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
+It’s 1v1. Sweet, sweet, sweet.]]></description>
+      <category>SFW</category>
+      <translator>CannibalTurtle</translator>
+      <discord_role_id><![CDATA[<@&1431675643078250646>]]></discord_role_id>
+      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
+      <coin>&lt;:mistmint_currency:1433046707121422487&gt; 5</coin>
+      <pubDate>Fri, 07 Nov 2025 02:47:44 +0000</pubDate>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <guid isPermaLink="false">4902c6a2-ba03-40df-bfbc-f59ef227a0d1</guid>
+    <item>
+      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
+      <volume>Arc 1: Tycoon Boss Gong × Pure Little Male Servant Shou</volume>
+      <chaptername>Chapter 6</chaptername>
+      <nameextend>***1.6***</nameextend>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-6</link>
+      <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
+Dark room, forced confinement, obsessive pampering.
+Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
+He’s been completing the missions beautifully, except… the process seems a bit off—
+A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
+A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
+The sound of metal chains clatters—
+The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
+It’s 1v1. Sweet, sweet, sweet.]]></description>
+      <category>SFW</category>
+      <translator>CannibalTurtle</translator>
+      <discord_role_id><![CDATA[<@&1431675643078250646>]]></discord_role_id>
+      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
+      <coin>&lt;:mistmint_currency:1433046707121422487&gt; 5</coin>
+      <pubDate>Thu, 06 Nov 2025 04:46:26 +0000</pubDate>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <guid isPermaLink="false">21ae8536-3a6d-4e1b-96fe-7d29370beb2f</guid>
+    </item>
+    <item>
+      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
+      <volume>Arc 1: Tycoon Boss Gong × Pure Little Male Servant Shou</volume>
+      <chaptername>Chapter 5</chaptername>
+      <nameextend>***1.5***</nameextend>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-5</link>
+      <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
+Dark room, forced confinement, obsessive pampering.
+Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
+He’s been completing the missions beautifully, except… the process seems a bit off—
+A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
+A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
+The sound of metal chains clatters—
+The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
+It’s 1v1. Sweet, sweet, sweet.]]></description>
+      <category>SFW</category>
+      <translator>CannibalTurtle</translator>
+      <discord_role_id><![CDATA[<@&1431675643078250646>]]></discord_role_id>
+      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
+      <coin>&lt;:mistmint_currency:1433046707121422487&gt; 5</coin>
+      <pubDate>Wed, 05 Nov 2025 09:19:09 +0000</pubDate>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <guid isPermaLink="false">da8a6fdd-2edd-4e6e-a548-bf719f6a29c2</guid>
+    </item>
+    <item>
+      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
+      <volume>Arc 1: Tycoon Boss Gong × Pure Little Male Servant Shou</volume>
+      <chaptername>Chapter 4</chaptername>
+      <nameextend>***1.4***</nameextend>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-4</link>
+      <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
+Dark room, forced confinement, obsessive pampering.
+Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
+He’s been completing the missions beautifully, except… the process seems a bit off—
+A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
+A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
+The sound of metal chains clatters—
+The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
+It’s 1v1. Sweet, sweet, sweet.]]></description>
+      <category>SFW</category>
+      <translator>CannibalTurtle</translator>
+      <discord_role_id><![CDATA[<@&1431675643078250646>]]></discord_role_id>
+      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
+      <coin>&lt;:mistmint_currency:1433046707121422487&gt; 5</coin>
+      <pubDate>Tue, 04 Nov 2025 10:07:20 +0000</pubDate>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <guid isPermaLink="false">0a5fdb29-faf4-4f5c-a47c-fc543311e233</guid>
+    </item>
+    <item>
+      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
+      <volume>Arc 1: Tycoon Boss Gong × Pure Little Male Servant Shou</volume>
+      <chaptername>Chapter 3</chaptername>
+      <nameextend>***1.3***</nameextend>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-3</link>
+      <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
+Dark room, forced confinement, obsessive pampering.
+Shen Yu has bound to a system. His task is to enter various mission worlds and stop anomalous data from causing a world collapse.
+He’s been completing the missions beautifully, except… the process seems a bit off—
+A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
+A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
+The sound of metal chains clatters—
+The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
+It’s 1v1. Sweet, sweet, sweet.]]></description>
+      <category>SFW</category>
+      <translator>CannibalTurtle</translator>
+      <discord_role_id><![CDATA[<@&1431675643078250646>]]></discord_role_id>
+      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
+      <coin>&lt;:mistmint_currency:1433046707121422487&gt; 5</coin>
+      <pubDate>Mon, 03 Nov 2025 09:49:07 +0000</pubDate>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <guid isPermaLink="false">e82609b0-6c66-45fb-a3e0-5715b327e978</guid>
+    </item>
   </channel>
 </rss>
