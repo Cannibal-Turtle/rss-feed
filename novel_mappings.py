@@ -114,16 +114,15 @@ It’s 1v1. Sweet, sweet, sweet."""
                 "custom_emoji": "<:hashigarakiheartlove:1437849521991454830>",
                 "extra_ping_roles": "<@&1329500516304158901> <@&1437070570582708345> <@&1330469077784727562>",
                 "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
-                "custom_description": """Steady, domineering CEO gong × quick-witted transmigrated shou【Transmigration + 1v1 + double clean + sweet pampering】
-Song Wan died after a failed resuscitation from a severe illness. When he opened his eyes again, he had entered a dog blood tragic romance and become the villain with his exact name, the shit-stirrer who keeps blocking the male and female leads from being together.
-To avoid the villain’s miserable ending falling on his own head, Song Wan decides to turn over a new leaf.
-Just like the system Siri says, the original met a bad end because he did too many evil deeds. If he stops sabotaging the leads’ relationship and stops targeting the male lead, then he can… Like hell!
-Other people transmigrate at the beginning or at least the middle. He nearly landed right at the finale!
-The original has done every bad thing under the sun and even drugged the male lead to ruin his reputation.
-He’s doomed. Song Wan blacks out for a second, then sprints a hundred meters. Even if he has to kick the door down, he will pull the male lead out of that hotel room laced with an aphrodisiac.
-But the moment the door opens and he pitches headfirst onto the sofa, Song Wan is dumbfounded.
-What is going on?
-The one drugged in the room is not the male lead. Why is it the heroine’s older brother!!!"""
+                "custom_description": ""【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
+Dark room, forced confinement, obsessive pampering.
+Shen Yu is bound to a system. His task is to enter various mission worlds and stop anomalous data from causing the world's collapse.
+He’s been completing the missions beautifully, except… the process seems a bit off—
+A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
+A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
+The sound of metal chains clatters—
+The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
+It’s 1v1. Sweet, sweet, sweet."""
             },
             # Add more Tales in the Valley novels you translate, if any.
         },
