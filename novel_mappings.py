@@ -114,7 +114,7 @@ It’s 1v1. Sweet, sweet, sweet."""
                 "custom_emoji": "<:hashigarakiheartlove:1437849521991454830>",
                 "extra_ping_roles": "<@&1329500516304158901> <@&1437070570582708345> <@&1330469077784727562>",
                 "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
-                "custom_description": ""【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
+                "custom_description": """【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
 Dark room, forced confinement, obsessive pampering.
 Shen Yu is bound to a system. His task is to enter various mission worlds and stop anomalous data from causing the world's collapse.
 He’s been completing the missions beautifully, except… the process seems a bit off—
