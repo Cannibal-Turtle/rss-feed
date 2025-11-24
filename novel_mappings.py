@@ -85,6 +85,7 @@ The zombie king of the apocalypse with an unwavering gaze: “Nuan Nuan, it’s 
 Sheng Nuan became even more panicked…"""
         },
     },
+},
     "Tales in the Valley": {
         "feed_url": "https://talesinthevalley.com/feed/",
         "comments_feed_url": "",
