@@ -17,35 +17,6 @@ Also included are helper getters at the bottom.
 """
 
 HOSTING_SITE_DATA = {
-    "Dragonholic": {
-        "feed_url": "https://dragonholic.com/feed/manga-chapters/",
-        "comments_feed_url": "https://dragonholic.com/comments/feed/",
-        "translator": "Cannibal Turtle",
-        "host_logo": "https://dragonholic.com/wp-content/uploads/2025/01/Web-Logo-White.png",
-        "coin_emoji": "🔥",
-        "novels": {
-            "Quick Transmigration: The Villain Is Too Pampered and Alluring": {
-                "novelupdates_feed_url": "https://www.novelupdates.com/series/quick-transmigration-the-villain-is-too-pampered-and-alluring/feed/", #if you want to combine your host's comment feed with NU's.
-                "discord_role_id": "<@&1329391480435114005>",
-                "novel_url": "https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/",
-                "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/177838.jpg",
-
-                # ─── webhook-only fields ───
-                "chapter_count": "1184 chapters + 8 extras",
-                "last_chapter": "Extra 8",
-                "start_date": "31/8/2024",
-                "free_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml",
-                "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
-                "comments_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml",
-                "custom_emoji": "<:emoji_62:1365400946330435654>",
-                "extra_ping_roles": "<@&1329500516304158901> <@&1329427832077684736> <@&1330469014895595620>",
-                "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
-                "history_file": "tvitpa_history.json",
-            },
-            # Add more Dragonholic novels here if needed.
-        },
-    },
-
     "Mistmint Haven": {
         "feed_url": "https://www.mistminthaven.com/feed/",
         "comments_feed_url": "https://api.mistminthaven.com/api/comments/trans/all-comments",
@@ -85,7 +56,33 @@ The sound of metal chains clatters—
 The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
 It’s 1v1. Sweet, sweet, sweet."""
             },
-            # Add more Mistmint novels you translate, if any.
+            "Quick Transmigration: The Villain Is Too Pampered and Alluring": {
+                "novelupdates_feed_url": "https://www.novelupdates.com/series/quick-transmigration-the-villain-is-too-pampered-and-alluring/feed/",
+                "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/quick-transmigration-the-villain-is-too-pampered-and-alluring/chapters",
+                "discord_role_id": "<@&1329391480435114005>",
+                "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring",
+                "featured_image": "https://i.imgur.com/5sxtfVf.jpeg",
+                "novel_id": "24f3efce-5b52-4dfe-a90e-14bcfb3f56c6", #comment homepage for scraping reply chain
+                "short_code": "tvitpa", #for parsing feed without guid. Also for short_code.
+
+                # ─── webhook-only fields ───
+                "chapter_count": "1184 chapters + 8 extras",
+                "last_chapter": "Extra 8",
+                "start_date": "31/8/2024",
+                "free_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml",
+                "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
+                "comments_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml",
+                "custom_emoji": "<:468087cutebunny:1431678613002125313>",
+                "extra_ping_roles": "<@&1329500516304158901> <@&1329427832077684736> <@&1330469014895595620>",
+                "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
+                "history_file": "tvitpa_history.json",
+                "custom_description": """To survive, Sheng Nuan must traverse different worlds, playing the role of self-destructive cannon fodder while saving the darkest villains. These villains are cold-blooded, obsessive, and ruthless—capable of annihilating millions with a smile and destroying the world with a wave of their hand. Holding the cannon fodder’s script, Sheng Nuan is terrified…
+Later:
+A paranoid young man with a gloomy expression: “Nuan Nuan, you’re not allowed to go anywhere except by my side…”
+The cold-blooded emperor whose face was stained with blood: “Nuan Nuan, for you, what does it matter if the empire falls?”
+The demonized immortal with snow-white hair: “Nuan Nuan, you are my inner demon.”
+The zombie king of the apocalypse with an unwavering gaze: “Nuan Nuan, it’s your choice—kill me, or save me.”
+Sheng Nuan became even more panicked…"""
         },
     },
     "Tales in the Valley": {
