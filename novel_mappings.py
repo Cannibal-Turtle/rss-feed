@@ -84,47 +84,8 @@ The demonized immortal with snow-white hair: “Nuan Nuan, you are my inner demo
 The zombie king of the apocalypse with an unwavering gaze: “Nuan Nuan, it’s your choice—kill me, or save me.”
 Sheng Nuan became even more panicked…"""
         },
-    },
-},
-    "Tales in the Valley": {
-        "feed_url": "https://talesinthevalley.com/feed/",
-        "comments_feed_url": "",
-        "translator": "cannibalturtle",
-        "host_logo": "https://i0.wp.com/talesinthevalley.com/wp-content/uploads/2025/07/cropped-Untitled-design-1-1.png",
-        "coin_emoji": "<:QiEssence:1437848372399837194>",
-        "novels": {
-            "[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught": {
-                "novelupdates_feed_url": "",
-                "discord_role_id": "<@&1437846306625290260>",
-                "novel_url": "",
-                "featured_image": "https://talesinthevalley.com/wp-content/uploads/2025/11/穿成反派后，我跟女主她哥HE了.png",
-                "novel_id": "10804",
-                # for manually updated paid feed
-                "short_code": "atvhe",
-
-                # ─── webhook-only fields ───
-                "chapter_count": "130 chapters",
-                "last_chapter": "Chapter 130",
-                "start_date": "",
-                "free_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml",
-                "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
-                "comments_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml",
-                "custom_emoji": "<:hashigarakiheartlove:1437849521991454830>",
-                "extra_ping_roles": "<@&1329500516304158901> <@&1437070570582708345> <@&1330469077784727562>",
-                "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
-                "custom_description": """【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
-Dark room, forced confinement, obsessive pampering.
-Shen Yu is bound to a system. His task is to enter various mission worlds and stop anomalous data from causing the world's collapse.
-He’s been completing the missions beautifully, except… the process seems a bit off—
-A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
-A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
-The sound of metal chains clatters—
-The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
-It’s 1v1. Sweet, sweet, sweet."""
-            },
-            # Add more Tales in the Valley novels you translate, if any.
-        },
-    },
+     },
+  },
 }
 
 # ---------------- Utility Functions ----------------
