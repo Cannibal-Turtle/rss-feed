@@ -38,7 +38,6 @@ def main():
     # <t:unix:R> relative, <t:unix:F> full
     t_rel = f"<t:{exp}:R>"
     t_full = f"<t:{exp}:F>"
-    left_human = _human_delta(secs_left)
 
     # Host logo if present
     host_logo = ""
@@ -59,8 +58,8 @@ def main():
     # Embed body
     description = (
         f"**{host}** token is expiring soon\n"
-        f"│ Token expires {t_rel} ({t_full}).\n"
-        f"│ Time left: **{left_human}**.\n"
+        f"│ Token expires {t_full}.\n"
+        f"│ Time left: **{t_rel}**.\n"
         f"│ Rotate the secret to prevent feed/API breakage.\n"
         f"│\n"
         f"│ Repo: `{REPO_SLUG}`"
