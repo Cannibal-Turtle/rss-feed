@@ -1,6 +1,26 @@
 <?xml version="1.0" ?>
 <rss xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" xmlns:georss="http://www.georss.org/georss" xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" version="2.0">
-  <channel>    <item>
+  <channel>
+    <title>Aggregated Comments Feed</title>
+    <link>https://github.com/Cannibal-Turtle</link>
+    <description>Aggregated RSS feed for comments across hosting sites.</description>
+    <lastBuildDate>Sun, 11 Jan 2026 21:12:36 +0000</lastBuildDate>
+    <item>
+      <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
+      <chapter>Chapter 21</chapter>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring/arc-1-the-heiress-will-not-be-a-cannon-fodder-chapter-21</link>
+      <dc:creator><![CDATA[Lalaiazurae]]></dc:creator>
+      <description><![CDATA[So funny 😂]]></description>
+      <translator>CannibalTurtle</translator>
+      <discord_role_id/>
+      <featuredImage url=""/>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <category>SFW</category>
+      <pubDate>Sat, 27 Dec 2025 17:39:28 +0000</pubDate>
+      <guid isPermaLink="false">dd73bb22-960c-4446-b2f2-02f4f369521b</guid>
+    </item>
+    <item>
       <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
       <chapter></chapter>
       <link>https://www.novelupdates.com/series/quick-transmigration-the-villain-is-too-pampered-and-alluring/#comment-512964</link>
@@ -225,5 +245,6 @@ It took so long for me to read it until the extra chapters. I didn't expect it t
       <pubDate>Tue, 17 Sep 2024 16:38:19 +0000</pubDate>
       <guid isPermaLink="false">https://www.novelupdates.com/?post_type=seriesplans&amp;p=88639#comment-434808</guid>
     </item>
-</channel>
+
+  </channel>
 </rss>
