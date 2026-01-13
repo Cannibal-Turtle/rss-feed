@@ -161,9 +161,9 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
         # Get other metadata using host-specific functions.
         translator = utils.get("get_host_translator", lambda host: "")(self.host)
         writer.write(indent + "    <translator>%s</translator>" % escape(translator) + newl)
-        discord_role = utils.get("get_novel_discord_role", lambda nt, host: "")(self.novel_title, self.host)
+        discord_role = utils["get_novel_discord_role"](self.host, self.novel_title)
         writer.write(indent + "    <discord_role_id><![CDATA[%s]]></discord_role_id>" % discord_role + newl)
-        featured_image = utils.get("get_featured_image", lambda nt, host: "")(self.novel_title, self.host)
+        featured_image = utils["get_featured_image"](self.host, self.novel_title)
         writer.write(indent + '    <featuredImage url="%s"/>' % escape(featured_image) + newl)
         writer.write(indent + "    <host>%s</host>" % escape(self.host) + newl)
         host_logo = utils.get("get_host_logo", lambda host: "")(self.host)
