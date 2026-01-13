@@ -240,9 +240,21 @@ def main():
         
                 print(f"[loader] {host}: {len(norm_items)} items from loader (url={comments_feed_url})")
                 for obj in norm_items:
-                    novel_title   = obj.get("novel_title", "").strip()
+                    novel_title = obj.get("novel_title", "").strip()
                     if not novel_title:
                         continue
+                
+                    novels = HOSTING_SITE_DATA.get(host, {}).get("novels", {})
+                
+                    if novel_title not in novels:
+                        print(
+                            "[UNMAPPED NOVEL]",
+                            f"host={host}",
+                            f"title={repr(novel_title)}",
+                            "mapped=",
+                            list(novels.keys())
+                        )
+                
                     novel_details = utils.get("get_novel_details", lambda h, nt: {})(host, novel_title)
                     if not novel_details:
                         print("Skipping item (novel not found in mapping):", novel_title)
@@ -292,6 +304,17 @@ def main():
             if not novel_title:
                 print(f"Skipping entry, unable to extract novel title from: {entry.title}")
                 continue
+
+            novels = HOSTING_SITE_DATA.get(host, {}).get("novels", {})
+            
+            if novel_title not in novels:
+                print(
+                    "[UNMAPPED NOVEL]",
+                    f"host={host}",
+                    f"title={repr(novel_title)}",
+                    "mapped=",
+                    list(novels.keys())
+                )
 
             # Retrieve novel details using host-specific function.
             novel_details = utils.get("get_novel_details", lambda h, nt: {})(host, novel_title)
