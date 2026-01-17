@@ -25,6 +25,38 @@ HOSTING_SITE_DATA = {
         "coin_emoji": "<:mistmint_currency:1433046707121422487>",
         "token_secret": "MISTMINT_COOKIE",
         "novels": {
+            "After Transmigrating Into the Villain, I Got a HE With the Female Lead's Older Brother": {
+                "novelupdates_feed_url": "",
+                "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother/chapters",
+                "discord_role_id": "<@&1437846306625290260>",
+                "novel_url": "https://www.mistminthaven.com/novels/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother",
+                "featured_image": "https://i.imgur.com/lGogTew.png",
+                "novel_id": "", #comment homepage for scraping reply chain
+                # for manually updated paid feed
+                "short_code": "atvhe", #for parsing feed without guid. Also for short_code.
+
+                # ─── webhook-only fields ───
+                "chapter_count": "130 chapters",
+                "last_chapter": "Chapter 130",
+                "free_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml",
+                "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
+                "comments_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml",
+                "custom_emoji": "<:hashigarakiheartlove:1437849521991454830>",
+                "extra_ping_roles": "<@&1329500516304158901> <@&1437070570582708345> <@&1330469077784727562>",
+                "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
+                "custom_description": """Calm, domineering CEO gong vs transmigrated clever shou【transmigration + 1v1 + double clean + sweet pampering】
+Song Wan fell gravely ill. Rescue efforts failed, and he died.
+When he opened his eyes again, he transmigrated into an abusive, dog-blood romance novel, becoming the villain who shared his exact name, the one who kept sabotaging the male and female leads’ romance.
+To prevent the novel villain’s tragic ending from landing on his own head, Song Wan decided to turn over a new leaf.
+Just like the system Siri said, the original host had committed too many evil deeds, which was why his ending was so miserable. As long as he did not block the male and female leads from falling in love and did not target the male lead, then it would be fine—
+Fine my ass!
+Other people transmigrated into the beginning or the middle of the story. He was practically about to transmigrate straight into the grand finale!
+The original owner had done every bad thing imaginable and had even drugged the male lead, intending to destroy the male lead’s chastity.
+This was bad! Song Wan’s vision went black. He took off in a hundred-meter sprint. Even if he had to kick the door down, he had to rescue the male lead from the hotel room laced with aphrodisiacs.
+But the moment the door opened and Song Wan crashed headfirst into the sofa, he froze.
+What was going on?
+The one who had been drugged in the room was not the male lead at all. How was it the female lead’s brother instead!!!"""
+            },
             "[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught": {
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/chapters",
