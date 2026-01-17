@@ -26,7 +26,7 @@ HOSTING_SITE_DATA = {
         "token_secret": "MISTMINT_COOKIE",
         "novels": {
             "After Transmigrating Into the Villain, I Got a HE With the Female Lead's Older Brother": {
-                "novelupdates_feed_url": "",
+                "novelupdates_feed_url": "https://www.novelupdates.com/series/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-leads-older-brother/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother/chapters",
                 "discord_role_id": "<@&1437846306625290260>",
                 "novel_url": "https://www.mistminthaven.com/novels/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother",
