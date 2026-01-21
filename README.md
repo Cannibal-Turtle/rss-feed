@@ -336,7 +336,7 @@ $env:DISCORD_BOT_TOKEN="ABCD......"
 $env:DISCORD_CHANNEL_ID="123456789"
 $env:MISTMINT_COOKIE="mistmint_token=abcd987654321..."
 ```
-> ⚠️ Cookie must be available as the environment variable named MISTMINT_COOKIE (or whatever name you put in token_secret)
+> ⚠️ Cookie must be available as the environment variable named MISTMINT_COOKIE (or whatever name you put in `token_secret` under `HOSTING_SITE_DATA`)
 
 Run the script with a shortcode, example:
 ```
