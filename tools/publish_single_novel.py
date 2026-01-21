@@ -191,19 +191,33 @@ async def on_ready():
                 value="\n".join(status_lines),
                 inline=False
             )
-
-            nu = novel["novelupdates_feed_url"].rstrip("/").replace("/feed", "")
-            forum = f"https://discord.com/channels/1379303379221614702/{meta['forum_post_id']}"
-
-            embed.add_field(
-                name=f"<:pastelflower:1365570061443530804> Links <:pastelflower:1365570061443530804>",
-                value=(
-                    f"[{host}]({novel['novel_url']}) • "
-                    f"[NU]({nu}) • "
-                    f"[Forum Post]({forum})"
-                ),
-                inline=False
-            )
+            
+            links = []
+            
+            # Host link (usually always present, but still safe)
+            host_url = novel.get("novel_url")
+            if host_url:
+                links.append(f"[{host}]({host_url})")
+            
+            # NovelUpdates link (optional)
+            nu_feed = novel.get("novelupdates_feed_url")
+            if nu_feed:
+                nu = nu_feed.rstrip("/").replace("/feed", "")
+                links.append(f"[NU]({nu})")
+            
+            # Forum post (optional)
+            forum_post_id = meta.get("forum_post_id")
+            if forum_post_id:
+                forum = f"https://discord.com/channels/1379303379221614702/{forum_post_id}"
+                links.append(f"[Forum Post]({forum})")
+            
+            # Only add the field if at least one link exists
+            if links:
+                embed.add_field(
+                    name=f"<:pastelflower:1365570061443530804> Links <:pastelflower:1365570061443530804>",
+                    value=" • ".join(links),
+                    inline=False
+                )
 
             embed.set_thumbnail(url=novel.get("featured_image"))
 
