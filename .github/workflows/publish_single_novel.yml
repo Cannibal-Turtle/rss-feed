@@ -57,9 +57,9 @@ jobs:
           DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
         run: |
           if [ -n "$CHANNEL_ID" ]; then
-            python publish_single_novel.py "$SHORT_CODE" "$CHANNEL_ID"
+            python tools/publish_single_novel.py "$SHORT_CODE" "$CHANNEL_ID"
           else
-            python publish_single_novel.py "$SHORT_CODE"
+            python tools/publish_single_novel.py "$SHORT_CODE"
           fi
 
       - name: Commit updated novel_status_targets.json
