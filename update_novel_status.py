@@ -65,19 +65,13 @@ def text_match(needle: str, haystack: str) -> bool:
     ) is not None
 
 def compute_status(chapters, last_chapter_text):
-    """
-    Completion logic:
-    1. If last_chapter starts with 'Chapter <number>' (allowing suffixes like '(END)'),
-       match against numeric chapterNumber.
-    2. Otherwise, use strict text-based (word-boundary) matching.
-    """
-
     completed = False
     next_free_dt = None
+    last_free_dt = None
 
     last_chapter_text = (last_chapter_text or "").strip()
 
-    # ── Case 1: Chapter N (with optional suffix like "(END)")
+    # ── Case 1: Chapter N
     m = re.match(
         r"chapter\s+(\d+(\.\d+)?)(?:\b|[^0-9])",
         last_chapter_text,
@@ -89,44 +83,55 @@ def compute_status(chapters, last_chapter_text):
             if str(c.get("chapterNumber", "")).strip() == target_num:
                 completed = True
                 break
-
-    # ── Case 2: Extras / side stories / named chapters
     else:
         needle = last_chapter_text
         if needle:
             for c in chapters:
-                chap_no = c.get("chapterNumber") or ""
-                title   = c.get("title") or ""
-
-                if text_match(needle, chap_no) or text_match(needle, title):
+                if (
+                    text_match(needle, c.get("chapterNumber") or "") or
+                    text_match(needle, c.get("title") or "")
+                ):
                     completed = True
                     break
 
-    # ── Next free chapter logic (unchanged)
     now = datetime.now(timezone.utc)
 
     for c in chapters:
-        if not c.get("isFree") and c.get("freeAt"):
-            try:
-                dt = dateparser.parse(c["freeAt"])
-                if dt > now and (not next_free_dt or dt < next_free_dt):
-                    next_free_dt = dt
-            except Exception:
-                pass
+        free_at = c.get("freeAt")
+        if not free_at:
+            continue
 
-    return completed, next_free_dt
+        try:
+            dt = dateparser.parse(free_at)
+        except Exception:
+            continue
 
-def build_status_value(completed, next_free_dt):
+        if dt > now:
+            if not next_free_dt or dt < next_free_dt:
+                next_free_dt = dt
+        else:
+            if not last_free_dt or dt > last_free_dt:
+                last_free_dt = dt
+
+    return completed, next_free_dt, last_free_dt
+
+def build_status_value(completed, next_free_dt, last_free_dt):
     lines = []
     lines.append("*Completed*" if completed else "*Ongoing*")
 
     if next_free_dt:
         ts = int(next_free_dt.timestamp())
         lines.append(f"Next free chapter live **<t:{ts}:R>**")
-    elif completed:
-        lines.append("**All chapters are now free**")
+
+    elif last_free_dt:
+        ts = int(last_free_dt.timestamp())
+        abs_time = last_free_dt.strftime("%A, %d %B %Y")
+        lines.append(
+            f"Last free chapter live **<t:{ts}:R>** ({abs_time})"
+        )
+
     else:
-        lines.append("_Free release schedule not available_")
+        lines.append("_No free chapter timing available_")
 
     return "\n".join(lines)
 
@@ -188,8 +193,11 @@ async def on_ready():
 
             api = fetch_api(novel["paid_feed_url"], data["token_secret"])
             chapters = flatten_chapters(api)
-            completed, next_free = compute_status(chapters, novel.get("last_chapter"))
-            status_value = build_status_value(completed, next_free)
+            completed, next_free, last_free = compute_status(
+                chapters,
+                novel.get("last_chapter")
+            )
+            status_value = build_status_value(completed, next_free, last_free)
 
             for t in targets:
                 ch = bot.get_channel(int(t["channel_id"]))
