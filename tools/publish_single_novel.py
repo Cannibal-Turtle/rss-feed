@@ -14,7 +14,7 @@ from novel_mappings import HOSTING_SITE_DATA
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 STATE_FILE = "novel_status_targets.json"
 
-ROLE_CHANNEL_ID = 1463476725253144751
+ARCHIVE_CHANNEL_ID = 1463476725253144751
 
 NOVEL_META = {
     "TVITPA": {"color": "#f8d8c9", "forum_post_id": "1444214902322368675"},
@@ -130,7 +130,7 @@ SHORT_CODE = sys.argv[1].upper()
 if len(sys.argv) >= 3:
     CHANNEL_ID = int(sys.argv[2])
 else:
-    CHANNEL_ID = int(os.environ["DISCORD_CHANNEL_ID"])
+    CHANNEL_ID = ARCHIVE_CHANNEL_ID
 
 if SHORT_CODE not in NOVEL_META:
     print("Unknown short_code:", SHORT_CODE)
@@ -177,7 +177,7 @@ async def on_ready():
             )
 
             # Only show Role field in the archive channel
-            if channel.id == ROLE_CHANNEL_ID:
+            if channel.id == ARCHIVE_CHANNEL_ID:
                 role = novel.get("discord_role_id")
                 if role:
                     embed.add_field(
