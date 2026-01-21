@@ -232,6 +232,16 @@ class CustomRSS2(PyRSS2Gen.RSS2):
         writer.write(indent + "</channel>" + newl)
         writer.write("</rss>" + newl)
 
+# ─── Novel order derived from HOSTING_SITE_DATA insertion order ───
+NOVEL_ORDER = {}
+
+for host, data in HOSTING_SITE_DATA.items():
+    novels = data.get("novels", {})
+    total = len(novels)
+    for idx, title in enumerate(novels.keys()):
+        # earlier in mapping = newer novel = higher priority
+        NOVEL_ORDER[(host.lower(), title)] = total - idx
+
 async def main_async():
     # 1) scrape fresh items
     scraped = []
@@ -262,10 +272,16 @@ async def main_async():
     seven_days_ago = now_utc - datetime.timedelta(days=7)
     kept = [it for it in merged.values() if it.pubDate >= seven_days_ago]
 
-    kept.sort(key=lambda it: (
-        normalize_date(it.pubDate),
-        get_host_utils(getattr(it, "host", "")).get("chapter_num", lambda s:(0,))(getattr(it, "chaptername",""))
-    ), reverse=True)
+    kept.sort(
+        key=lambda it: (
+            normalize_date(it.pubDate),
+            NOVEL_ORDER.get((getattr(it, "host", "").lower(), it.title), 0),
+            get_host_utils(getattr(it, "host", "")).get(
+                "chapter_num", lambda s: (0,)
+            )(getattr(it, "chaptername", "")),
+        ),
+        reverse=True
+    )
     kept = kept[:200]
 
     # 5) save history back
