@@ -55,32 +55,45 @@ def flatten_chapters(api):
     out.sort(key=lambda c: (c.get("order", 0), c.get("createdAt", "")))
     return out
 
+def text_match(needle: str, haystack: str) -> bool:
+    if not needle or not haystack:
+        return False
+    return re.search(
+        rf"\b{re.escape(needle)}\b",
+        haystack,
+        flags=re.IGNORECASE
+    ) is not None
+
 def compute_status(chapters, last_chapter_text):
+    """
+    Completion logic:
+    - If last_chapter_text appears (case-insensitive, word-boundary)
+      in chapterNumber OR title of any API chapter → completed
+    """
+
     completed = False
-    num = None
-    m = re.search(r"(\d+(\.\d+)?)", last_chapter_text or "")
-    if m:
-        num = float(m.group(1))
+    next_free = None
 
-    nums = []
-    for c in chapters:
-        try:
-            nums.append(float(c["chapterNumber"]))
-        except:
-            pass
+    needle = (last_chapter_text or "").strip()
 
-    if num and nums and max(nums) >= num:
-        completed = True
+    if needle:
+        for c in chapters:
+            chap_no = c.get("chapterNumber") or ""
+            title   = c.get("title") or ""
+
+            if text_match(needle, chap_no) or text_match(needle, title):
+                completed = True
+                break
 
     now = datetime.now(timezone.utc)
-    next_free = None
+
     for c in chapters:
         if not c.get("isFree") and c.get("freeAt"):
             try:
                 dt = dateparser.parse(c["freeAt"])
                 if dt > now and (not next_free or dt < next_free):
                     next_free = dt
-            except:
+            except Exception:
                 pass
 
     return completed, next_free
