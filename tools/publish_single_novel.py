@@ -12,8 +12,9 @@ from discord import Embed
 from novel_mappings import HOSTING_SITE_DATA
 
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
-CHANNEL_ID = int(os.environ["DISCORD_CHANNEL_ID"])
-STATE_FILE = "novel_messages.json"
+STATE_FILE = "novel_status_targets.json"
+
+ROLE_CHANNEL_ID = 1463476725253144751
 
 NOVEL_META = {
     "TVITPA": {"color": "#f8d8c9", "forum_post_id": "1444214902322368675"},
@@ -25,13 +26,14 @@ NOVEL_META = {
 
 def load_state():
     try:
-        return json.load(open(STATE_FILE, encoding="utf-8"))
-    except:
+        with open(STATE_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
         return {}
 
-def save_state(st):
+def save_state(state):
     with open(STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(st, f, indent=2)
+        json.dump(state, f, indent=2)
 
 def fetch_api(url, cookie_env):
     headers = {}
@@ -118,11 +120,17 @@ def compute_status(chapters, last_chapter_text):
 
 # ---------------- main ----------------
 
-if len(sys.argv) != 2:
-    print("Usage: python publish_single_novel.py <short_code>")
+if len(sys.argv) < 2:
+    print("Usage: python publish_single_novel.py <short_code> [channel_id]")
     sys.exit(1)
 
 SHORT_CODE = sys.argv[1].upper()
+
+# 🔑 channel resolution (THIS is the part you asked about)
+if len(sys.argv) >= 3:
+    CHANNEL_ID = int(sys.argv[2])
+else:
+    CHANNEL_ID = int(os.environ["DISCORD_CHANNEL_ID"])
 
 if SHORT_CODE not in NOVEL_META:
     print("Unknown short_code:", SHORT_CODE)
@@ -168,11 +176,15 @@ async def on_ready():
                 color=int(meta["color"].lstrip("#"), 16)
             )
 
-            embed.add_field(
-                name=f"<:pastelflower:1365570061443530804> Role <:pastelflower:1365570061443530804>",
-                value=novel.get("discord_role_id","—"),
-                inline=True
-            )
+            # Only show Role field in the archive channel
+            if channel.id == ROLE_CHANNEL_ID:
+                role = novel.get("discord_role_id")
+                if role:
+                    embed.add_field(
+                        name=f"<:pastelflower:1365570061443530804> Role <:pastelflower:1365570061443530804>",
+                        value=role,
+                        inline=True
+                    )
 
             embed.add_field(
                 name=f"<:pastelflower:1365570061443530804> Status <:pastelflower:1365570061443530804>",
@@ -196,8 +208,20 @@ async def on_ready():
             embed.set_thumbnail(url=novel.get("featured_image"))
 
             msg = await channel.send(embed=embed)
-            state[SHORT_CODE] = {"message_id": msg.id, "channel_id": CHANNEL_ID}
-            save_state(state)
+            channel_id = str(channel.id)
+            message_id = str(msg.id)
+            
+            state.setdefault(SHORT_CODE, [])
+            
+            # avoid duplicates if script is re-run
+            entry = {
+                "channel_id": channel_id,
+                "message_id": message_id,
+            }
+            
+            if entry not in state[SHORT_CODE]:
+                state[SHORT_CODE].append(entry)
+                save_state(state)
 
             print("Posted novel card for", SHORT_CODE)
             await bot.close()
