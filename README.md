@@ -343,4 +343,5 @@ Run the script with a shortcode, example:
 python publish_single_novel.py TVITPA
 ```
 Result:
+
 <img width="441" height="197" alt="image" src="https://github.com/user-attachments/assets/36e3c6e0-5dfd-4960-921f-e9c1cf3dd96c" />
