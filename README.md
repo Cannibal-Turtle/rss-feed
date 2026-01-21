@@ -173,3 +173,167 @@ Now also updates `<category>` if `<chaptername>` and `<nameextend>` has these ke
 - (R-18) , (r18) , (ver. R-18+ patch) , (R-18+)
 - (18+)
 - (H) , (HH) , (HHH) , (bonus H chapter)
+
+---
+
+## 🆕 Automatic Novel Status Updater (Cross-Bot Integration)
+
+This system keeps **existing Discord novel cards up-to-date** whenever new free chapters are announced, without reposting or changing formatting.
+
+It is designed to work **across repositories and servers**.
+
+---
+
+## 🔁 Overview: How Status Auto-Updates Work
+
+When a **new free chapter** is detected and posted:
+
+1. **Free Chapters Bot** (discord-webhook repo)  
+   - Posts the chapter announcement to Discord  
+   - Collects:
+     - Novel **title**
+     - **Host** (e.g. Mistmint Haven, Dragonholic)
+   - Fires a `repository_dispatch` event to the **rss-feed repo**
+
+2. **rss-feed Repo**  
+   - Receives the dispatch
+   - Runs the **status updater script**
+   - Resolves:
+     ```
+     title + host → short_code (via HOSTING_SITE_DATA)
+     ```
+   - Updates only the **Status field** of existing embeds
+
+3. **Target Discord Messages**  
+   - Are edited in-place
+   - Formatting, emojis, and layout are preserved
+   - No reposts, no duplication
+
+---
+
+## 📍 Where the Mapping Happens (Important)
+
+> 🔑 **Short codes are NOT passed between repos**
+
+Resolution happens **only inside the updater Python script**, using mappings.
+
+```text
+Title + Host
+   ↓
+HOSTING_SITE_DATA
+   ↓
+short_code
+```
+
+---
+
+## 📄 Status Target Mapping
+
+The updater uses a static map of **existing Discord messages** that should be updated.
+
+Example (`novel_status_targets.json`):
+
+```json
+{
+  "TVITPA": [
+    {
+      "channel_id": "123456789",
+      "message_id": "123456789"
+    }
+  ],
+  "TDLBKGC": [
+    {
+      "channel_id": "123456789",
+      "message_id": "123456789"
+    }
+  ],
+  "ATVHE": [
+    {
+      "channel_id": "123456789",
+      "message_id": "123456789"
+    }
+  ]
+}
+```
+
+### Notes
+- A **single novel can have multiple targets**  
+  (e.g. different servers, channels, or forum posts)
+- Forum thread messages are supported  
+  (threads are just channels internally)
+
+---
+
+## ✏️ What the Updater Changes (and What It Doesn’t)
+
+### ✅ Updated
+- **Status field value only**
+  - `*Ongoing*` / `*Completed*`
+  - `Next free chapter live <t:UNIX:R>`
+  - `All chapters are now free`
+
+### ❌ Not touched
+- Title
+- Emojis
+- Role field (if present)
+- Links
+- Thumbnail
+- Embed color
+- Any other formatting
+
+> If a server’s embed **does not have a Role field**, the updater skips it safely.
+
+---
+
+## 🧠 How Status Is Calculated
+
+The updater:
+1. Fetches the **paid/free chapter API**
+2. Determines:
+   - Whether **all paid chapters are released**
+   - Whether **future free chapters exist**
+3. Produces one of:
+   - `*Completed*`
+   - `*Ongoing*`
+   - `Next free chapter live <t:…:R>`
+   - `All chapters are now free`
+   - `_Free release schedule not available_`
+
+---
+
+## 🔐 Required Secrets (Cross-Repo)
+
+Because this system triggers **across repositories**, a PAT is required.
+
+### Required Secrets
+| Secret | Repo | Purpose |
+|---|---|---|
+| `PAT_GITHUB` | **Source repo (in this case discord-webhook)** | Dispatch events to rss-feed |
+| `DISCORD_BOT_TOKEN` | rss-feed | Edit existing Discord messages |
+| `MISTMINT_COOKIE` | rss-feed | Paid/free API access (if applicable) |
+
+> ⚠️ `GITHUB_TOKEN` is **not sufficient** for cross-repo dispatch.
+
+---
+
+## 🧩 Adding a New Novel (With Auto-Updates)
+
+To enable automatic status updates for a new novel:
+
+1. Add the novel to `HOSTING_SITE_DATA`
+2. Assign it a unique `short_code`
+3. Add its Discord message(s) to `novel_status_targets.json`
+
+---
+
+## ✅ Design Guarantees
+
+- `tools/publish_single_novel.py` can be run locally to serve as template.
+- `update_novel_status.py` looks for the `status` field for updates.
+- env needed:
+```
+$env:DISCORD_BOT_TOKEN="ABCD......"
+$env:DISCORD_CHANNEL_ID="123456789"
+$env:MISTMINT_COOKIE="mistmint_token=abcd987654321..."
+```
+> ⚠️ Cookie must be available as the environment variable named MISTMINT_COOKIE (or whatever name you put in token_secret)
