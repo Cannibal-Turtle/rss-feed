@@ -1,0 +1,62 @@
+name: Update Novel Status Embeds
+
+on:
+  repository_dispatch:
+    types: [update-novel-status]
+
+  workflow_dispatch:
+    inputs:
+      short_code:
+        description: "Novel short code (e.g. TVITPA)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-novel-status
+  cancel-in-progress: false
+
+jobs:
+  update_status:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            discord.py>=2.3 \
+            requests>=2.31 \
+            python-dateutil
+
+      - name: Resolve payload
+        run: |
+          SHORT_CODE="${{ github.event.client_payload.short_code }}"
+          if [ -z "$SHORT_CODE" ]; then
+            SHORT_CODE="${{ github.event.inputs.short_code }}"
+          fi
+
+          if [ -z "$SHORT_CODE" ]; then
+            echo "❌ No short_code provided"
+            exit 1
+          fi
+
+          echo "SHORT_CODE=$SHORT_CODE" >> $GITHUB_ENV
+          echo "SOURCE=${{ github.event.client_payload.source || 'manual' }}" >> $GITHUB_ENV
+          echo "🔔 Updating novel status for $SHORT_CODE"
+
+      - name: Run updater
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+        run: |
+          python update_novel_status.py "$SHORT_CODE"
