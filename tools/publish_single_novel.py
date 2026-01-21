@@ -94,25 +94,37 @@ def human_delta(dt):
     if m and not d: parts.append(f"{m}m")
     return " ".join(parts)
 
+def text_match(needle: str, haystack: str) -> bool:
+    if not needle or not haystack:
+        return False
+    return re.search(
+        rf"\b{re.escape(needle)}\b",
+        haystack,
+        flags=re.IGNORECASE
+    ) is not None
+
 def compute_status(chapters, last_chapter_text):
-    # 1️⃣ Determine completion (paid-side completion)
+    """
+    Completion logic:
+    - If last_chapter_text appears (case-insensitive, word-boundary)
+      in chapterNumber OR title of any API chapter → completed
+    """
+
     completed = False
-    num_match = re.search(r"(\d+(\.\d+)?)", last_chapter_text or "")
-    target_num = float(num_match.group(1)) if num_match else None
-
-    api_nums = []
-    for c in chapters:
-        try:
-            api_nums.append(float(c["chapterNumber"]))
-        except:
-            pass
-
-    if target_num and api_nums and max(api_nums) >= target_num:
-        completed = True
-
-    # 2️⃣ Determine next free chapter time
-    now = datetime.now(timezone.utc)
     next_free_dt = None
+
+    needle = (last_chapter_text or "").strip()
+
+    if needle:
+        for c in chapters:
+            chap_no = c.get("chapterNumber") or ""
+            title   = c.get("title") or ""
+
+            if text_match(needle, chap_no) or text_match(needle, title):
+                completed = True
+                break
+
+    now = datetime.now(timezone.utc)
 
     for c in chapters:
         if not c.get("isFree") and c.get("freeAt"):
@@ -120,7 +132,7 @@ def compute_status(chapters, last_chapter_text):
                 dt = dateparser.parse(c["freeAt"])
                 if dt > now and (not next_free_dt or dt < next_free_dt):
                     next_free_dt = dt
-            except:
+            except Exception:
                 pass
 
     return completed, next_free_dt
