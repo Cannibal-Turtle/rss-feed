@@ -48,13 +48,12 @@ jobs:
             echo "CHANNEL_ID=${{ github.event.inputs.channel_id }}" >> $GITHUB_ENV
             echo "📍 Posting to explicit channel: ${{ github.event.inputs.channel_id }}"
           else
-            echo "📍 Using default DISCORD_CHANNEL_ID"
+            echo "📍 Using archive channel fallback (handled in script)"
           fi
 
       - name: Run publish script
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
         run: |
           if [ -n "$CHANNEL_ID" ]; then
             python tools/publish_single_novel.py "$SHORT_CODE" "$CHANNEL_ID"
