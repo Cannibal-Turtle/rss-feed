@@ -134,7 +134,8 @@ def compute_status(chapters, last_chapter_text):
                 ):
                     completed = True
                     break
-
+                    
+    # ── Next free chapter logic
     now = datetime.now(timezone.utc)
 
     for c in chapters:
