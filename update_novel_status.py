@@ -67,10 +67,9 @@ def text_match(needle: str, haystack: str) -> bool:
 def compute_status(chapters, last_chapter_text):
     """
     Completion logic:
-    1. If last_chapter starts with 'Chapter <number>',
+    1. If last_chapter starts with 'Chapter <number>' (allowing suffixes like '(END)'),
        match against numeric chapterNumber.
-    2. Otherwise, use strict text-based (word-boundary) matching
-       against chapterNumber OR title.
+    2. Otherwise, use strict text-based (word-boundary) matching.
     """
 
     completed = False
@@ -78,8 +77,12 @@ def compute_status(chapters, last_chapter_text):
 
     last_chapter_text = (last_chapter_text or "").strip()
 
-    # ── Case 1: Explicit Chapter N (Mistmint numeric chapters)
-    m = re.match(r"chapter\s+(\d+(\.\d+)?)$", last_chapter_text, re.IGNORECASE)
+    # ── Case 1: Chapter N (with optional suffix like "(END)")
+    m = re.match(
+        r"chapter\s+(\d+(\.\d+)?)(?:\b|[^0-9])",
+        last_chapter_text,
+        re.IGNORECASE
+    )
     if m:
         target_num = m.group(1)
         for c in chapters:
@@ -87,7 +90,7 @@ def compute_status(chapters, last_chapter_text):
                 completed = True
                 break
 
-    # ── Case 2: Extras / Side stories / Named chapters
+    # ── Case 2: Extras / side stories / named chapters
     else:
         needle = last_chapter_text
         if needle:
