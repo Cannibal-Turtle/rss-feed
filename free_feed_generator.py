@@ -136,6 +136,16 @@ class CustomRSS2(PyRSS2Gen.RSS2):
         writer.write(indent + "</channel>" + newl)
         writer.write("</rss>" + newl)
 
+# ─── Novel order derived from HOSTING_SITE_DATA insertion order ───
+NOVEL_ORDER = {}
+
+for host, data in HOSTING_SITE_DATA.items():
+    novels = data.get("novels", {})
+    total = len(novels)
+    for idx, title in enumerate(novels.keys()):
+        # earlier in mapping = newer novel = higher priority
+        NOVEL_ORDER[(host.lower(), title)] = total - idx
+
 def main():
     rss_items = []
 
@@ -209,7 +219,7 @@ def main():
     rss_items.sort(
         key=lambda item: (
             item.pubDate,
-            item.title,
+            NOVEL_ORDER.get((item.host.lower(), item.title), 0),
             get_host_utils(item.host)["chapter_num"](item.chaptername),
         ),
         reverse=True
