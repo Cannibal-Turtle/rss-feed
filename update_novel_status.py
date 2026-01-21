@@ -67,36 +67,51 @@ def text_match(needle: str, haystack: str) -> bool:
 def compute_status(chapters, last_chapter_text):
     """
     Completion logic:
-    - If last_chapter_text appears (case-insensitive, word-boundary)
-      in chapterNumber OR title of any API chapter → completed
+    1. If last_chapter starts with 'Chapter <number>',
+       match against numeric chapterNumber.
+    2. Otherwise, use strict text-based (word-boundary) matching
+       against chapterNumber OR title.
     """
 
     completed = False
-    next_free = None
+    next_free_dt = None
 
-    needle = (last_chapter_text or "").strip()
+    last_chapter_text = (last_chapter_text or "").strip()
 
-    if needle:
+    # ── Case 1: Explicit Chapter N (Mistmint numeric chapters)
+    m = re.match(r"chapter\s+(\d+(\.\d+)?)$", last_chapter_text, re.IGNORECASE)
+    if m:
+        target_num = m.group(1)
         for c in chapters:
-            chap_no = c.get("chapterNumber") or ""
-            title   = c.get("title") or ""
-
-            if text_match(needle, chap_no) or text_match(needle, title):
+            if str(c.get("chapterNumber", "")).strip() == target_num:
                 completed = True
                 break
 
+    # ── Case 2: Extras / Side stories / Named chapters
+    else:
+        needle = last_chapter_text
+        if needle:
+            for c in chapters:
+                chap_no = c.get("chapterNumber") or ""
+                title   = c.get("title") or ""
+
+                if text_match(needle, chap_no) or text_match(needle, title):
+                    completed = True
+                    break
+
+    # ── Next free chapter logic (unchanged)
     now = datetime.now(timezone.utc)
 
     for c in chapters:
         if not c.get("isFree") and c.get("freeAt"):
             try:
                 dt = dateparser.parse(c["freeAt"])
-                if dt > now and (not next_free or dt < next_free):
-                    next_free = dt
+                if dt > now and (not next_free_dt or dt < next_free_dt):
+                    next_free_dt = dt
             except Exception:
                 pass
 
-    return completed, next_free
+    return completed, next_free_dt
 
 def build_status_value(completed, next_free_dt):
     lines = []
