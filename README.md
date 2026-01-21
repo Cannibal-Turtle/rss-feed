@@ -337,3 +337,8 @@ $env:DISCORD_CHANNEL_ID="123456789"
 $env:MISTMINT_COOKIE="mistmint_token=abcd987654321..."
 ```
 > ⚠️ Cookie must be available as the environment variable named MISTMINT_COOKIE (or whatever name you put in token_secret)
+
+Run the script with a shortcode, example:
+```
+python publish_single_novel.py TVITPA
+```
