@@ -83,6 +83,8 @@ def compute_status(chapters, last_chapter_text):
             if str(c.get("chapterNumber", "")).strip() == target_num:
                 completed = True
                 break
+                
+    # ── Case 2: Extras / side stories / named chapters
     else:
         needle = last_chapter_text
         if needle:
@@ -93,7 +95,8 @@ def compute_status(chapters, last_chapter_text):
                 ):
                     completed = True
                     break
-
+    
+    # ── Next free chapter logic
     now = datetime.now(timezone.utc)
 
     for c in chapters:
