@@ -328,20 +328,33 @@ To enable automatic status updates for a new novel:
 
 ## ✅ Design Guarantees
 
-- `tools/publish_single_novel.py` can be run locally to serve as template.
+- `tools/publish_single_novel.py` can serve as template for first run.
+- `Update `NOVEL_META` in `tools/publish_single_novel.py` for every new novel; Color = embed color; Omit forum_post_id if it doesn't belong to any forum. Example:
+```
+  NOVEL_META = {
+    "TVITPA": {"color": "#f8d8c9", "forum_post_id": "1444214902322368675"},
+```
 - `update_novel_status.py` looks for the `status` field for updates.
+- `Role` field only shows for `ARCHIVE_CHANNEL_ID` listed and is omitted unless message is sent to that channel.
 - env needed:
-```
-$env:DISCORD_BOT_TOKEN="ABCD......"
-$env:DISCORD_CHANNEL_ID="123456789"
-$env:MISTMINT_COOKIE="mistmint_token=abcd987654321..."
-```
 > ⚠️ Cookie must be available as the environment variable named MISTMINT_COOKIE (or whatever name you put in `token_secret` under `HOSTING_SITE_DATA`)
 
-Run the script with a shortcode, example:
+- Run the `publish_single_novel.yml` script with a shortcode and channel ID for the first run, and it will update `novel_status_targets.json` automatically.
+- `update_novel_status.py` trigerred automatically by `update_novel_status.yml` everytime **new free chapter** is announced, will use the shortcode, channel, and message ID stored in `novel_status_targets.json`.
+- Workflow:
+  
 ```
-python publish_single_novel.py TVITPA
+Discord free chapter announcement
+   ↓
+Trigger GitHub event
+   ↓
+Recompute novel status
+   ↓
+Edit existing embeds
 ```
+
+---
+
 Result:
 
 <img width="441" height="197" alt="image" src="https://github.com/user-attachments/assets/36e3c6e0-5dfd-4960-921f-e9c1cf3dd96c" />
