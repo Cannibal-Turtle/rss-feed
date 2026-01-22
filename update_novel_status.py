@@ -139,31 +139,24 @@ def build_status_value(completed, next_free_dt, last_free_dt):
     return "\n".join(lines)
 
 def update_status_field(embed: Embed, new_value: str) -> Embed:
-    """
-    Finds the field whose name contains 'status' (case-insensitive)
-    and replaces only its value.
-    """
     found = False
     new_fields = []
 
     for f in embed.fields:
         if "status" in f.name.lower():
-            new_fields.append(
-                Embed.Field(name=f.name, value=new_value, inline=f.inline)
-            )
+            new_fields.append((f.name, new_value, f.inline))
             found = True
         else:
-            new_fields.append(f)
+            new_fields.append((f.name, f.value, f.inline))
 
     if not found:
         raise RuntimeError("No Status field found in embed")
 
     embed.clear_fields()
-    for f in new_fields:
-        embed.add_field(name=f.name, value=f.value, inline=f.inline)
+    for name, value, inline in new_fields:
+        embed.add_field(name=name, value=value, inline=inline)
 
     return embed
-
 
 # ─── Main ───────────────────────────────────────────────────────────────────────
 
@@ -176,7 +169,8 @@ HOST  = sys.argv[2]
 
 short_code = resolve_short_code(TITLE, HOST)
 if not short_code:
-    raise SystemExit(f"❌ Cannot resolve short_code for {TITLE} ({HOST})")
+    print(f"⚠️ No short_code for {TITLE} ({HOST}), skipping status update.")
+    sys.exit(0)
 
 targets_map = load_targets()
 targets = targets_map.get(short_code.upper()) or targets_map.get(short_code.lower(), [])
