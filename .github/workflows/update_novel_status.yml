@@ -6,8 +6,12 @@ on:
 
   workflow_dispatch:
     inputs:
-      short_code:
-        description: "Novel short code (e.g. TVITPA)"
+      title:
+        description: "Novel title"
+        required: true
+        type: string
+      host:
+        description: "Hosting site (e.g. Mistmint Haven)"
         required: true
         type: string
 
@@ -41,22 +45,22 @@ jobs:
 
       - name: Resolve payload
         run: |
-          SHORT_CODE="${{ github.event.client_payload.short_code }}"
-          if [ -z "$SHORT_CODE" ]; then
-            SHORT_CODE="${{ github.event.inputs.short_code }}"
-          fi
+          TITLE="${{ github.event.client_payload.title || github.event.inputs.title }}"
+          HOST="${{ github.event.client_payload.host || github.event.inputs.host }}"
 
-          if [ -z "$SHORT_CODE" ]; then
-            echo "❌ No short_code provided"
+          if [ -z "$TITLE" ] || [ -z "$HOST" ]; then
+            echo "❌ Missing title or host"
             exit 1
           fi
 
-          echo "SHORT_CODE=$SHORT_CODE" >> $GITHUB_ENV
+          echo "TITLE=$TITLE" >> $GITHUB_ENV
+          echo "HOST=$HOST" >> $GITHUB_ENV
           echo "SOURCE=${{ github.event.client_payload.source || 'manual' }}" >> $GITHUB_ENV
-          echo "🔔 Updating novel status for $SHORT_CODE"
+
+          echo "🔔 Updating novel status for $TITLE ($HOST)"
 
       - name: Run updater
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         run: |
-          python update_novel_status.py "$SHORT_CODE"
+          python update_novel_status.py "$TITLE" "$HOST"
