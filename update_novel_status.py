@@ -178,7 +178,8 @@ short_code = resolve_short_code(TITLE, HOST)
 if not short_code:
     raise SystemExit(f"❌ Cannot resolve short_code for {TITLE} ({HOST})")
 
-targets = load_targets().get(short_code, [])
+targets_map = load_targets()
+targets = targets_map.get(short_code.upper()) or targets_map.get(short_code.lower(), [])
 if not targets:
     raise SystemExit(f"⚠️ No targets configured for {short_code}")
 
