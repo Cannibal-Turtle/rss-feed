@@ -175,7 +175,8 @@ if not short_code:
 targets_map = load_targets()
 targets = targets_map.get(short_code.upper()) or targets_map.get(short_code.lower(), [])
 if not targets:
-    raise SystemExit(f"⚠️ No targets configured for {short_code}")
+    print(f"⚠️ No targets configured for {short_code}, skipping.")
+    sys.exit(0)
 
 intents = discord.Intents.default()
 bot = discord.Client(intents=intents)
