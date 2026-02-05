@@ -31,8 +31,7 @@ HOSTING_SITE_DATA = {
                 "discord_role_id": "<@&1437846306625290260>",
                 "novel_url": "https://www.mistminthaven.com/novels/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother",
                 "featured_image": "https://i.imgur.com/lGogTew.png",
-                "novel_id": "", #comment homepage for scraping reply chain
-                # for manually updated paid feed
+                "novel_id": "8ae77ae4-8871-4ac3-8bc4-2a094f825ea0", #comment homepage for scraping reply chain
                 "short_code": "atvhe", #for parsing feed without guid. Also for short_code.
 
                 # ─── webhook-only fields ───
