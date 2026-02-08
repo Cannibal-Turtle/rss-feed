@@ -27,6 +27,7 @@ NOVEL_META = {
     "TVITPA": {"color": "#f8d8c9", "forum_post_id": "1444214902322368675"},
     "TDLBKGC": {"color": "#90c3f2", "forum_post_id": "1438462596381413417"},
     "ATVHE":  {"color": "#9c8bb5", "forum_post_id": "1462019944823656608"},
+    "WSMSC":  {"color": "#8a95a7", "forum_post_id": "1469896904761544845"},
 }
 
 # ---------------- utils ----------------
