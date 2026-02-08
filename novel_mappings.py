@@ -25,6 +25,36 @@ HOSTING_SITE_DATA = {
         "coin_emoji": "<:mistmint_currency:1433046707121422487>",
         "token_secret": "MISTMINT_COOKIE",
         "novels": {
+            "Whose Simping Male Supporting Character Is Being Held and Kissed by the Male Lead?": {
+                "novelupdates_feed_url": "",
+                "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead/chapters",
+                "discord_role_id": "<@&1462773952144478334>",
+                "novel_url": "https://www.mistminthaven.com/novels/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead",
+                "featured_image": "https://i.imgur.com/zea8LXV.png",
+                "novel_id": "4ee66cf7-3d4f-4cd1-b958-8a2dac6e167b",
+                "short_code": "wsmsc",
+
+                # ─── webhook-only fields ───
+                "chapter_count": "160 chapters + 3 extras",
+                "last_chapter": "Afterword 2",
+                "free_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml",
+                "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
+                "comments_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml",
+                "custom_emoji": "<:neko_simp:1462777063705546763>",
+                "extra_ping_roles": "<@&1329500516304158901> <@&1437070731308699842> <@&1330469400553197588> <@&1330469077784727562>",
+                "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
+                "custom_description": """【Universal-darling shou, bittersweet tone, sour first then sweet, livestream variety show, shura-field free-for-all, double male leads, double purity, HE】
+Wen Yanyu, a cannon-fodder supporting male universally hated online for obsessively clinging to the male lead and dragging himself into public controversy, suddenly awakens self-awareness and gets bound to a system, sent off to take missions.
+After countless cycles that grind him down in both body and mind, Wen Yanyu returns in a body shattered by missions. He decides to give up trying, planning to muddle through the variety show the company lined up for him and earn a bit of retirement money.
+Who would have thought that on what should have been a show meant to turn him into a laughingstock, the other guests’ gazes start getting stranger and stranger. Odd physical contact. Unexplained shura-fields.
+Netizens who once angrily cursed him begin piecing things together from every tiny detail. His almost self-punishing behavior. His complete disregard for his own life. The doctor’s on-show medical pronouncement of impending death. And finally, the scar that nearly severed him at the waist. They all fell silent.
+“Wuwu, how much has my wife suffered? I’ve caught a disease where I cry the moment I see my wife!”
+“Wife, don’t like Fu Hanchuan anymore, okay? Be with us instead.”
+——
+The once ice-cold male lead who despised him to the extreme abandons his work, chases the variety show, follows him wherever he goes, blocks every rival, and because of one of his fevers, is so frightened that he breaks down crying in front of everyone.
+Holding him in his arms, kissing him while coaxing him, his voice trembling with fear: “Good baby will live to a hundred years old, happy and safe.”
+Netizens: redefining ‘hate to the extreme’. Fu Hanchuan! You brat, keep your hands off my bunny baby!"""
+            },
             "After Transmigrating Into the Villain, I Got a HE With the Female Lead's Older Brother": {
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-leads-older-brother/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother/chapters",
@@ -32,7 +62,7 @@ HOSTING_SITE_DATA = {
                 "novel_url": "https://www.mistminthaven.com/novels/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother",
                 "featured_image": "https://i.imgur.com/lGogTew.png",
                 "novel_id": "8ae77ae4-8871-4ac3-8bc4-2a094f825ea0", #comment homepage for scraping reply chain
-                "short_code": "atvhe", #for parsing feed without guid. Also for short_code.
+                "short_code": "atvhe",
 
                 # ─── webhook-only fields ───
                 "chapter_count": "130 chapters",
@@ -63,8 +93,7 @@ The one who had been drugged in the room was not the male lead at all. How was i
                 "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught",
                 "featured_image": "https://i.imgur.com/vqvVVz9.png",
                 "novel_id": "8ebd3484-d5b2-422d-a22d-11404bc8481f", #comment homepage for scraping reply chain
-                # for manually updated paid feed
-                "short_code": "tdlbkgc", #for parsing feed without guid. Also for short_code.
+                "short_code": "tdlbkgc",
 
                 # ─── webhook-only fields ───
                 "chapter_count": "734 chapters + 3 extras",
@@ -94,7 +123,7 @@ It’s 1v1. Sweet, sweet, sweet."""
                 "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring",
                 "featured_image": "https://i.imgur.com/5sxtfVf.jpeg",
                 "novel_id": "24f3efce-5b52-4dfe-a90e-14bcfb3f56c6", #comment homepage for scraping reply chain
-                "short_code": "tvitpa", #for parsing feed without guid. Also for short_code.
+                "short_code": "tvitpa",
 
                 # ─── webhook-only fields ───
                 "chapter_count": "1184 chapters + 8 extras",
