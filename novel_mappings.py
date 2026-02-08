@@ -26,7 +26,7 @@ HOSTING_SITE_DATA = {
         "token_secret": "MISTMINT_COOKIE",
         "novels": {
             "Whose Simping Male Supporting Character Is Being Held and Kissed by the Male Lead?": {
-                "novelupdates_feed_url": "",
+                "novelupdates_feed_url": "https://www.novelupdates.com/series/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead/chapters",
                 "discord_role_id": "<@&1462773952144478334>",
                 "novel_url": "https://www.mistminthaven.com/novels/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead",
