@@ -18,10 +18,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: update-novel-status-${{ github.event.client_payload.title || github.event.inputs.title }}
-  cancel-in-progress: false
-
 jobs:
   update_status:
     runs-on: ubuntu-latest
