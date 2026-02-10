@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: update-novel-status
+  group: update-novel-status-${{ github.event.client_payload.title || github.event.inputs.title }}
   cancel-in-progress: false
 
 jobs:
