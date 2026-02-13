@@ -26,7 +26,7 @@ HOSTING_SITE_DATA = {
         "token_secret": "MISTMINT_COOKIE",
         "novels": {
             "Help! I Accidentally Flirted with the Lord God, What Do I Do?!": {
-                "novelupdates_feed_url": "",
+                "novelupdates_feed_url": "https://www.novelupdates.com/series/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do/chapters",
                 "discord_role_id": "<@&1471460385348386847>",
                 "novel_url": "https://www.mistminthaven.com/novels/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do",
