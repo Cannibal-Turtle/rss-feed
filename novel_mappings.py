@@ -25,6 +25,40 @@ HOSTING_SITE_DATA = {
         "coin_emoji": "<:mistmint_currency:1433046707121422487>",
         "token_secret": "MISTMINT_COOKIE",
         "novels": {
+            "Help! I Accidentally Flirted With the Lord God, What Do I Do?!": {
+                "novelupdates_feed_url": "",
+                "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do/chapters",
+                "discord_role_id": "<@&1471460385348386847>",
+                "novel_url": "https://www.mistminthaven.com/novels/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do",
+                "featured_image": "https://i.imgur.com/7LRK6Uw.png",
+                "novel_id": "5868afe3-4a39-43ed-ae1c-314a8b3ffebe",
+                "short_code": "hiaflg",
+
+                # ─── webhook-only fields ───
+                "chapter_count": "503 Chapters",
+                "last_chapter": "Chapter 503",
+                "start_date": "13/2/2026",
+                "free_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml",
+                "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
+                "comments_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml",
+                "custom_emoji": "<:piggy_warrior:1471462818489307283>",
+                "extra_ping_roles": "<@&1329500516304158901> <@&1329427832077684736> <@&1330469306936328286> <@&1330469077784727562>",
+                "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
+                "history_file": "hiaflg_history.json",
+                "custom_description": """【Quick Transmigration + Double Male Leads + Cannon Fodder Counterattack + Main Shou + 1v1 + Double Clean】
+The Lord God got scammed in an online relationship!
+The other party even ran off on the way to meet in person!
+Enraged, the Lord God issued a special-class wanted order, determined to drag back the wife who suddenly disappeared on him.
+......
+Xie Yaochen, who has already hidden himself inside a small world to carry out missions, blinks innocently.
+“Dating? Never done that.”
+“Online dating scam? No idea.”
+“Special-class wanted criminal? Don’t know him either.”
+Bound to a cannon fodder counterattack system, he happily travels through various small worlds. While cleaning up idiots, he even starts a sweet romance on the side.
+His boyfriend is tall and handsome and loves him so much. If certain parts of him didn’t keep making him see that damn dog Lord God, it would be perfect...
+Damn dog:
+^_^"""
+            },
             "Whose Simping Male Supporting Character Is Being Held and Kissed by the Male Lead?": {
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead/chapters",
