@@ -25,7 +25,7 @@ HOSTING_SITE_DATA = {
         "coin_emoji": "<:mistmint_currency:1433046707121422487>",
         "token_secret": "MISTMINT_COOKIE",
         "novels": {
-            "Help! I Accidentally Flirted With the Lord God, What Do I Do?!": {
+            "Help! I Accidentally Flirted with the Lord God, What Do I Do?!": {
                 "novelupdates_feed_url": "",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do/chapters",
                 "discord_role_id": "<@&1471460385348386847>",
@@ -89,7 +89,7 @@ The once ice-cold male lead who despised him to the extreme abandons his work, c
 Holding him in his arms, kissing him while coaxing him, his voice trembling with fear: “Good baby will live to a hundred years old, happy and safe.”
 Netizens: redefining ‘hate to the extreme’. Fu Hanchuan! You brat, keep your hands off my bunny baby!"""
             },
-            "After Transmigrating Into the Villain, I Got a HE With the Female Lead's Older Brother": {
+            "After Transmigrating into the Villain, I Got a HE with the Female Lead's Older Brother": {
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-leads-older-brother/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother/chapters",
                 "discord_role_id": "<@&1437846306625290260>",
