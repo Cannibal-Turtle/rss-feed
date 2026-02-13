@@ -23,4 +23,4 @@ jobs:
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         run: |
-          python rss-feed/tools/fix_atvhe_title.py
+          python tools/fix_atvhe_title.py
