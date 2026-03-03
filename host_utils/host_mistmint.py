@@ -1198,17 +1198,16 @@ def load_comments_mistmint(comments_feed_url: str):
             if who and (ALLOW_SELF_REPLIES or who.strip().casefold() != author.casefold()):
                 reply_to = who
 
-        # adjacency heuristic last
-        if not reply_to and flags and i > 0 and i-1 < len(flags) and flags[i-1]:
-            prev = enriched[i-1]
+        # UI-style reply resolution (Mistmint visual stacking)
+        if not reply_to and bool(obj.get("is_reply")) and i > 0:
+            prev = enriched[i - 1]
+        
             prev_author = _user_str(prev.get("user") or pick(prev, *user_keys))
             same_novel = novel_title == (pick(prev, "novel", "novelTitle", "title").strip())
-            t_cur = _parse_when(obj)
-            t_prev = _parse_when(prev)
-            close_in_time = (t_cur and t_prev and abs((t_cur - t_prev).total_seconds()) <= 120)
-            if prev_author and author and prev_author != author and same_novel and close_in_time:
+        
+            if same_novel and prev_author and (ALLOW_SELF_REPLIES or prev_author != author):
                 reply_to = prev_author
-                diag_ok("reply-adjacency-heuristic", child=author, parent=prev_author, novel=novel_title)
+                diag_ok("reply-ui-style", child=author, parent=prev_author)
 
         body = body_raw
 
@@ -1579,4 +1578,5 @@ MISTMINT_UTILS = {
     "get_nsfw_novels":
         lambda: [],
 }
+
 
