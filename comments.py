@@ -230,12 +230,7 @@ def main():
         
                 # ---- NEW: treat empty as a notice, not a failure ----
                 if not norm_items:
-                    try:
-                        from host_utils import _gha  # optional; falls back to print
-                        _gha("notice", "mistmint-empty", f"{host} returned 0 items; skipping.")
-                    except Exception:
-                        print(f"[{host}] empty; skipping host.")
-                    continue  # go to next host without error
+                    print(f"[WARNING] {host} returned 0 items (unexpected)")
                 # -----------------------------------------------------
         
                 print(f"[loader] {host}: {len(norm_items)} items from loader (url={comments_feed_url})")
@@ -313,10 +308,10 @@ def main():
             
                 continue
             
-                    parsed_feed = feedparser.parse(comments_feed_url)
+        parsed_feed = feedparser.parse(comments_feed_url)
             
-                    # Get the host-specific function to split comment titles.
-                    split_comment_title = utils.get("split_comment_title", lambda title: re.sub(r'^Comment on (.+?) by .+$', r'\1', title).strip())
+        # Get the host-specific function to split comment titles.
+        split_comment_title = utils.get("split_comment_title", lambda title: re.sub(r'^Comment on (.+?) by .+$', r'\1', title).strip())
                     
         for entry in parsed_feed.entries:
             # Use host-specific logic to extract the novel title from the comment title.
