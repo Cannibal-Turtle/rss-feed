@@ -1040,7 +1040,9 @@ def load_comments_mistmint(comments_feed_url: str):
         if payload is None:
             diag_fail("comments-unauthorized")
             print("[mistmint] unauthorized; set MISTMINT_TOKEN or MISTMINT_COOKIE")
-            return out
+        
+            # 🚨 IMPORTANT: raise instead of silently returning
+            raise RuntimeError("AUTH_ERROR: Mistmint unauthorized (token invalid or expired)")
 
         # keep this snapshot light; don’t dump the whole JSON
         top_keys = list(payload)[:8] if isinstance(payload, dict) else []
