@@ -1072,7 +1072,11 @@ def load_comments_mistmint(comments_feed_url: str):
         preview = str(payload)
         preview = preview[:200] + ("…" if len(preview) > 200 else "")
         print(f"[mistmint] no items; top-level keys={list(payload)[:6]} sample={preview!r}")
-        return out
+    
+        # 🚨 mark as failure + trigger alert upstream
+        diag_fail("comments-empty-response", note="possible auth failure")
+    
+        raise RuntimeError("AUTH_ERROR: Mistmint returned empty (likely bad token)")
 
     def pick(d, *cands, default=""):
         for k in cands:
