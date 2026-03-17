@@ -278,14 +278,46 @@ def main():
                     all_rss_items.append(item)
         
                 continue  # next host
+
             except Exception as e:
-                print(f"[{host}] load_comments failed, falling back to generic: {e}")
-
-        parsed_feed = feedparser.parse(comments_feed_url)
-
-        # Get the host-specific function to split comment titles.
-        split_comment_title = utils.get("split_comment_title", lambda title: re.sub(r'^Comment on (.+?) by .+$', r'\1', title).strip())
-        
+                msg = str(e)
+                print(f"[ERROR] {host} loader failed: {msg}")
+            
+                # 🚨 send alert if auth issue
+                if "AUTH_ERROR" in msg:
+                    try:
+                        repo = os.getenv("GITHUB_REPOSITORY", "")
+                        token = os.getenv("PAT_GITHUB") or os.getenv("GITHUB_TOKEN")
+            
+                        if repo and token:
+                            url = f"https://api.github.com/repos/{repo}/dispatches"
+                            headers = {
+                                "Accept": "application/vnd.github+json",
+                                "Authorization": f"Bearer {token}",
+                                "X-GitHub-Api-Version": "2022-11-28",
+                            }
+            
+                            payload = {
+                                "event_type": "token-invalid",
+                                "client_payload": {
+                                    "host": host,
+                                    "error": msg,
+                                },
+                            }
+            
+                            requests.post(url, headers=headers, json=payload, timeout=15)
+                            print(f"[alert] dispatched token-invalid → {host}")
+            
+                    except Exception as dispatch_err:
+                        print(f"[warn] failed to dispatch alert: {dispatch_err}")
+            
+                continue
+            
+                    parsed_feed = feedparser.parse(comments_feed_url)
+            
+                    # Get the host-specific function to split comment titles.
+                    split_comment_title = utils.get("split_comment_title", lambda title: re.sub(r'^Comment on (.+?) by .+$', r'\1', title).strip())
+                    
         for entry in parsed_feed.entries:
             # Use host-specific logic to extract the novel title from the comment title.
             novel_title = split_comment_title(entry.title)
