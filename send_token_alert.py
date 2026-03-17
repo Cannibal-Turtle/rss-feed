@@ -29,10 +29,14 @@ def main():
         event = json.load(f)
 
     payload = event.get("client_payload", {}) or {}
+    event_type = event.get("action", "")
+    
     host = payload.get("host", "Unknown host")
+    error_msg = payload.get("error", "")
     token_secret_name = payload.get("token_secret_name", "SECRET")
-    exp = int(payload.get("exp", 0))
-    secs_left = int(payload.get("secs_left", max(0, exp - int(time.time()))))
+    
+    exp = int(payload.get("exp", 0) or 0)
+    secs_left = int(payload.get("secs_left", max(0, exp - int(time.time())))) if exp else 0
 
     # Nice timestamps for Discord
     # <t:unix:R> relative, <t:unix:F> full
@@ -48,26 +52,40 @@ def main():
     secret_url = f"https://github.com/{REPO_SLUG}/settings/secrets/actions/{token_secret_name}"
 
     # Fancy header outside embed (as you wanted)
-    header = (
-        "## ˚꒦꒷<a:2891_RedAlert:1435281549074628618>꒷ ⋘ 𝑻𝒐𝒌𝒆𝒏 𝒆𝒙𝒑𝒊𝒓𝒊𝒏𝒈... ⋙"
-    )
+    if event_type == "token-invalid":
+        header = "## ˚꒦꒷<a:2891_RedAlert:1435281549074628618>꒷ ⋘ 𝑻𝒐𝒌𝒆𝒏 𝑩𝒓𝒐𝒌𝒆𝒏... ⋙"
+    else:
+        header = "## ˚꒦꒷<a:2891_RedAlert:1435281549074628618>꒷ ⋘ 𝑻𝒐𝒌𝒆𝒏 𝑬𝒙𝒑𝒊𝒓𝒊𝒏𝒈... ⋙"
     content = header
     if GLOBAL_MENTION:
         content = f"{GLOBAL_MENTION}\n{header}"
 
-    # Embed body
-    description = (
-        f"**{host}** token is expiring soon\n"
-        f"│ Token expires {t_full}.\n"
-        f"│ Time left: **{t_rel}**.\n"
-        f"│ Rotate the secret to prevent feed/API breakage.\n"
-        f"│\n"
-        f"│ Repo: `{REPO_SLUG}`"
-    )
-
+    # Embed body (dynamic)
+    if event_type == "token-invalid":
+        description = (
+            f"**{host}** token is **INVALID / EXPIRED**\n"
+            f"│ API is failing RIGHT NOW.\n"
+            f"│ Error: `{error_msg}`\n"
+            f"│\n"
+            f"│ Immediate action required.\n"
+            f"│ Repo: `{REPO_SLUG}`"
+        )
+        color = int("F1202B", 16)  # red
+    
+    else:
+        description = (
+            f"**{host}** token is expiring soon\n"
+            f"│ Token expires {t_full}.\n"
+            f"│ Time left: **{t_rel}**.\n"
+            f"│ Rotate the secret to prevent feed/API breakage.\n"
+            f"│\n"
+            f"│ Repo: `{REPO_SLUG}`"
+        )
+        color = int("FFA500", 16)  # orange
+    
     embed = {
         "description": description,
-        "color": int("F1202B", 16),
+        "color": color,
         "footer": {"text": "rss-feed • token watcher"},
     }
     # Put logo + host in the author line (title stays outside the embed)
