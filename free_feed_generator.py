@@ -231,6 +231,14 @@ def main():
         reverse=True
     )
 
+    # --- Mimic paid feed behavior for Mistmint API ---
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    seven_days_ago = now_utc - datetime.timedelta(days=7)
+    
+    rss_items = [item for item in rss_items if item.pubDate >= seven_days_ago]
+    
+    rss_items = rss_items[:200]
+
     # Build the aggregated feed.
     new_feed = CustomRSS2(
         title="Aggregated Free Chapters Feed",
