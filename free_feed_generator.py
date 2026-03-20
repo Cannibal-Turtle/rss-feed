@@ -231,27 +231,6 @@ def main():
         reverse=True
     )
 
-    # --- Mimic paid feed behavior for API feed ---
-    now_utc = datetime.datetime.now(datetime.timezone.utc)
-    seven_days_ago = now_utc - datetime.timedelta(days=7)
-    
-    filtered_items = []
-    for item in rss_items:
-        utils = get_host_utils(item.host)
-    
-        apply_window = utils.get("apply_recent_window", lambda: False)()
-    
-        if apply_window:
-            if item.pubDate >= seven_days_ago:
-                filtered_items.append(item)
-        else:
-            filtered_items.append(item)
-    
-    rss_items = filtered_items
-    
-    # cap like paid feed
-    rss_items = rss_items[:200]
-
     # Build the aggregated feed.
     new_feed = CustomRSS2(
         title="Aggregated Free Chapters Feed",
