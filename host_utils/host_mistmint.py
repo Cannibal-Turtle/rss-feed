@@ -14,6 +14,7 @@ from collections import Counter
 from contextlib import contextmanager
 import hashlib
 import unicodedata
+import types
 
 from novel_mappings import HOSTING_SITE_DATA
 
@@ -1460,6 +1461,73 @@ def split_paid_chapter_mistmint(raw_title: str):
     return ("", "")
 
 # =============================================================================
+# API-based Mistmint free scraper
+# =============================================================================
+
+def load_feed_mistmint_via_api(host: str):
+    """
+    Mimics feedparser.parse() but uses Mistmint API instead.
+    Returns an object with `.entries` just like feedparser.
+    """
+
+    entries = []
+
+    block = HOSTING_SITE_DATA.get(host, {}).get("novels", {})
+
+    for novel_title, details in block.items():
+        novel_url = details.get("novel_url")
+        novel_slug = _mistmint_slug_from_url(novel_url)
+
+        api_url = f"{BASE_API}/novels/slug/{novel_slug}/chapters"
+
+        payload = _http_get_json(api_url)
+        if not payload:
+            continue
+
+        for vol in payload.get("data", []):
+            vol_title = (vol.get("volumeTitle") or "").strip()
+
+            for ch in vol.get("chapters", []):
+                if not ch.get("isFree"):
+                    continue
+                if ch.get("isHidden"):
+                    continue
+
+                chapter_num = str(ch.get("chapterNumber") or "").strip()
+                nameextend  = (ch.get("title") or "").strip()
+                slug_tail   = (ch.get("slug") or "").strip()
+
+                link = f"{BASE_APP}/novels/{novel_slug}/{slug_tail}"
+
+                created = ch.get("createdAt")
+                try:
+                    dt = datetime.datetime.fromisoformat(created.replace("Z","+00:00"))
+                except Exception:
+                    dt = datetime.datetime.now(datetime.timezone.utc)
+
+                # 🔥 CRITICAL: recreate ORIGINAL TITLE FORMAT
+                if vol_title:
+                    full_title = f"{novel_title} — {vol_title}, Chapter {chapter_num}"
+                else:
+                    full_title = f"{novel_title} — Chapter {chapter_num}"
+
+                if nameextend:
+                    full_title += f" — {nameextend}"
+
+                entry = types.SimpleNamespace(
+                    title=full_title,
+                    link=link,
+                    id=ch.get("id") or link,
+                    published_parsed=dt.timetuple(),
+                    description=details.get("custom_description", "")
+                )
+
+                entries.append(entry)
+
+    # return object like feedparser
+    return types.SimpleNamespace(entries=entries)
+
+# =============================================================================
 # OTHER SHARED HELPERS
 # =============================================================================
 
@@ -1553,6 +1621,7 @@ MISTMINT_UTILS = {
     # Free/public feed
     "split_title": split_title_mistmint,
     "extract_volume": extract_volume_mistmint,
+    "load_feed": load_feed_mistmint_via_api,
 
     # Paid feed (synthetic)
     "split_paid_title": split_paid_chapter_mistmint,
@@ -1585,4 +1654,10 @@ MISTMINT_UTILS = {
         lambda: [],
 }
 
+def get_host_utils(host):
+    if host == "Mistmint Haven":
+        return MISTMINT_UTILS
+
+    # fallback for other hosts (if you have any)
+    return {}
 
