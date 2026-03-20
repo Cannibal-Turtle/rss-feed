@@ -1474,15 +1474,26 @@ def load_feed_mistmint_via_api(host: str):
     """
     Mimics feedparser.parse() but uses Mistmint API instead.
     Returns an object with `.entries` just like feedparser.
+    Now includes STATE tracking so only NEW free chapters are emitted.
     """
 
     entries = []
+    state = _load_mistmint_state()
 
     block = HOSTING_SITE_DATA.get(host, {}).get("novels", {})
 
     for novel_title, details in block.items():
         novel_url = details.get("novel_url")
         novel_slug = _mistmint_slug_from_url(novel_url)
+
+        short_code = (details.get("short_code") or "").strip()
+        if not short_code:
+            continue
+
+        # ── STATE ─────────────────────────────────────
+        novel_state = state.setdefault(short_code, {})
+        last_free_chapter = int(novel_state.get("last_free_chapter", 0) or 0)
+        newest_seen = last_free_chapter
 
         api_url = f"{BASE_API}/novels/slug/{novel_slug}/chapters"
 
@@ -1491,7 +1502,7 @@ def load_feed_mistmint_via_api(host: str):
             print(f"[mistmint] free feed fetch failed for {novel_slug}")
             diag_fail("free-feed-fetch-fail", novel=novel_slug)
             continue
-    
+
         for vol in payload.get("data", []):
             vol_title = (vol.get("volumeTitle") or "").strip()
 
@@ -1501,7 +1512,20 @@ def load_feed_mistmint_via_api(host: str):
                 if ch.get("isHidden"):
                     continue
 
-                chapter_num = str(ch.get("chapterNumber") or "").strip()
+                # ── PARSE CHAPTER NUMBER ─────────────────
+                chapter_num_raw = ch.get("chapterNumber") or 0
+                try:
+                    chapter_num = int(float(chapter_num_raw))
+                except Exception:
+                    continue
+
+                # 🚨 SKIP OLD CHAPTERS
+                if chapter_num <= last_free_chapter:
+                    continue
+
+                newest_seen = max(newest_seen, chapter_num)
+
+                # ── BUILD ENTRY (UNCHANGED LOGIC) ────────
                 nameextend  = (ch.get("title") or "").strip()
                 slug_tail   = (ch.get("slug") or "").strip()
 
@@ -1513,7 +1537,7 @@ def load_feed_mistmint_via_api(host: str):
                 except Exception:
                     dt = datetime.datetime.now(datetime.timezone.utc)
 
-                # 🔥 CRITICAL: recreate ORIGINAL TITLE FORMAT
+                # ORIGINAL TITLE FORMAT
                 if vol_title:
                     full_title = f"{novel_title} — {vol_title}, Chapter {chapter_num}"
                 else:
@@ -1532,9 +1556,16 @@ def load_feed_mistmint_via_api(host: str):
 
                 entries.append(entry)
 
+        # ── UPDATE STATE ──────────────────────────────
+        novel_state["last_free_chapter"] = newest_seen
+        state[short_code] = novel_state
+
+    # ── SAVE STATE ───────────────────────────────────
+    _save_mistmint_state(state)
+
     # return object like feedparser
     return types.SimpleNamespace(entries=entries)
-
+    
 # =============================================================================
 # OTHER SHARED HELPERS
 # =============================================================================
