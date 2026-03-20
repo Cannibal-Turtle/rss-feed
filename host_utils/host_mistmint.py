@@ -1508,9 +1508,14 @@ def load_feed_mistmint_via_api(host: str):
 
                 link = f"{BASE_APP}/novels/{novel_slug}/{slug_tail}"
 
-                created = ch.get("createdAt")
+                free_at = ch.get("freeAt")
+                
+                if not free_at:
+                    # fallback just in case (rare)
+                    free_at = ch.get("createdAt")
+                
                 try:
-                    dt = datetime.datetime.fromisoformat(created.replace("Z","+00:00"))
+                    dt = datetime.datetime.fromisoformat(free_at.replace("Z", "+00:00"))
                 except Exception:
                     dt = datetime.datetime.now(datetime.timezone.utc)
 
@@ -1631,7 +1636,6 @@ MISTMINT_UTILS = {
     "split_title": split_title_mistmint,
     "extract_volume": extract_volume_mistmint,
     "load_feed": load_feed_mistmint_via_api if MISTMINT_MODE == 1 else None,
-    "apply_recent_window": lambda: MISTMINT_MODE == 1,
 
     # Paid feed (synthetic)
     "split_paid_title": split_paid_chapter_mistmint,
