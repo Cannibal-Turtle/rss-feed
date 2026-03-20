@@ -158,8 +158,10 @@ def main():
 
         utils = get_host_utils(host)
         
-        if "load_feed" in utils:
-            parsed_feed = utils["load_feed"](host)
+        load_feed = utils.get("load_feed")
+        
+        if load_feed:
+            parsed_feed = load_feed(host)
         else:
             parsed_feed = feedparser.parse(feed_url)
 
