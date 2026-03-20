@@ -18,6 +18,16 @@ import types
 
 from novel_mappings import HOSTING_SITE_DATA
 
+# ================= CONFIG =================
+def _use_api_feed():
+    return MISTMINT_MODE == 1
+
+def _manual_mode_on():
+    return MISTMINT_MODE == 0
+
+MISTMINT_MODE = int(os.getenv("MISTMINT_MODE", "1"))
+# =========================================
+
 # === GitHub Actions diagnostics helpers ======================================
 
 COIN_MANUAL_DEFAULT = os.getenv("MISTMINT_MANUAL_COIN", "5").strip()
@@ -119,10 +129,6 @@ TDLBKGC_ARCS = [
 ]
 
 # ─── Mode & state helpers required by async paid functions ───────────────────
-
-def _manual_mode_on() -> bool:
-    # When set to "1" we force STATE mode (no live API scraping)
-    return (os.getenv("MISTMINT_FORCE_STATE", "0") or "0").strip() == "1"
 
 def _mistmint_mode() -> str:
     # If manual override is on or we have no cookie, use STATE; else API.
@@ -1482,8 +1488,10 @@ def load_feed_mistmint_via_api(host: str):
 
         payload = _http_get_json(api_url)
         if not payload:
+            print(f"[mistmint] free feed fetch failed for {novel_slug}")
+            diag_fail("free-feed-fetch-fail", novel=novel_slug)
             continue
-
+    
         for vol in payload.get("data", []):
             vol_title = (vol.get("volumeTitle") or "").strip()
 
@@ -1621,7 +1629,7 @@ MISTMINT_UTILS = {
     # Free/public feed
     "split_title": split_title_mistmint,
     "extract_volume": extract_volume_mistmint,
-    "load_feed": load_feed_mistmint_via_api,
+    "load_feed": load_feed_mistmint_via_api if MISTMINT_MODE == 1 else None,
 
     # Paid feed (synthetic)
     "split_paid_title": split_paid_chapter_mistmint,
@@ -1653,11 +1661,4 @@ MISTMINT_UTILS = {
     "get_nsfw_novels":
         lambda: [],
 }
-
-def get_host_utils(host):
-    if host == "Mistmint Haven":
-        return MISTMINT_UTILS
-
-    # fallback for other hosts (if you have any)
-    return {}
 
