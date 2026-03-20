@@ -231,7 +231,7 @@ def main():
         reverse=True
     )
 
-    # --- Mimic paid feed behavior for Mistmint API ---
+    # --- Mimic paid feed behavior for API feed ---
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     seven_days_ago = now_utc - datetime.timedelta(days=7)
     
@@ -239,12 +239,9 @@ def main():
     for item in rss_items:
         utils = get_host_utils(item.host)
     
-        is_mistmint_api = (
-            item.host == "Mistmint Haven"
-            and utils.get("load_feed") is not None
-        )
+        apply_window = utils.get("apply_recent_window", lambda: False)()
     
-        if is_mistmint_api:
+        if apply_window:
             if item.pubDate >= seven_days_ago:
                 filtered_items.append(item)
         else:
