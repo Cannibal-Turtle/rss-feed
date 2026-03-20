@@ -156,8 +156,12 @@ def main():
             print(f"No feed URL defined for host: {host}")
             continue
 
-        parsed_feed = feedparser.parse(feed_url)
         utils = get_host_utils(host)
+        
+        if "load_feed" in utils:
+            parsed_feed = utils["load_feed"](host)
+        else:
+            parsed_feed = feedparser.parse(feed_url)
 
         for entry in parsed_feed.entries:
             # host-specific title parsing
