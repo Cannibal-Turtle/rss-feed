@@ -38,6 +38,8 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Feed Generator
+        env:
+          MISTMINT_MODE: "1"
         run: python free_feed_generator.py
 
       - name: Commit and Push Changes
