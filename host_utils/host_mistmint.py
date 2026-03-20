@@ -1631,6 +1631,7 @@ MISTMINT_UTILS = {
     "split_title": split_title_mistmint,
     "extract_volume": extract_volume_mistmint,
     "load_feed": load_feed_mistmint_via_api if MISTMINT_MODE == 1 else None,
+    "apply_recent_window": lambda: MISTMINT_MODE == 1,
 
     # Paid feed (synthetic)
     "split_paid_title": split_paid_chapter_mistmint,
