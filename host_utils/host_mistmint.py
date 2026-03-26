@@ -19,16 +19,18 @@ import types
 from novel_mappings import HOSTING_SITE_DATA
 
 # ================= MODE SWITCH =================
-USE_MISTMINT_API = False   # True = API, False = RSS
+USE_MISTMINT_API = 0  # 0 = RSS, 1 = API
 MISTMINT_MODE = 0   # 0 = AUTO, 1 = MANUAL
 # ==============================================
 
 # ================= CONFIG =================
 def _use_api_feed():
-    return USE_MISTMINT_API
+    return USE_MISTMINT_API == 1
 
 def _manual_mode_on():
     return MISTMINT_MODE == 1
+
+os.environ["MISTMINT_FORCE_STATE"] = "1" if _manual_mode_on() else "0"
 # =========================================
 
 print(
