@@ -1,4 +1,3 @@
-
 import re
 import os
 import json
@@ -19,15 +18,23 @@ import types
 
 from novel_mappings import HOSTING_SITE_DATA
 
+# ================= MODE SWITCH =================
+USE_MISTMINT_API = False   # True = API, False = RSS
+MISTMINT_MODE = 0   # 0 = AUTO, 1 = MANUAL
+# ==============================================
+
 # ================= CONFIG =================
 def _use_api_feed():
-    return MISTMINT_MODE == 1
+    return USE_MISTMINT_API
 
 def _manual_mode_on():
-    return MISTMINT_MODE == 0
-
-MISTMINT_MODE = int(os.getenv("MISTMINT_MODE", "1"))
+    return MISTMINT_MODE == 1
 # =========================================
+
+print(
+    f"[MODE] Feed = {'API' if USE_MISTMINT_API else 'RSS'} | "
+    f"Paid = {'AUTO' if MISTMINT_MODE == 0 else 'MANUAL'}"
+)
 
 # === GitHub Actions diagnostics helpers ======================================
 
@@ -1635,7 +1642,7 @@ MISTMINT_UTILS = {
     # Free/public feed
     "split_title": split_title_mistmint,
     "extract_volume": extract_volume_mistmint,
-    "load_feed": load_feed_mistmint_via_api if MISTMINT_MODE == 1 else None,
+    "load_feed": load_feed_mistmint_via_api if USE_MISTMINT_API else None
 
     # Paid feed (synthetic)
     "split_paid_title": split_paid_chapter_mistmint,
