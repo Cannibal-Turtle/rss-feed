@@ -1642,7 +1642,7 @@ MISTMINT_UTILS = {
     # Free/public feed
     "split_title": split_title_mistmint,
     "extract_volume": extract_volume_mistmint,
-    "load_feed": load_feed_mistmint_via_api if USE_MISTMINT_API else None
+    "load_feed": load_feed_mistmint_via_api if USE_MISTMINT_API else None,
 
     # Paid feed (synthetic)
     "split_paid_title": split_paid_chapter_mistmint,
