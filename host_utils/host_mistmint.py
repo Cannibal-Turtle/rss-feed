@@ -34,7 +34,7 @@ os.environ["MISTMINT_FORCE_STATE"] = "1" if _manual_mode_on() else "0"
 # =========================================
 
 print(
-    f"[MODE] Feed = {'API' if USE_MISTMINT_API else 'RSS'} | "
+    f"[MODE] Free = {'API' if USE_MISTMINT_API else 'RSS'} | "
     f"Paid = {'AUTO' if MISTMINT_MODE == 0 else 'MANUAL'}"
 )
 
