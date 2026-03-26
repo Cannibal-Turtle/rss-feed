@@ -16,8 +16,6 @@ concurrency:
 jobs:
   update_paid_feed:
     runs-on: ubuntu-latest
-    env:
-      MISTMINT_FORCE_STATE: "0"   # single source of truth for the whole job
 
     steps:
       - name: Checkout Repository
@@ -41,14 +39,11 @@ jobs:
       - name: Run Paid Feed Generator
         env:
           MISTMINT_COOKIE: ${{ secrets.MISTMINT_COOKIE }}
-          MISTMINT_FORCE_STATE: "0"   # use API mode (cookie); set "1" to force state fallback
         run: python paid_feed_generator.py
 
       - name: Commit and Push Changes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # repeat the same toggle here so this step can see it
-          MISTMINT_FORCE_STATE: "0"   # set to "1" only when you want to commit manual state/history
         run: |
           set -euo pipefail
           git config --global user.name  "github-actions[bot]"
