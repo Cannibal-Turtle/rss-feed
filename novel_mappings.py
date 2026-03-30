@@ -25,10 +25,52 @@ HOSTING_SITE_DATA = {
         "coin_emoji": "<:mistmint_currency:1433046707121422487>",
         "token_secret": "MISTMINT_COOKIE",
         "novels": {
+            "Entering the Cage": {
+                "novelupdates_feed_url": "https://www.novelupdates.com/series/entering-the-cage/feed/",
+                "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/entering-the-cage/chapters",
+                "discord_role_id": "<@&1488183093054406716>",
+                "discord_color": "#47e38f",
+                "novel_url": "https://www.mistminthaven.com/novels/entering-the-cage",
+                "featured_image": "https://i.imgur.com/hrscn54.jpeg",
+                "novel_id": "5536923a-4c2b-495c-b0dd-ac7a9b592df6",
+                "short_code": "ec",
+
+                # ─── webhook-only fields ───
+                "chapter_count": "72 chapters + 9 extras",
+                "last_chapter": "Chapter 81",
+                "free_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml",
+                "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
+                "comments_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml",
+                "custom_emoji": "<:25396nokojail:1488194854893912185>",
+                "extra_ping_roles": "<@&1329500516304158901> <@&1330469077784727562>",
+                "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
+                "custom_description": """Everyone says Qi Cheng is the biggest failure of the Qi family.
+Spoiled, unruly, a well-known useless pretty boy in their circle.
+Looking him over from head to toe, aside from his status as the Qi family’s second young master, the only thing worth mentioning is his face.
+As for his older brother, Qi Huaizhou, he seems like Qi Cheng’s complete opposite.
+Calm and reserved, highly capable, he took over their father’s position at a young age and now controls the family business.
+If the older brother is the moon in the sky, then Qi Cheng is the mud on the ground.
+Even outsiders say they don’t look like real brothers at all.
+On the eve of Qi Cheng’s 21st birthday, their father brings home his sworn school rival and announces that this person is his real son.
+Qi Cheng was just the wrongly switched fake young master.
+In a single moment, he falls from the clouds into the dust, and anyone can kick him while he’s down.
+Especially that rival, the real young master, who takes every opportunity to go against him.
+Until one banquet, in front of a crowd of guests, Qi Cheng pours a glass of red wine straight over the real young master from head to toe.
+Chin lifted, arrogant and beautiful, his tone wildly overbearing: “A mangy dog raised in the mud is still something that can’t be presented, no matter how you dress it up.”
+He smashes the wine glass. Amid the uproar, he looks toward the older brother he hasn’t seen in a long time, eyes reddened as he stubbornly demands:
+“Are you choosing him, or choosing me?”
+—
+Until one drunken night.
+Qi Cheng is pinned down in the darkness by the real young master. Soft lips brush past his cheek. He’s so shocked he hasn’t even begun to struggle when the person on top of him is suddenly yanked away.
+The lights snap on. Sitting on the bed, Qi Cheng stares in alarm at the chaotic scene before him.
+His usually dignified older brother throws the real young master violently to the ground.
+His voice is cold as ice: “Who gave you the guts to touch him?”"""
+            },
             "Help! I Accidentally Flirted with the Lord God, What Do I Do?!": {
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do/chapters",
                 "discord_role_id": "<@&1471460385348386847>",
+                "discord_color": "#daa31a",
                 "novel_url": "https://www.mistminthaven.com/novels/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do",
                 "featured_image": "https://i.imgur.com/7LRK6Uw.png",
                 "novel_id": "5868afe3-4a39-43ed-ae1c-314a8b3ffebe",
@@ -63,6 +105,7 @@ Damn dog:
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead/chapters",
                 "discord_role_id": "<@&1462773952144478334>",
+                "discord_color": "#8a95a7",
                 "novel_url": "https://www.mistminthaven.com/novels/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead",
                 "featured_image": "https://i.imgur.com/zea8LXV.png",
                 "novel_id": "4ee66cf7-3d4f-4cd1-b958-8a2dac6e167b",
@@ -93,6 +136,7 @@ Netizens: redefining ‘hate to the extreme’. Fu Hanchuan! You brat, keep your
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-leads-older-brother/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother/chapters",
                 "discord_role_id": "<@&1437846306625290260>",
+                "discord_color": "#9c8bb5",
                 "novel_url": "https://www.mistminthaven.com/novels/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother",
                 "featured_image": "https://i.imgur.com/lGogTew.png",
                 "novel_id": "8ae77ae4-8871-4ac3-8bc4-2a094f825ea0", #comment homepage for scraping reply chain
@@ -124,6 +168,7 @@ The one who had been drugged in the room was not the male lead at all. How was i
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/chapters",
                 "discord_role_id": "<@&1431675643078250646>",
+                "discord_color": "#90c3f2",
                 "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught",
                 "featured_image": "https://i.imgur.com/vqvVVz9.png",
                 "novel_id": "8ebd3484-d5b2-422d-a22d-11404bc8481f", #comment homepage for scraping reply chain
@@ -154,6 +199,7 @@ It’s 1v1. Sweet, sweet, sweet."""
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/quick-transmigration-the-villain-is-too-pampered-and-alluring/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/quick-transmigration-the-villain-is-too-pampered-and-alluring/chapters",
                 "discord_role_id": "<@&1329391480435114005>",
+                "discord_color":"#f8d8c9",
                 "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring",
                 "featured_image": "https://i.imgur.com/5sxtfVf.jpeg",
                 "novel_id": "24f3efce-5b52-4dfe-a90e-14bcfb3f56c6", #comment homepage for scraping reply chain
