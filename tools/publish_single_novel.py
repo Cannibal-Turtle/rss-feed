@@ -24,11 +24,11 @@ STATE_FILE = "novel_status_targets.json"
 ARCHIVE_CHANNEL_ID = 1463476725253144751
 
 NOVEL_META = {
-    "TVITPA": {"color": "#f8d8c9", "forum_post_id": "1444214902322368675"},
-    "TDLBKGC": {"color": "#90c3f2", "forum_post_id": "1438462596381413417"},
-    "ATVHE":  {"color": "#9c8bb5", "forum_post_id": "1462019944823656608"},
-    "WSMSC":  {"color": "#8a95a7", "forum_post_id": "1469896904761544845"},
-    "HIAFLG":  {"color": "#daa31a", "forum_post_id": "1471742754261438620"},
+    "TVITPA": {"forum_post_id": "1444214902322368675"},
+    "TDLBKGC": {"forum_post_id": "1438462596381413417"},
+    "ATVHE":  {"forum_post_id": "1462019944823656608"},
+    "WSMSC":  {"forum_post_id": "1469896904761544845"},
+    "HIAFLG": {"forum_post_id": "1471742754261438620"},
 }
 
 # ---------------- utils ----------------
@@ -218,9 +218,12 @@ async def on_ready():
             else:
                 status_lines.append("_No free chapter timing available_")
 
+            # get color from mappings (fallback to old meta color if missing)
+            color_hex = novel.get("discord_color", "#ffffff")
+            
             embed = Embed(
                 title=f"<a:4751fluffybunnii:1368138331652755537><:pastelsparkles:1365569995794288680> **{title}**",
-                color=int(meta["color"].lstrip("#"), 16)
+                color=int(color_hex.lstrip("#"), 16)
             )
 
             # Only show Role field in the archive channel
