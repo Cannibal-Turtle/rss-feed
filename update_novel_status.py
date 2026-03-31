@@ -199,10 +199,20 @@ async def on_ready():
             status_value = build_status_value(completed, next_free, last_free)
 
             for t in targets:
-                ch = bot.get_channel(int(t["channel_id"]))
+                ch = bot.get_channel(int(t["channel_id"])) or await bot.fetch_channel(int(t["channel_id"]))
                 if not ch:
                     print("❌ Channel not found:", t["channel_id"])
                     continue
+
+                # 🔧 FIX: revive archived thread if needed
+                if isinstance(ch, discord.Thread) and ch.archived:
+                    try:
+                        temp_msg = await ch.send("\u200b")  # invisible message
+                        await temp_msg.delete()
+                        print(f"🧵 Revived thread {ch.id}")
+                    except Exception as e:
+                        print(f"❌ Failed to revive thread {ch.id}: {e}")
+                        continue
 
                 msg = await ch.fetch_message(int(t["message_id"]))
                 if not msg.embeds:
