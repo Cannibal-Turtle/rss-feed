@@ -29,7 +29,7 @@ HOSTING_SITE_DATA = {
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/entering-the-cage/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/entering-the-cage/chapters",
                 "discord_role_id": "<@&1488183093054406716>",
-                "discord_color": "#47e38f",
+                "discord_color": "#22aa58",
                 "novel_url": "https://www.mistminthaven.com/novels/entering-the-cage",
                 "featured_image": "https://i.imgur.com/hrscn54.jpeg",
                 "novel_id": "5536923a-4c2b-495c-b0dd-ac7a9b592df6",
