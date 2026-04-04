@@ -120,26 +120,32 @@ def compact_cdata(xml_str):
 # ---------------- Comments Feed Item ----------------
 
 class MyCommentRSSItem(PyRSS2Gen.RSSItem):
-    def __init__(self, *args, novel_title="", host="", reply_chain="", **kwargs):
+    def __init__(self, *args, novel_title="", host="", reply_chain="", chapter="", **kwargs):
         self.novel_title = novel_title  # As derived from the comment's title.
         self.host = host
         self.reply_chain  = reply_chain
+        self.chapter = chapter
         super().__init__(*args, **kwargs)
         
     def writexml(self, writer, indent="", addindent="", newl=""):
         writer.write(indent + "  <item>" + newl)
         writer.write(indent + "    <title>%s</title>" % escape(self.novel_title) + newl)
-        
-        utils = get_host_utils(self.host)
 
-        # <chapter> via host-specific extractor
-        if "extract_chapter" in utils:
-            chapter_info = utils["extract_chapter"](self.link)
+        utils = get_host_utils(self.host)
+        
+        # ✅ If chapter already provided, trust it
+        if getattr(self, "chapter", None):
+            chapter_info = self.chapter
         else:
-            from urllib.parse import urlparse, unquote
-            parsed = urlparse(self.link)
-            segments = [seg for seg in parsed.path.split('/') if seg]
-            chapter_info = "Homepage" if len(segments) <= 2 else unquote(segments[-1]).replace('-', ' ')
+            if "extract_chapter" in utils:
+                chapter_info = utils["extract_chapter"](self.link)
+            else:
+                from urllib.parse import urlparse, unquote
+                parsed = urlparse(self.link)
+                segments = [seg for seg in parsed.path.split('/') if seg]
+                chapter_info = "Homepage" if len(segments) <= 2 else unquote(segments[-1]).replace('-', ' ')
+
+        # ✅ WRITE IT
         writer.write(indent + "    <chapter>%s</chapter>" % escape(chapter_info) + newl)
     
         # Build a proper permalink
@@ -262,6 +268,7 @@ def main():
                         novel_title=novel_title,
                         title=novel_title,
                         link=chapter_label,  # label or URL; writexml will fix per-host
+                        chapter=chapter_label,
                         author=author_name,
                         description=body,
                         reply_chain=reply_to,
