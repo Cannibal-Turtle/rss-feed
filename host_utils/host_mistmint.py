@@ -1184,10 +1184,11 @@ def load_comments_mistmint(comments_feed_url: str):
                     diag_fail("chapter-slug-not-found", novel=novel_title, novel_slug=novel_slug, chapter_label=chapter_lbl)
 
         # Canonical chapter field for the feed
+        chapter = normalize_mistmint_chapter_label(chapter_lbl)
+        
+        # Keep chapterSlug separately if you still need it later
         if chapter_slug:
-            chapter = f"mm://novel/{novel_slug}/chapter/{chapter_slug}"
-        else:
-            chapter = normalize_mistmint_chapter_label(chapter_lbl)
+            obj["chapterSlug"] = chapter_slug
 
         # --- Resolve reply target (multiple fallbacks; each inner function logs) ---
         reply_to = pick(obj, *reply_user_keys)
