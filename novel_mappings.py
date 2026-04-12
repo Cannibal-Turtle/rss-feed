@@ -86,7 +86,7 @@ His voice is cold as ice: “Who gave you the guts to touch him?”"""
                 "custom_emoji": "<:piggy_warrior:1471462818489307283>",
                 "extra_ping_roles": "<@&1329500516304158901> <@&1329427832077684736> <@&1330469306936328286> <@&1330469077784727562>",
                 "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
-                "history_file": "hiaflg_history.json",
+                "history_file": "arc_history/hiaflg_history.json",
                 "custom_description": """【Quick Transmigration + Double Male Leads + Cannon Fodder Counterattack + Main Shou + 1v1 + Double Clean】
 The Lord God got scammed in an online relationship!
 The other party even ran off on the way to meet in person!
@@ -184,7 +184,7 @@ The one who had been drugged in the room was not the male lead at all. How was i
                 "custom_emoji": "<:468087cutebunny:1431678613002125313>",
                 "extra_ping_roles": "<@&1329500516304158901> <@&1329427832077684736> <@&1330469077784727562>",
                 "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
-                "history_file": "tdlbkgc_history.json",
+                "history_file": "arc_history/tdlbkgc_history.json",
                 "custom_description": """【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
 Dark room, forced confinement, obsessive pampering.
 Shen Yu is bound to a system. His task is to enter various mission worlds and stop anomalous data from causing the worlds' collapse.
@@ -215,7 +215,7 @@ It’s 1v1. Sweet, sweet, sweet."""
                 "custom_emoji": "<:emoji_62:1365400946330435654>",
                 "extra_ping_roles": "<@&1329500516304158901> <@&1329427832077684736> <@&1330469014895595620>",
                 "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
-                "history_file": "tvitpa_history.json",
+                "history_file": "arc_history/tvitpa_history.json",
                 "custom_description": """To survive, Sheng Nuan must traverse different worlds, playing the role of self-destructive cannon fodder while saving the darkest villains. These villains are cold-blooded, obsessive, and ruthless—capable of annihilating millions with a smile and destroying the world with a wave of their hand. Holding the cannon fodder’s script, Sheng Nuan is terrified…
 Later:
 A paranoid young man with a gloomy expression: “Nuan Nuan, you’re not allowed to go anywhere except by my side…”
