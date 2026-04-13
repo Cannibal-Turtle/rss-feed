@@ -267,7 +267,7 @@ def main():
                     item = MyCommentRSSItem(
                         novel_title=novel_title,
                         title=novel_title,
-                        link=chapter_label,  # label or URL; writexml will fix per-host
+                        link=obj.get("url") or chapter_label,
                         chapter=chapter_label,
                         author=author_name,
                         description=body,
