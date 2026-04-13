@@ -1273,6 +1273,8 @@ def load_comments_mistmint(comments_feed_url: str):
             "novel_id":   novel_id,
             "novel_slug": novel_slug,
             "chapter_id": obj.get("chapterId"),
+            "chapter_slug": chapter_slug,
+            "url": client.build_url(novel_slug, chapter_slug) if novel_slug and chapter_slug else "",
         })
 
     print(f"[mistmint] loaded {len(out)} raw comment(s)")
