@@ -703,6 +703,9 @@ def enrich_all_comments(client: MistmintClient, records: List[Dict[str, Any]]) -
                     chapter_slug = alt
                     item["url"] = client.build_url(novel_slug, alt)
                     cid, gated = client.get_chapter_id(novel_slug, alt)
+                            
+        if chapter_slug:
+            item["url"] = client.build_url(novel_slug, chapter_slug)
 
         item["chapterId"] = cid
         item["gated"] = gated
