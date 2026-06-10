@@ -138,6 +138,41 @@ TDLBKGC_ARCS = [
     {"arc_num": 20, "title": "Tentacled Alien Gong × Passerby Doctor Shou",                 "start": 701, "end": 734},
 ]
 
+# --- Mistmint website sticker text -> Discord custom emoji -------------------
+
+MISTMINT_DISCORD_EMOJIS = {
+    "shirone_banned": "1514344193378619392",
+    "shirone_cool": "1514344190371430562",
+    "shirone_flower": "1514344187862978611",
+    "shirone_girlfailure": "1514344185585733723",
+    "shirone_heart": "1514344183475732520",
+    "shirone_hi": "1514344180418084924",
+    "shirone_hmm": "1514344178207952946",
+    "shirone_lol": "1514344176026648646",
+    "shirone_pout": "1514344173350944949",
+    "shirone_sad": "1514344170746286160",
+}
+
+_STICKER_TEXT_RE = re.compile(
+    r"(?<!<):(" + "|".join(map(re.escape, MISTMINT_DISCORD_EMOJIS.keys())) + r"):",
+    re.I
+)
+
+def mistmint_stickers_to_discord_emojis(text: str) -> str:
+    if not text:
+        return ""
+
+    def repl(m):
+        name = m.group(1)
+        key = name.lower()
+        emoji_id = MISTMINT_DISCORD_EMOJIS.get(key)
+        if not emoji_id:
+            return m.group(0)
+        return f"<:{key}:{emoji_id}>"
+
+    return _STICKER_TEXT_RE.sub(repl, text)
+
+
 # ─── Mode & state helpers required by async paid functions ───────────────────
 
 def _mistmint_mode() -> str:
@@ -1236,7 +1271,7 @@ def load_comments_mistmint(comments_feed_url: str):
                 reply_to = prev_author
                 diag_ok("reply-ui-style", child=author, parent=prev_author)
 
-        body = body_raw
+        body = mistmint_stickers_to_discord_emojis(body_raw)
 
         # --- Derive canonical IDs robustly (homepage-friendly) ---
         def _pick(d, *keys):
