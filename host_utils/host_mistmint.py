@@ -1271,7 +1271,7 @@ def load_comments_mistmint(comments_feed_url: str):
                 reply_to = prev_author
                 diag_ok("reply-ui-style", child=author, parent=prev_author)
 
-        body = mistmint_stickers_to_discord_emojis(body_raw)
+        body = body_raw
 
         # --- Derive canonical IDs robustly (homepage-friendly) ---
         def _pick(d, *keys):
