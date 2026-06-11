@@ -141,16 +141,16 @@ TDLBKGC_ARCS = [
 # --- Mistmint website sticker text -> comment image URL -----------------------
 
 MISTMINT_STICKER_IMAGES = {
-    ":shirone_banned:": "https://cdn.discordapp.com/emojis/1514344193378619392.webp?size=128&quality=lossless",
-    ":shirone_cool:": "https://cdn.discordapp.com/emojis/1514344190371430562.webp?size=128&quality=lossless",
-    ":shirone_flower:": "https://cdn.discordapp.com/emojis/1514344187862978611.webp?size=128&quality=lossless",
-    ":shirone_girlfailure:": "https://cdn.discordapp.com/emojis/1514344185585733723.webp?size=128&quality=lossless",
-    ":shirone_heart:": "https://cdn.discordapp.com/emojis/1514344183475732520.webp?size=128&quality=lossless",
-    ":shirone_hi:": "https://cdn.discordapp.com/emojis/1514344180418084924.webp?size=128&quality=lossless",
-    ":shirone_hmm:": "https://cdn.discordapp.com/emojis/1514344178207952946.webp?size=128&quality=lossless",
-    ":shirone_lol:": "https://cdn.discordapp.com/emojis/1514344176026648646.webp?size=128&quality=lossless",
-    ":shirone_pout:": "https://cdn.discordapp.com/emojis/1514344173350944949.webp?size=128&quality=lossless",
-    ":shirone_sad:": "https://cdn.discordapp.com/emojis/1514344170746286160.webp?size=128&quality=lossless",
+    ":shirone_banned:": "https://cdn.discordapp.com/emojis/1514344193378619392.webp?size=64&quality=lossless",
+    ":shirone_cool:": "https://cdn.discordapp.com/emojis/1514344190371430562.webp?size=64&quality=lossless",
+    ":shirone_flower:": "https://cdn.discordapp.com/emojis/1514344187862978611.webp?size=64&quality=lossless",
+    ":shirone_girlfailure:": "https://cdn.discordapp.com/emojis/1514344185585733723.webp?size=64&quality=lossless",
+    ":shirone_heart:": "https://cdn.discordapp.com/emojis/1514344183475732520.webp?size=64&quality=lossless",
+    ":shirone_hi:": "https://cdn.discordapp.com/emojis/1514344180418084924.webp?size=64&quality=lossless",
+    ":shirone_hmm:": "https://cdn.discordapp.com/emojis/1514344178207952946.webp?size=64&quality=lossless",
+    ":shirone_lol:": "https://cdn.discordapp.com/emojis/1514344176026648646.webp?size=64&quality=lossless",
+    ":shirone_pout:": "https://cdn.discordapp.com/emojis/1514344173350944949.webp?size=64&quality=lossless",
+    ":shirone_sad:": "https://cdn.discordapp.com/emojis/1514344170746286160.webp?size=64&quality=lossless",
 }
 
 def split_mistmint_sticker_image(text: str):
