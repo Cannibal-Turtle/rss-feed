@@ -138,40 +138,43 @@ TDLBKGC_ARCS = [
     {"arc_num": 20, "title": "Tentacled Alien Gong × Passerby Doctor Shou",                 "start": 701, "end": 734},
 ]
 
-# --- Mistmint website sticker text -> Discord custom emoji -------------------
+# --- Mistmint website sticker text -> comment image URL -----------------------
 
-MISTMINT_DISCORD_EMOJIS = {
-    "shirone_banned": "1514344193378619392",
-    "shirone_cool": "1514344190371430562",
-    "shirone_flower": "1514344187862978611",
-    "shirone_girlfailure": "1514344185585733723",
-    "shirone_heart": "1514344183475732520",
-    "shirone_hi": "1514344180418084924",
-    "shirone_hmm": "1514344178207952946",
-    "shirone_lol": "1514344176026648646",
-    "shirone_pout": "1514344173350944949",
-    "shirone_sad": "1514344170746286160",
+MISTMINT_STICKER_IMAGES = {
+    ":shirone_banned:": "https://cdn.discordapp.com/emojis/1514344193378619392.webp?size=128&quality=lossless",
+    ":shirone_cool:": "https://cdn.discordapp.com/emojis/1514344190371430562.webp?size=128&quality=lossless",
+    ":shirone_flower:": "https://cdn.discordapp.com/emojis/1514344187862978611.webp?size=128&quality=lossless",
+    ":shirone_girlfailure:": "https://cdn.discordapp.com/emojis/1514344185585733723.webp?size=128&quality=lossless",
+    ":shirone_heart:": "https://cdn.discordapp.com/emojis/1514344183475732520.webp?size=128&quality=lossless",
+    ":shirone_hi:": "https://cdn.discordapp.com/emojis/1514344180418084924.webp?size=128&quality=lossless",
+    ":shirone_hmm:": "https://cdn.discordapp.com/emojis/1514344178207952946.webp?size=128&quality=lossless",
+    ":shirone_lol:": "https://cdn.discordapp.com/emojis/1514344176026648646.webp?size=128&quality=lossless",
+    ":shirone_pout:": "https://cdn.discordapp.com/emojis/1514344173350944949.webp?size=128&quality=lossless",
+    ":shirone_sad:": "https://cdn.discordapp.com/emojis/1514344170746286160.webp?size=128&quality=lossless",
 }
 
-_STICKER_TEXT_RE = re.compile(
-    r"(?<!<):(" + "|".join(map(re.escape, MISTMINT_DISCORD_EMOJIS.keys())) + r"):",
-    re.I
-)
+def split_mistmint_sticker_image(text: str):
+    """
+    Returns (clean_text, image_url).
 
-def mistmint_stickers_to_discord_emojis(text: str) -> str:
-    if not text:
-        return ""
+    ':shirone_cool:Re-reading' -> ('Re-reading', cool_url)
+    'Thanks :shirone_lol:'     -> ('Thanks', lol_url)
+    ':shirone_sad:'            -> ('Sticker comment', sad_url)
+    """
+    clean_text = text or ""
+    image_url = ""
 
-    def repl(m):
-        name = m.group(1)
-        key = name.lower()
-        emoji_id = MISTMINT_DISCORD_EMOJIS.get(key)
-        if not emoji_id:
-            return m.group(0)
-        return f"<:{key}:{emoji_id}>"
+    for sticker_code, url in MISTMINT_STICKER_IMAGES.items():
+        if sticker_code in clean_text:
+            image_url = url
+            clean_text = clean_text.replace(sticker_code, "", 1).strip()
+            break
 
-    return _STICKER_TEXT_RE.sub(repl, text)
+    if image_url and not clean_text:
+        clean_text = "Sticker comment"
 
+    return clean_text, image_url
+    
 
 # ─── Mode & state helpers required by async paid functions ───────────────────
 
@@ -1271,7 +1274,7 @@ def load_comments_mistmint(comments_feed_url: str):
                 reply_to = prev_author
                 diag_ok("reply-ui-style", child=author, parent=prev_author)
 
-        body = body_raw
+        body, comment_image_url = split_mistmint_sticker_image(body_raw)
 
         # --- Derive canonical IDs robustly (homepage-friendly) ---
         def _pick(d, *keys):
@@ -1292,11 +1295,12 @@ def load_comments_mistmint(comments_feed_url: str):
             "chapter": chapter,
             "author": author,
             "description": body,
+            "comment_image_url": comment_image_url,
             "reply_to": reply_to,                 # <- this is what becomes <reply_chain> later
             "posted_at": posted_at or "",
 
             # expose id in both styles so comments.py can pick it up
-            "guid":       cid or _guid_from([novel_title, author, posted_at, body[:80]]),
+            "guid": cid or _guid_from([novel_title, author, posted_at, body_raw[:80]]),
             "comment_id": cid,
             "commentId":  cid,
             "id":         cid,                
