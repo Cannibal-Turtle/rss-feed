@@ -120,11 +120,12 @@ def compact_cdata(xml_str):
 # ---------------- Comments Feed Item ----------------
 
 class MyCommentRSSItem(PyRSS2Gen.RSSItem):
-    def __init__(self, *args, novel_title="", host="", reply_chain="", chapter="", **kwargs):
-        self.novel_title = novel_title  # As derived from the comment's title.
+    def __init__(self, *args, novel_title="", host="", reply_chain="", chapter="", comment_image_url="", **kwargs):
+        self.novel_title = novel_title
         self.host = host
-        self.reply_chain  = reply_chain
+        self.reply_chain = reply_chain
         self.chapter = chapter
+        self.comment_image_url = comment_image_url
         super().__init__(*args, **kwargs)
         
     def writexml(self, writer, indent="", addindent="", newl=""):
@@ -157,6 +158,9 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
         writer.write(indent + "    <link>%s</link>" % escape(real_link) + newl)
         writer.write(indent + "    <dc:creator><![CDATA[%s]]></dc:creator>" % escape(self.author) + newl)
         writer.write(indent + "    <description><![CDATA[%s]]></description>" % self.description + newl)
+        
+        if self.comment_image_url:
+            writer.write(indent + '    <commentImage url="%s"/>' % escape(self.comment_image_url) + newl)
 
         if self.reply_chain:
             rc = (self.reply_chain or "").strip()
@@ -252,6 +256,7 @@ def main():
                     chapter_label = obj.get("chapter", "")
                     author_name   = obj.get("author", "")
                     body          = obj.get("description", "").strip()
+                    comment_image_url = obj.get("comment_image_url", "").strip()
                     posted_at     = obj.get("posted_at", "")
                     reply_to      = obj.get("reply_to", "")
         
@@ -271,6 +276,7 @@ def main():
                         chapter=chapter_label,
                         author=author_name,
                         description=body,
+                        comment_image_url=comment_image_url,
                         reply_chain=reply_to,
                         guid=PyRSS2Gen.Guid(guid_val, isPermaLink=False),
                         pubDate=_parse_iso_utc_local(posted_at).astimezone(datetime.timezone.utc) if posted_at
