@@ -297,15 +297,32 @@ def main():
         sys.exit(1)
 
     novel_meta = load_novel_meta_from_publish_single()
-
+    
+    if short_code not in novel_meta:
+        print(f"ERROR: {short_code} is missing from NOVEL_META in tools/publish_single_novel.py.")
+        print('Add it with a forum_post_id, or use {"forum_post_id": "N/A"} if it has no thread.')
+        sys.exit(1)
+    
+    meta = novel_meta[short_code]
+    
     targets = [NEWS_CHANNEL_ID]
-
-    thread_id = novel_meta.get(short_code, {}).get("forum_post_id")
-    if thread_id:
+    
+    thread_id = str(meta.get("forum_post_id", "")).strip()
+    
+    if not thread_id:
+        print(f"ERROR: {short_code} has empty forum_post_id in NOVEL_META.")
+        print('Use {"forum_post_id": "N/A"} if this novel should only post to your private/news server.')
+        sys.exit(1)
+    
+    if thread_id.upper() == "N/A":
+        print(f"{short_code} has no forum thread. Posting only to private/news server.")
+    
+    else:
         thread_id = int(thread_id)
+    
         if thread_id not in targets:
             targets.append(thread_id)
-
+    
     print(f"Publishing membership update for: {novel_title}")
     print(f"Targets: {targets}")
 
