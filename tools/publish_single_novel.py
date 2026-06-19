@@ -28,7 +28,7 @@ NOVEL_META = {
     "ATVHE":  {"forum_post_id": "1462019944823656608"},
     "WSMSC":  {"forum_post_id": "1469896904761544845"},
     "HIAFLG": {"forum_post_id": "1471742754261438620"},
-    "EC": {"forum_post_id": "1488217762231877743"},
+    "EC": {"forum_post_id": "1488217762231877743"},    # in the case of non-existing thread put ex. "BE": {"forum_post_id": "N/A"}
 }
 
 # ---------------- utils ----------------
@@ -168,15 +168,25 @@ if len(sys.argv) < 2:
 SHORT_CODE = sys.argv[1].upper()
 
 if SHORT_CODE not in NOVEL_META:
-    print("Unknown short_code:", SHORT_CODE)
+    print(f"ERROR: {SHORT_CODE} is missing from NOVEL_META.")
+    print('Add it with a forum_post_id, or use {"forum_post_id": "N/A"} if it has no thread.')
     sys.exit(1)
 
 meta = NOVEL_META[SHORT_CODE]
 
 TARGET_CHANNEL_IDS = [ARCHIVE_CHANNEL_ID]
 
-forum_post_id = meta.get("forum_post_id")
-if forum_post_id:
+forum_post_id = str(meta.get("forum_post_id", "")).strip()
+
+if not forum_post_id:
+    print(f"ERROR: {SHORT_CODE} has empty forum_post_id in NOVEL_META.")
+    print('Use {"forum_post_id": "N/A"} if this novel should only post privately.')
+    sys.exit(1)
+
+if forum_post_id.upper() == "N/A":
+    print(f"{SHORT_CODE} has no forum thread. Posting only to private/archive server.")
+
+else:
     forum_post_id = int(forum_post_id)
 
     # Avoid posting twice if archive and forum ID somehow match.
@@ -266,8 +276,8 @@ def build_embed_for_channel(
         links.append(f"[NU]({nu})")
 
     # Forum post
-    forum_post_id = meta.get("forum_post_id")
-    if forum_post_id:
+    forum_post_id = str(meta.get("forum_post_id", "")).strip()
+    if forum_post_id and forum_post_id.upper() != "N/A":
         forum = f"https://discord.com/channels/1379303379221614702/{forum_post_id}"
         links.append(f"[Forum Post]({forum})")
 
