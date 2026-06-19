@@ -273,3 +273,9 @@ def get_nsfw_novels():
 def get_coin_emoji(host):
     """Emoji string used in <coin> for paid feed."""
     return HOSTING_SITE_DATA.get(host, {}).get("coin_emoji", "")
+
+def get_membership_novels():
+    """Returns the list of novels currently available for membership."""
+    return [
+        "Entering the Cage",
+    ]
