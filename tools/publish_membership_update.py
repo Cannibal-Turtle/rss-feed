@@ -168,7 +168,7 @@ def build_membership_payload(*, host, novel_title, novel, banner_url, channel_id
                             f"<a:blackcatbracket_1:1517457481532440576>"
                             f"**{novel_title}**"
                             f"<a:blackcatbracket_2:1517457479380766751> "
-                            f"is now available for ***{host} Membership!***\n\n"
+                            f"is now available for ***{host} Membership!*** <:mascot_mistmint:1517514042930106559>\n\n"
                         ),
                     },
                     {
