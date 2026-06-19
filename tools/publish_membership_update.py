@@ -129,13 +129,13 @@ def build_membership_payload(*, host, novel_title, novel, banner_url, channel_id
         "allowed_mentions": allowed_mentions,
         "components": [
             {
-                "type": 10,
-                "content": global_mention,
-            },
-            {
                 "type": 17,
                 "accent_color": ACCENT_COLOR,
                 "components": [
+                    {
+                        "type": 10,
+                        "content": global_mention,
+                    },
                     {
                         "type": 10,
                         "content": "## <:mistmint_ticket:1517453566632001597> MEMBERSHIP EXCLUSIVE <:approvedpurple:1517433828535173231>",
