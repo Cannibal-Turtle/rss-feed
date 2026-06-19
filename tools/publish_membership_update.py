@@ -168,14 +168,14 @@ def build_membership_payload(*, host, novel_title, novel, banner_url, channel_id
                             f"<a:blackcatbracket_1:1517457481532440576>"
                             f"**{novel_title}**"
                             f"<a:blackcatbracket_2:1517457479380766751> "
-                            f"is now available for {host} Membership!"
+                            f"is now available for {host} Membership!\n\n"
                         ),
                     },
                     {
                         "type": 10,
                         "content": (
                             "Members can now choose this novel as their monthly pick and use tickets "
-                            "to unlock its premium chapters.\n"
+                            "to unlock its premium chapters.\n\n"
                             "Happy reading <a:purple_book:1517433229018136617>"
                         ),
                     },
