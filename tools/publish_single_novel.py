@@ -29,8 +29,8 @@ NOVEL_META = {
     "WSMSC":  {"forum_post_id": "1469896904761544845"},
     "HIAFLG": {"forum_post_id": "1471742754261438620"},
     "EC": {"forum_post_id": "1488217762231877743"},
-    
-    # In the case of a non-existing thread, use:
+
+    # If the novel has no forum post link, use:
     # "BOE": {"forum_post_id": "N/A"},
 }
 
@@ -165,40 +165,41 @@ def compute_status(chapters, last_chapter_text):
 # ---------------- main ----------------
 
 if len(sys.argv) < 2:
-    print("Usage: python publish_single_novel.py <short_code>")
+    print("Usage: python publish_single_novel.py <short_code> [channel_id]")
     sys.exit(1)
 
 SHORT_CODE = sys.argv[1].upper()
 
+# 🔑 target resolution
+# Always post to your archive channel.
+# If a second channel/thread ID is provided, also post there.
+EXTRA_CHANNEL_ID = None
+
+if len(sys.argv) >= 3 and sys.argv[2].strip():
+    EXTRA_CHANNEL_ID = int(sys.argv[2])
+
+TARGET_CHANNEL_IDS = [ARCHIVE_CHANNEL_ID]
+
+# Avoid posting twice if you accidentally enter the archive channel as the extra ID.
+if EXTRA_CHANNEL_ID and EXTRA_CHANNEL_ID != ARCHIVE_CHANNEL_ID:
+    TARGET_CHANNEL_IDS.append(EXTRA_CHANNEL_ID)
+
 if SHORT_CODE not in NOVEL_META:
     print(f"ERROR: {SHORT_CODE} is missing from NOVEL_META.")
-    print('Add it with a forum_post_id, or use {"forum_post_id": "N/A"} if it has no thread.')
+    print('Add it with a forum_post_id, or use {"forum_post_id": "N/A"} if it has no forum link.')
     sys.exit(1)
 
 meta = NOVEL_META[SHORT_CODE]
 
-TARGET_CHANNEL_IDS = [ARCHIVE_CHANNEL_ID]
+forum_post_id_for_link = str(meta.get("forum_post_id", "")).strip()
 
-forum_post_id = str(meta.get("forum_post_id", "")).strip()
-
-if not forum_post_id:
+if not forum_post_id_for_link:
     print(f"ERROR: {SHORT_CODE} has empty forum_post_id in NOVEL_META.")
-    print('Use {"forum_post_id": "N/A"} if this novel should only post privately.')
+    print('Use {"forum_post_id": "N/A"} if this novel has no forum link.')
     sys.exit(1)
-
-if forum_post_id.upper() == "N/A":
-    print(f"{SHORT_CODE} has no forum thread. Posting only to private/archive server.")
-
-else:
-    forum_post_id = int(forum_post_id)
-
-    # Avoid posting twice if archive and forum ID somehow match.
-    if forum_post_id not in TARGET_CHANNEL_IDS:
-        TARGET_CHANNEL_IDS.append(forum_post_id)
 
 intents = discord.Intents.default()
 bot = discord.Client(intents=intents)
-
 
 async def resolve_channel(channel_id: int):
     """
@@ -210,6 +211,38 @@ async def resolve_channel(channel_id: int):
         channel = await bot.fetch_channel(channel_id)
     return channel
 
+async def build_forum_post_url(meta):
+    """
+    Builds the Forum Post link using the correct server ID.
+
+    NOVEL_META only needs forum_post_id.
+    The bot fetches the channel/thread and reads the guild/server ID automatically.
+    """
+    forum_post_id = str(meta.get("forum_post_id", "")).strip()
+
+    if not forum_post_id or forum_post_id.upper() == "N/A":
+        return None
+
+    try:
+        forum_channel = await resolve_channel(int(forum_post_id))
+
+        guild_id = None
+
+        if getattr(forum_channel, "guild", None):
+            guild_id = forum_channel.guild.id
+
+        if not guild_id:
+            guild_id = getattr(forum_channel, "guild_id", None)
+
+        if not guild_id:
+            print(f"Warning: could not find guild/server ID for forum_post_id {forum_post_id}")
+            return None
+
+        return f"https://discord.com/channels/{guild_id}/{forum_post_id}"
+
+    except Exception as e:
+        print(f"Warning: could not resolve forum post link for {forum_post_id}: {e}")
+        return None
 
 def build_embed_for_channel(
     *,
@@ -221,6 +254,7 @@ def build_embed_for_channel(
     next_free_dt,
     last_free_dt,
     target_channel_id,
+    forum_post_url,
 ):
     status_lines = []
 
@@ -279,10 +313,8 @@ def build_embed_for_channel(
         links.append(f"[NU]({nu})")
 
     # Forum post
-    forum_post_id = str(meta.get("forum_post_id", "")).strip()
-    if forum_post_id and forum_post_id.upper() != "N/A":
-        forum = f"https://discord.com/channels/1379303379221614702/{forum_post_id}"
-        links.append(f"[Forum Post]({forum})")
+    if forum_post_url:
+        links.append(f"[Forum Post]({forum_post_url})")
 
     if links:
         embed.add_field(
@@ -314,7 +346,9 @@ async def on_ready():
                 chapters,
                 novel.get("last_chapter"),
             )
-
+            
+            forum_post_url = await build_forum_post_url(meta)
+            
             state.setdefault(SHORT_CODE, [])
 
             for target_channel_id in TARGET_CHANNEL_IDS:
@@ -330,6 +364,7 @@ async def on_ready():
                         next_free_dt=next_free_dt,
                         last_free_dt=last_free_dt,
                         target_channel_id=int(channel.id),
+                        forum_post_url=forum_post_url,
                     )
 
                     msg = await channel.send(embed=embed)
