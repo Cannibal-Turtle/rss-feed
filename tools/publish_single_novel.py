@@ -22,18 +22,6 @@ STATE_FILE = "novel_status_targets.json"
 
 ARCHIVE_CHANNEL_ID = 1463476725253144751
 
-NOVEL_META = {
-    "TVITPA": {"forum_post_id": "1444214902322368675"},
-    "TDLBKGC": {"forum_post_id": "1438462596381413417"},
-    "ATVHE":  {"forum_post_id": "1462019944823656608"},
-    "WSMSC":  {"forum_post_id": "1469896904761544845"},
-    "HIAFLG": {"forum_post_id": "1471742754261438620"},
-    "EC": {"forum_post_id": "1488217762231877743"},
-
-    # If the novel has no forum post link, use:
-    # "BOE": {"forum_post_id": "N/A"},
-}
-
 # ---------------- utils ----------------
 
 def load_state():
@@ -55,6 +43,49 @@ def fetch_api(url, cookie_env):
     r = requests.get(url, headers=headers, timeout=15)
     r.raise_for_status()
     return r.json()
+
+_THREAD_ID_MAP_CACHE = {}
+
+def fetch_thread_id_map(hostdata):
+    """
+    Fetches the host's thread_id_map_url from novel_mappings.py.
+
+    Expected JSON format:
+    {
+      "TVITPA": "1444214902322368675",
+      "TDLBKGC": "1438462596381413417"
+    }
+    """
+    url = (hostdata.get("thread_id_map_url") or "").strip()
+
+    if not url:
+        return {}
+
+    if url in _THREAD_ID_MAP_CACHE:
+        return _THREAD_ID_MAP_CACHE[url]
+
+    r = requests.get(url, timeout=15)
+    r.raise_for_status()
+    data = r.json()
+
+    if not isinstance(data, dict):
+        raise RuntimeError(f"thread_id_map_url did not return a JSON object: {url}")
+
+    normalized = {
+        str(k).upper(): str(v).strip()
+        for k, v in data.items()
+        if str(v).strip()
+    }
+
+    _THREAD_ID_MAP_CACHE[url] = normalized
+    return normalized
+
+def resolve_forum_post_id(hostdata, short_code):
+    """
+    Gets the forum/thread ID for this novel from the host's thread_id_map_url.
+    """
+    thread_map = fetch_thread_id_map(hostdata)
+    return thread_map.get(short_code.upper())
 
 def normalize_api(api):
     if not api:
@@ -94,9 +125,12 @@ def human_delta(dt):
     h = s // 3600
     m = (s % 3600) // 60
     parts = []
-    if d: parts.append(f"{d}d")
-    if h: parts.append(f"{h}h")
-    if m and not d: parts.append(f"{m}m")
+    if d:
+        parts.append(f"{d}d")
+    if h:
+        parts.append(f"{h}h")
+    if m and not d:
+        parts.append(f"{m}m")
     return " ".join(parts)
 
 def text_match(needle: str, haystack: str) -> bool:
@@ -127,7 +161,7 @@ def compute_status(chapters, last_chapter_text):
             if str(c.get("chapterNumber", "")).strip() == target_num:
                 completed = True
                 break
-                
+
     # ── Case 2: Extras / side stories / named chapters
     else:
         needle = last_chapter_text
@@ -139,7 +173,7 @@ def compute_status(chapters, last_chapter_text):
                 ):
                     completed = True
                     break
-                    
+
     # ── Next free chapter logic
     now = datetime.now(timezone.utc)
 
@@ -170,33 +204,12 @@ if len(sys.argv) < 2:
 
 SHORT_CODE = sys.argv[1].upper()
 
-# 🔑 target resolution
-# Always post to your archive channel.
-# If a second channel/thread ID is provided, also post there.
+# If a second channel/thread ID is provided, post there instead of auto-posting to mapped forum thread.
+# It will still always post to the archive channel too.
 EXTRA_CHANNEL_ID = None
 
 if len(sys.argv) >= 3 and sys.argv[2].strip():
     EXTRA_CHANNEL_ID = int(sys.argv[2])
-
-TARGET_CHANNEL_IDS = [ARCHIVE_CHANNEL_ID]
-
-# Avoid posting twice if you accidentally enter the archive channel as the extra ID.
-if EXTRA_CHANNEL_ID and EXTRA_CHANNEL_ID != ARCHIVE_CHANNEL_ID:
-    TARGET_CHANNEL_IDS.append(EXTRA_CHANNEL_ID)
-
-if SHORT_CODE not in NOVEL_META:
-    print(f"ERROR: {SHORT_CODE} is missing from NOVEL_META.")
-    print('Add it with a forum_post_id, or use {"forum_post_id": "N/A"} if it has no forum link.')
-    sys.exit(1)
-
-meta = NOVEL_META[SHORT_CODE]
-
-forum_post_id_for_link = str(meta.get("forum_post_id", "")).strip()
-
-if not forum_post_id_for_link:
-    print(f"ERROR: {SHORT_CODE} has empty forum_post_id in NOVEL_META.")
-    print('Use {"forum_post_id": "N/A"} if this novel has no forum link.')
-    sys.exit(1)
 
 intents = discord.Intents.default()
 bot = discord.Client(intents=intents)
@@ -211,14 +224,14 @@ async def resolve_channel(channel_id: int):
         channel = await bot.fetch_channel(channel_id)
     return channel
 
-async def build_forum_post_url(meta):
+async def build_forum_post_url(forum_post_id):
     """
     Builds the Forum Post link using the correct server ID.
 
-    NOVEL_META only needs forum_post_id.
+    forum_post_id now comes from the host's thread_id_map_url.
     The bot fetches the channel/thread and reads the guild/server ID automatically.
     """
-    forum_post_id = str(meta.get("forum_post_id", "")).strip()
+    forum_post_id = str(forum_post_id or "").strip()
 
     if not forum_post_id or forum_post_id.upper() == "N/A":
         return None
@@ -249,7 +262,6 @@ def build_embed_for_channel(
     title,
     novel,
     host,
-    meta,
     completed,
     next_free_dt,
     last_free_dt,
@@ -346,12 +358,31 @@ async def on_ready():
                 chapters,
                 novel.get("last_chapter"),
             )
-            
-            forum_post_url = await build_forum_post_url(meta)
-            
+
+            # Get the forum/thread ID from the host's thread_id_map_url
+            forum_post_id = resolve_forum_post_id(hostdata, SHORT_CODE)
+
+            if not forum_post_id:
+                print(f"Warning: no forum/thread ID found for {SHORT_CODE} in {host}'s thread_id_map_url.")
+
+            forum_post_url = await build_forum_post_url(forum_post_id)
+
+            # Always post to archive.
+            # If you manually pass a channel/thread ID, post there too.
+            # Otherwise, auto-post to the mapped forum/thread ID.
+            target_channel_ids = [ARCHIVE_CHANNEL_ID]
+
+            if EXTRA_CHANNEL_ID:
+                target_channel_ids.append(EXTRA_CHANNEL_ID)
+            elif forum_post_id and str(forum_post_id).upper() != "N/A":
+                target_channel_ids.append(int(forum_post_id))
+
+            # Avoid duplicate posts if archive/manual/mapped ID are accidentally the same
+            target_channel_ids = list(dict.fromkeys(target_channel_ids))
+
             state.setdefault(SHORT_CODE, [])
 
-            for target_channel_id in TARGET_CHANNEL_IDS:
+            for target_channel_id in target_channel_ids:
                 try:
                     channel = await resolve_channel(target_channel_id)
 
@@ -359,7 +390,6 @@ async def on_ready():
                         title=title,
                         novel=novel,
                         host=host,
-                        meta=meta,
                         completed=completed,
                         next_free_dt=next_free_dt,
                         last_free_dt=last_free_dt,
