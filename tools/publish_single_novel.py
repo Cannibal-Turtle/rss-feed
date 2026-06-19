@@ -6,7 +6,6 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import os
-import sys
 import json
 import re
 import requests
@@ -163,30 +162,26 @@ def compute_status(chapters, last_chapter_text):
 # ---------------- main ----------------
 
 if len(sys.argv) < 2:
-    print("Usage: python publish_single_novel.py <short_code> [channel_id]")
+    print("Usage: python publish_single_novel.py <short_code>")
     sys.exit(1)
 
 SHORT_CODE = sys.argv[1].upper()
-
-# 🔑 target resolution
-# Always post to your archive channel.
-# If a second channel/thread ID is provided, also post there.
-EXTRA_CHANNEL_ID = None
-
-if len(sys.argv) >= 3 and sys.argv[2].strip():
-    EXTRA_CHANNEL_ID = int(sys.argv[2])
-
-TARGET_CHANNEL_IDS = [ARCHIVE_CHANNEL_ID]
-
-# Avoid posting twice if you accidentally enter the archive channel as the extra ID.
-if EXTRA_CHANNEL_ID and EXTRA_CHANNEL_ID != ARCHIVE_CHANNEL_ID:
-    TARGET_CHANNEL_IDS.append(EXTRA_CHANNEL_ID)
 
 if SHORT_CODE not in NOVEL_META:
     print("Unknown short_code:", SHORT_CODE)
     sys.exit(1)
 
 meta = NOVEL_META[SHORT_CODE]
+
+TARGET_CHANNEL_IDS = [ARCHIVE_CHANNEL_ID]
+
+forum_post_id = meta.get("forum_post_id")
+if forum_post_id:
+    forum_post_id = int(forum_post_id)
+
+    # Avoid posting twice if archive and forum ID somehow match.
+    if forum_post_id not in TARGET_CHANNEL_IDS:
+        TARGET_CHANNEL_IDS.append(forum_post_id)
 
 intents = discord.Intents.default()
 bot = discord.Client(intents=intents)
