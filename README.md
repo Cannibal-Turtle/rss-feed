@@ -326,6 +326,205 @@ To enable automatic status updates for a new novel:
 
 ---
 
+## 🆕 Manual Novel Card + Membership Update Tools
+
+These tools are used when manually publishing Discord announcement cards for novels.
+
+They work together with `novel_mappings.py`, `NOVEL_META`, and `novel_status_targets.json`.
+
+---
+
+## 📌 `tools/publish_single_novel.py`
+
+This script manually publishes a normal novel status embed.
+
+It is usually used for the first-time setup of a novel card, so that future status updates know which Discord message to edit.
+
+### What it does
+
+- Takes a novel `short_code`
+- Finds the novel in `HOSTING_SITE_DATA`
+- Posts a novel status embed to:
+  - the private/archive channel
+  - the novel forum/thread, if one exists
+- Registers the posted message ID in `novel_status_targets.json`
+
+### Important channel behavior
+
+The script uses:
+
+```python
+ARCHIVE_CHANNEL_ID = 1463476725253144751
+```
+
+as the private/archive channel.
+
+It also checks `NOVEL_META`:
+
+```python
+NOVEL_META = {
+    "TVITPA": {"forum_post_id": "1444214902322368675"},
+    "TDLBKGC": {"forum_post_id": "1438462596381413417"},
+    "BOE": {"forum_post_id": "N/A"},
+}
+```
+
+### `NOVEL_META` rules
+
+| Value | Meaning |
+|---|---|
+| Numeric `forum_post_id` | Post to private/archive channel + that thread |
+| `"N/A"` | Post only to the private/archive channel |
+| Missing short code | Stop with error, because the mapping may have been forgotten |
+| Empty `forum_post_id` | Stop with error |
+
+Use `"N/A"` intentionally when a novel has no Mistmint Haven forum/thread.
+
+Example:
+
+```python
+"BOE": {"forum_post_id": "N/A"},
+```
+
+This prevents accidental silent private-only posting when a thread ID was simply forgotten.
+
+---
+
+## 🎟 `tools/publish_membership_update.py`
+
+This script manually publishes a Discord Components V2 membership announcement.
+
+It is used when a novel becomes available for membership.
+
+### What it does
+
+- Takes a novel `short_code`
+- Takes a required membership `banner_url`
+- Finds the novel in `HOSTING_SITE_DATA`
+- Reads `NOVEL_META` from `tools/publish_single_novel.py`
+- Posts the membership announcement to:
+  - the private/news channel
+  - the novel forum/thread, if one exists
+- Adds the novel title to `get_membership_novels()` in `novel_mappings.py`
+
+### Required workflow inputs
+
+The GitHub workflow requires:
+
+```yaml
+short_code:
+  description: "Novel short code, e.g. TVITPA, TDLBKGC, ATVHE"
+  required: true
+  type: string
+
+banner_url:
+  description: "Membership banner image URL"
+  required: true
+  type: string
+```
+
+There is no default banner image. A banner URL must be entered every time.
+
+### Posting behavior
+
+The script always posts first to:
+
+```python
+NEWS_CHANNEL_ID = 1330049962129489930
+```
+
+Then it checks `NOVEL_META`.
+
+| Value | Meaning |
+|---|---|
+| Numeric `forum_post_id` | Post to private/news channel + that thread |
+| `"N/A"` | Post only to the private/news channel |
+| Missing short code | Stop with error |
+| Empty `forum_post_id` | Stop with error |
+
+Example:
+
+```python
+"BOE": {"forum_post_id": "N/A"},
+```
+
+means the membership update will only post to the private/news channel.
+
+---
+
+## 🧾 Membership Tracking in `novel_mappings.py`
+
+When `publish_membership_update.py` runs successfully, it automatically updates `novel_mappings.py`.
+
+It adds or updates:
+
+```python
+def get_membership_novels():
+    """Returns the list of novels currently available for membership."""
+    return [
+        "Novel Title Here",
+    ]
+```
+
+This works like `get_nsfw_novels()`, but for membership novels.
+
+Do not manually add this function unless needed. The membership publish script can create it automatically.
+
+---
+
+## 🔁 Related Workflows
+
+### `publish_single_novel.yml`
+
+Used to publish normal novel status cards.
+
+Input:
+
+```yaml
+short_code
+```
+
+Result:
+
+- Posts the novel card
+- Updates `novel_status_targets.json`
+- Commits the updated target mapping
+
+### `publish_membership_update.yml`
+
+Used to publish membership announcements.
+
+Inputs:
+
+```yaml
+short_code
+banner_url
+```
+
+Result:
+
+- Posts the membership update
+- Updates `novel_mappings.py`
+- Commits the updated membership list
+
+---
+
+## ✅ Manual Publishing Checklist
+
+When adding a new novel:
+
+1. Add the novel to `HOSTING_SITE_DATA`
+2. Add a unique `short_code`
+3. Add the short code to `NOVEL_META`
+   - use a real thread ID if the novel has one
+   - use `"N/A"` if it has no thread
+4. Run `publish_single_novel.yml` to create/register the normal novel card
+5. If the novel enters membership, run `publish_membership_update.yml` with:
+   - `short_code`
+   - membership banner URL
+
+---
+
 ## ✅ Design Guarantees
 
 - `tools/publish_single_novel.py` can serve as template for first run.
