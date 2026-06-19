@@ -368,16 +368,14 @@ async def on_ready():
             forum_post_url = await build_forum_post_url(forum_post_id)
 
             # Always post to archive.
-            # If you manually pass a channel/thread ID, post there too.
-            # Otherwise, auto-post to the mapped forum/thread ID.
+            # Only post to another channel/thread if you pass it as the second argument.
+            # The mapped forum_post_id is ONLY used for the Forum Post link, not as a posting target.
             target_channel_ids = [ARCHIVE_CHANNEL_ID]
-
-            if EXTRA_CHANNEL_ID:
+            
+            if EXTRA_CHANNEL_ID and EXTRA_CHANNEL_ID != ARCHIVE_CHANNEL_ID:
                 target_channel_ids.append(EXTRA_CHANNEL_ID)
-            elif forum_post_id and str(forum_post_id).upper() != "N/A":
-                target_channel_ids.append(int(forum_post_id))
-
-            # Avoid duplicate posts if archive/manual/mapped ID are accidentally the same
+            
+            # Avoid duplicate posts
             target_channel_ids = list(dict.fromkeys(target_channel_ids))
 
             state.setdefault(SHORT_CODE, [])
