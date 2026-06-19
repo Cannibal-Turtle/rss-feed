@@ -168,11 +168,19 @@ if len(sys.argv) < 2:
 
 SHORT_CODE = sys.argv[1].upper()
 
-# 🔑 channel resolution (THIS is the part you asked about)
-if len(sys.argv) >= 3:
-    CHANNEL_ID = int(sys.argv[2])
-else:
-    CHANNEL_ID = ARCHIVE_CHANNEL_ID
+# 🔑 target resolution
+# Always post to your archive channel.
+# If a second channel/thread ID is provided, also post there.
+EXTRA_CHANNEL_ID = None
+
+if len(sys.argv) >= 3 and sys.argv[2].strip():
+    EXTRA_CHANNEL_ID = int(sys.argv[2])
+
+TARGET_CHANNEL_IDS = [ARCHIVE_CHANNEL_ID]
+
+# Avoid posting twice if you accidentally enter the archive channel as the extra ID.
+if EXTRA_CHANNEL_ID and EXTRA_CHANNEL_ID != ARCHIVE_CHANNEL_ID:
+    TARGET_CHANNEL_IDS.append(EXTRA_CHANNEL_ID)
 
 if SHORT_CODE not in NOVEL_META:
     print("Unknown short_code:", SHORT_CODE)
@@ -183,14 +191,111 @@ meta = NOVEL_META[SHORT_CODE]
 intents = discord.Intents.default()
 bot = discord.Client(intents=intents)
 
+
+async def resolve_channel(channel_id: int):
+    """
+    bot.get_channel can fail for some threads if they are not cached.
+    fetch_channel is safer.
+    """
+    channel = bot.get_channel(channel_id)
+    if channel is None:
+        channel = await bot.fetch_channel(channel_id)
+    return channel
+
+
+def build_embed_for_channel(
+    *,
+    title,
+    novel,
+    host,
+    meta,
+    completed,
+    next_free_dt,
+    last_free_dt,
+    target_channel_id,
+):
+    status_lines = []
+
+    status_lines.append("*Completed*" if completed else "*Ongoing*")
+
+    if next_free_dt:
+        unix_ts = int(next_free_dt.timestamp())
+        status_lines.append(f"Next free chapter live **<t:{unix_ts}:R>**")
+
+    elif last_free_dt:
+        unix_ts = int(last_free_dt.timestamp())
+        abs_time = last_free_dt.strftime("%A, %d %B %Y")
+        status_lines.append(
+            f"Last free chapter live **<t:{unix_ts}:R>** ({abs_time})"
+        )
+
+    else:
+        status_lines.append("_No free chapter timing available_")
+
+    # get color from mappings
+    color_hex = novel.get("discord_color", "#ffffff")
+
+    embed = Embed(
+        title=f"<a:4751fluffybunnii:1368138331652755537><:pastelsparkles:1365569995794288680> **{title}**",
+        color=int(color_hex.lstrip("#"), 16),
+    )
+
+    # Only show Role field in your archive channel.
+    # This keeps formatting based on WHERE the message is posted.
+    if target_channel_id == ARCHIVE_CHANNEL_ID:
+        role = novel.get("discord_role_id")
+        if role:
+            embed.add_field(
+                name=f"<:pastelflower:1365570061443530804> Role <:pastelflower:1365570061443530804>",
+                value=role,
+                inline=True,
+            )
+
+    embed.add_field(
+        name=f"<:pastelflower:1365570061443530804> Status <:pastelflower:1365570061443530804>",
+        value="\n".join(status_lines),
+        inline=False,
+    )
+
+    links = []
+
+    # Host link
+    host_url = novel.get("novel_url")
+    if host_url:
+        links.append(f"[{host}]({host_url})")
+
+    # NovelUpdates link
+    nu_feed = novel.get("novelupdates_feed_url")
+    if nu_feed:
+        nu = nu_feed.rstrip("/").replace("/feed", "")
+        links.append(f"[NU]({nu})")
+
+    # Forum post
+    forum_post_id = meta.get("forum_post_id")
+    if forum_post_id:
+        forum = f"https://discord.com/channels/1379303379221614702/{forum_post_id}"
+        links.append(f"[Forum Post]({forum})")
+
+    if links:
+        embed.add_field(
+            name=f"<:pastelflower:1365570061443530804> Links <:pastelflower:1365570061443530804>",
+            value=" • ".join(links),
+            inline=False,
+        )
+
+    embed.set_thumbnail(url=novel.get("featured_image"))
+
+    return embed
+
+
 @bot.event
 async def on_ready():
     state = load_state()
-    channel = bot.get_channel(CHANNEL_ID)
 
     for host, hostdata in HOSTING_SITE_DATA.items():
         for title, novel in hostdata["novels"].items():
             print("Checking:", novel.get("short_code"))
+
             if novel.get("short_code", "").upper() != SHORT_CODE:
                 continue
 
@@ -198,101 +303,48 @@ async def on_ready():
             chapters = flatten_chapters(api)
 
             completed, next_free_dt, last_free_dt = compute_status(
-                chapters, novel.get("last_chapter")
+                chapters,
+                novel.get("last_chapter"),
             )
 
-            status_lines = []
+            state.setdefault(SHORT_CODE, [])
 
-            status_lines.append("*Completed*" if completed else "*Ongoing*")
+            for target_channel_id in TARGET_CHANNEL_IDS:
+                try:
+                    channel = await resolve_channel(target_channel_id)
 
-            if next_free_dt:
-                unix_ts = int(next_free_dt.timestamp())
-                status_lines.append(f"Next free chapter live **<t:{unix_ts}:R>**")
-            
-            elif last_free_dt:
-                unix_ts = int(last_free_dt.timestamp())
-                abs_time = last_free_dt.strftime("%A, %d %B %Y")
-                status_lines.append(
-                    f"Last free chapter live **<t:{unix_ts}:R>** ({abs_time})"
-                )
-            
-            else:
-                status_lines.append("_No free chapter timing available_")
-
-            # get color from mappings (fallback to old meta color if missing)
-            color_hex = novel.get("discord_color", "#ffffff")
-            
-            embed = Embed(
-                title=f"<a:4751fluffybunnii:1368138331652755537><:pastelsparkles:1365569995794288680> **{title}**",
-                color=int(color_hex.lstrip("#"), 16)
-            )
-
-            # Only show Role field in the archive channel
-            if channel.id == ARCHIVE_CHANNEL_ID:
-                role = novel.get("discord_role_id")
-                if role:
-                    embed.add_field(
-                        name=f"<:pastelflower:1365570061443530804> Role <:pastelflower:1365570061443530804>",
-                        value=role,
-                        inline=True
+                    embed = build_embed_for_channel(
+                        title=title,
+                        novel=novel,
+                        host=host,
+                        meta=meta,
+                        completed=completed,
+                        next_free_dt=next_free_dt,
+                        last_free_dt=last_free_dt,
+                        target_channel_id=int(channel.id),
                     )
 
-            embed.add_field(
-                name=f"<:pastelflower:1365570061443530804> Status <:pastelflower:1365570061443530804>",
-                value="\n".join(status_lines),
-                inline=False
-            )
-            
-            links = []
-            
-            # Host link (usually always present, but still safe)
-            host_url = novel.get("novel_url")
-            if host_url:
-                links.append(f"[{host}]({host_url})")
-            
-            # NovelUpdates link (optional)
-            nu_feed = novel.get("novelupdates_feed_url")
-            if nu_feed:
-                nu = nu_feed.rstrip("/").replace("/feed", "")
-                links.append(f"[NU]({nu})")
-            
-            # Forum post (optional)
-            forum_post_id = meta.get("forum_post_id")
-            if forum_post_id:
-                forum = f"https://discord.com/channels/1379303379221614702/{forum_post_id}"
-                links.append(f"[Forum Post]({forum})")
-            
-            # Only add the field if at least one link exists
-            if links:
-                embed.add_field(
-                    name=f"<:pastelflower:1365570061443530804> Links <:pastelflower:1365570061443530804>",
-                    value=" • ".join(links),
-                    inline=False
-                )
+                    msg = await channel.send(embed=embed)
 
-            embed.set_thumbnail(url=novel.get("featured_image"))
+                    entry = {
+                        "channel_id": str(channel.id),
+                        "message_id": str(msg.id),
+                    }
 
-            msg = await channel.send(embed=embed)
-            channel_id = str(channel.id)
-            message_id = str(msg.id)
-            
-            state.setdefault(SHORT_CODE, [])
-            
-            # avoid duplicates if script is re-run
-            entry = {
-                "channel_id": channel_id,
-                "message_id": message_id,
-            }
-            
-            if entry not in state[SHORT_CODE]:
-                state[SHORT_CODE].append(entry)
-                save_state(state)
+                    if entry not in state[SHORT_CODE]:
+                        state[SHORT_CODE].append(entry)
+                        save_state(state)
 
-            print("Posted novel card for", SHORT_CODE)
+                    print(f"Posted novel card for {SHORT_CODE} to {channel.id}")
+
+                except Exception as e:
+                    print(f"Failed to post novel card for {SHORT_CODE} to {target_channel_id}: {e}")
+
             await bot.close()
             return
 
     print("Novel not found in mappings.")
     await bot.close()
+
 
 bot.run(TOKEN)
