@@ -1,3 +1,4 @@
+```yaml
 name: Publish Single Novel Embed
 
 on:
@@ -6,6 +7,10 @@ on:
       short_code:
         description: "Novel short code (e.g. TVITPA, TDLBKGC, ATVHE)"
         required: true
+        type: string
+      channel_id:
+        description: "Extra Discord channel/thread ID to post into (optional)"
+        required: false
         type: string
 
 permissions:
@@ -32,20 +37,30 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install \
-            discord.py>=2.3 \
-            requests>=2.31 \
+            "discord.py>=2.3" \
+            "requests>=2.31" \
             python-dateutil
 
       - name: Resolve arguments
         run: |
           echo "SHORT_CODE=${{ github.event.inputs.short_code }}" >> $GITHUB_ENV
-          echo "📍 Using archive channel + NOVEL_META forum thread"
+
+          if [ -n "${{ github.event.inputs.channel_id }}" ]; then
+            echo "CHANNEL_ID=${{ github.event.inputs.channel_id }}" >> $GITHUB_ENV
+            echo "📍 Posting to archive channel + extra target: ${{ github.event.inputs.channel_id }}"
+          else
+            echo "📍 Posting to archive channel only"
+          fi
 
       - name: Run publish script
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         run: |
-          python tools/publish_single_novel.py "$SHORT_CODE"
+          if [ -n "$CHANNEL_ID" ]; then
+            python tools/publish_single_novel.py "$SHORT_CODE" "$CHANNEL_ID"
+          else
+            python tools/publish_single_novel.py "$SHORT_CODE"
+          fi
 
       - name: Commit updated novel_status_targets.json
         run: |
@@ -59,3 +74,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git commit -m "ci: register novel embed target for $SHORT_CODE"
           git push
+```
