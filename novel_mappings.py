@@ -273,9 +273,4 @@ def get_nsfw_novels():
     return [
         # e.g. "Some NSFW Novel Title"
     ]
-
-def get_membership_novels():
-    """Returns the list of novels currently available for membership."""
-    return [
-        "Entering the Cage",
-    ]
+  
