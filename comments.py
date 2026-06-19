@@ -291,31 +291,56 @@ def main():
                 msg = str(e)
                 print(f"[ERROR] {host} loader failed: {msg}")
             
-                # 🚨 send alert if auth issue
+                # 🚨 send alert if auth issue, but only once per current cookie/token value
                 if "AUTH_ERROR" in msg:
                     try:
                         repo = os.getenv("GITHUB_REPOSITORY", "")
-                        token = os.getenv("PAT_GITHUB") or os.getenv("GITHUB_TOKEN")
-            
-                        if repo and token:
+                        github_token = os.getenv("PAT_GITHUB") or os.getenv("GITHUB_TOKEN")
+
+                        token_secret = data.get("token_secret", "SECRET")
+                        site_token = os.getenv(token_secret, "").strip()
+
+                        # Make a safe fingerprint of the cookie/token.
+                        # This lets us alert once per bad cookie without storing the real cookie.
+                        if site_token:
+                            token_fingerprint = hashlib.sha1(site_token.encode("utf-8")).hexdigest()[:12]
+                        else:
+                            token_fingerprint = "missing"
+
+                        state = _load_alert_state()
+                        key = f"{host}:{token_secret}:auth_error:{token_fingerprint}"
+
+                        if state.get(key):
+                            print(f"[alert] token-invalid already sent for this {host} cookie; skipping")
+                        elif repo and github_token:
                             url = f"https://api.github.com/repos/{repo}/dispatches"
                             headers = {
                                 "Accept": "application/vnd.github+json",
-                                "Authorization": f"Bearer {token}",
+                                "Authorization": f"Bearer {github_token}",
                                 "X-GitHub-Api-Version": "2022-11-28",
                             }
-            
+
+                            exp = _jwt_expiry_unix(site_token) if site_token else None
+
                             payload = {
                                 "event_type": "token-invalid",
                                 "client_payload": {
                                     "host": host,
+                                    "token_secret_name": token_secret,
                                     "error": msg,
+                                    "exp": exp or 0,
+                                    "secs_left": (exp - int(time.time())) if exp else 0,
                                 },
                             }
-            
-                            requests.post(url, headers=headers, json=payload, timeout=15)
-                            print(f"[alert] dispatched token-invalid → {host}")
-            
+
+                            r = requests.post(url, headers=headers, json=payload, timeout=15)
+                            r.raise_for_status()
+
+                            state[key] = int(time.time())
+                            _save_alert_state(state)
+
+                            print(f"[alert] dispatched token-invalid once → {host}")
+
                     except Exception as dispatch_err:
                         print(f"[warn] failed to dispatch alert: {dispatch_err}")
             
