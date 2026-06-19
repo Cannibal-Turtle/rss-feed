@@ -189,7 +189,7 @@ def build_membership_payload(*, host, novel_title, novel, banner_url, channel_id
                         "components": [
                             {
                                 "type": 10,
-                                "content": "<:mascot_mistmint:1517514042930106559> *Become a member?*",
+                                "content": "*Become a member?*",
                             }
                         ],
                         "accessory": {
