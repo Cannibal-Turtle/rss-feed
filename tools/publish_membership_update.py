@@ -26,8 +26,6 @@ MY_SERVER_GUILD_ID = "1329384099609051136"
 # Membership role in your server.
 MEMBERSHIP_ROLE_ID = "1329502951764525187"
 
-DEFAULT_BANNER_URL = "https://i.imgur.com/2pkm1Y7.png"
-
 # #c9d3ff
 ACCENT_COLOR = 0xC9D3FF
 
@@ -310,15 +308,17 @@ def mark_novel_as_membership(short_code: str):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python tools/publish_membership_update.py <short_code> [banner_url]")
+        print("Usage: python tools/publish_membership_update.py <short_code> <banner_url>")
         sys.exit(1)
 
     short_code = sys.argv[1].upper().strip()
 
-    if len(sys.argv) >= 3 and sys.argv[2].strip():
-        banner_url = sys.argv[2].strip()
-    else:
-        banner_url = DEFAULT_BANNER_URL
+    if len(sys.argv) < 3 or not sys.argv[2].strip():
+        print("Error: banner_url is required.")
+        print("Usage: python tools/publish_membership_update.py <short_code> <banner_url>")
+        sys.exit(1)
+    
+    banner_url = sys.argv[2].strip()
 
     host, novel_title, novel = find_novel_by_short_code(short_code)
 
