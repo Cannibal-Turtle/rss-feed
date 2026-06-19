@@ -138,7 +138,7 @@ def build_membership_payload(*, host, novel_title, novel, banner_url, channel_id
                 "components": [
                     {
                         "type": 10,
-                        "content": "## <:mistmint_ticket:1517453566632001597> Membership Update <:approvedpurple:1517433828535173231>",
+                        "content": "## <:mistmint_ticket:1517453566632001597> Membership Exclusive <:approvedpurple:1517433828535173231>",
                     },
                     {
                         "type": 14,
