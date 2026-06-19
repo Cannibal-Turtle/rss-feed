@@ -9,9 +9,8 @@ on:
         type: string
       banner_url:
         description: "Membership banner image URL"
-        required: false
+        required: true
         type: string
-        default: "https://i.imgur.com/2pkm1Y7.png"
 
 permissions:
   contents: write
