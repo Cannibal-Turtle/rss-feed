@@ -24,6 +24,7 @@ HOSTING_SITE_DATA = {
         "host_logo": "https://www.mistminthaven.com/images/mascot_mistmint.png",
         "coin_emoji": "<:mistmint_currency:1433046707121422487>",
         "token_secret": "MISTMINT_COOKIE",
+        "thread_id_map_url": "https://raw.githubusercontent.com/Cannibal-Turtle/mistmint-discord/main/thread_id_map.json",
         "novels": {
             "Entering the Cage": {
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/entering-the-cage/feed/",
