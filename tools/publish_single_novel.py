@@ -28,7 +28,10 @@ NOVEL_META = {
     "ATVHE":  {"forum_post_id": "1462019944823656608"},
     "WSMSC":  {"forum_post_id": "1469896904761544845"},
     "HIAFLG": {"forum_post_id": "1471742754261438620"},
-    "EC": {"forum_post_id": "1488217762231877743"},    # in the case of non-existing thread put ex. "BE": {"forum_post_id": "N/A"}
+    "EC": {"forum_post_id": "1488217762231877743"},
+    
+    # In the case of a non-existing thread, use:
+    # "BOE": {"forum_post_id": "N/A"},
 }
 
 # ---------------- utils ----------------
