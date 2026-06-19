@@ -2,7 +2,6 @@
 import os
 import sys
 import re
-import ast
 import requests
 from pathlib import Path
 
@@ -30,7 +29,6 @@ MEMBERSHIP_ROLE_ID = "1329502951764525187"
 ACCENT_COLOR = 0xC9D3FF
 
 MAPPINGS_FILE = ROOT / "novel_mappings.py"
-PUBLISH_SINGLE_NOVEL_FILE = ROOT / "tools" / "publish_single_novel.py"
 
 
 def discord_headers():
@@ -40,23 +38,50 @@ def discord_headers():
     }
 
 
-def load_novel_meta_from_publish_single():
+_THREAD_ID_MAP_CACHE = {}
+
+def fetch_thread_id_map(hostdata):
     """
-    Do NOT import tools.publish_single_novel directly.
+    Fetches the host's thread_id_map_url from novel_mappings.py.
 
-    That file has top-level bot-running code, so importing it can accidentally
-    start/exit the script. This safely reads only the NOVEL_META assignment.
+    Expected JSON format:
+    {
+      "TVITPA": "1444214902322368675",
+      "TDLBKGC": "1438462596381413417",
+      "BOE": "N/A"
+    }
     """
-    source = PUBLISH_SINGLE_NOVEL_FILE.read_text(encoding="utf-8")
-    tree = ast.parse(source)
+    url = (hostdata.get("thread_id_map_url") or "").strip()
 
-    for node in tree.body:
-        if isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name) and target.id == "NOVEL_META":
-                    return ast.literal_eval(node.value)
+    if not url:
+        return {}
 
-    raise RuntimeError("Could not find NOVEL_META in tools/publish_single_novel.py")
+    if url in _THREAD_ID_MAP_CACHE:
+        return _THREAD_ID_MAP_CACHE[url]
+
+    r = requests.get(url, timeout=15)
+    r.raise_for_status()
+    data = r.json()
+
+    if not isinstance(data, dict):
+        raise RuntimeError(f"thread_id_map_url did not return a JSON object: {url}")
+
+    normalized = {
+        str(k).upper(): str(v).strip()
+        for k, v in data.items()
+        if str(v).strip()
+    }
+
+    _THREAD_ID_MAP_CACHE[url] = normalized
+    return normalized
+
+
+def resolve_forum_thread_id(hostdata, short_code):
+    """
+    Gets the forum/thread ID for this novel from the host's thread_id_map_url.
+    """
+    thread_map = fetch_thread_id_map(hostdata)
+    return thread_map.get(short_code.upper())
 
 
 def find_novel_by_short_code(short_code: str):
@@ -65,9 +90,9 @@ def find_novel_by_short_code(short_code: str):
     for host, hostdata in HOSTING_SITE_DATA.items():
         for novel_title, novel in hostdata.get("novels", {}).items():
             if novel.get("short_code", "").upper() == short_code:
-                return host, novel_title, novel
+                return host, hostdata, novel_title, novel
 
-    return None, None, None
+    return None, None, None, None
 
 
 def fetch_channel(channel_id: int):
@@ -290,28 +315,26 @@ def main():
 
     banner_url = sys.argv[2].strip()
 
-    host, novel_title, novel = find_novel_by_short_code(short_code)
+    host, hostdata, novel_title, novel = find_novel_by_short_code(short_code)
 
     if not novel:
         print(f"Unknown short_code: {short_code}")
         sys.exit(1)
 
-    novel_meta = load_novel_meta_from_publish_single()
-    
-    if short_code not in novel_meta:
-        print(f"ERROR: {short_code} is missing from NOVEL_META in tools/publish_single_novel.py.")
-        print('Add it with a forum_post_id, or use {"forum_post_id": "N/A"} if it has no thread.')
-        sys.exit(1)
-    
-    meta = novel_meta[short_code]
-    
     targets = [NEWS_CHANNEL_ID]
     
-    thread_id = str(meta.get("forum_post_id", "")).strip()
+    thread_id = resolve_forum_thread_id(hostdata, short_code)
+    
+    if thread_id is None:
+        print(f"ERROR: {short_code} is missing from {host}'s thread_id_map_url.")
+        print('Add it to that host repo thread_id_map.json, or use "N/A" if it has no thread.')
+        sys.exit(1)
+    
+    thread_id = str(thread_id).strip()
     
     if not thread_id:
-        print(f"ERROR: {short_code} has empty forum_post_id in NOVEL_META.")
-        print('Use {"forum_post_id": "N/A"} if this novel should only post to your private/news server.')
+        print(f"ERROR: {short_code} has an empty thread ID in {host}'s thread_id_map_url.")
+        print('Use "N/A" if this novel should only post to your private/news server.')
         sys.exit(1)
     
     if thread_id.upper() == "N/A":
