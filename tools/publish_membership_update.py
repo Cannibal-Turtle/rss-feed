@@ -103,7 +103,6 @@ def build_global_mention(*, novel, channel_id, guild_id):
 
     if int(channel_id) == NEWS_CHANNEL_ID or str(guild_id) == MY_SERVER_GUILD_ID:
         mention = f"{novel_role} | <@&{MEMBERSHIP_ROLE_ID}>"
-
         role_ids = role_ids_from_text(mention)
 
         return mention, {
@@ -228,96 +227,67 @@ def post_message(channel_id: int, payload: dict):
     return r.json()
 
 
-def ensure_membership_helpers_exist(text: str):
+def ensure_membership_helper_exists(text: str):
     changed = False
 
-    if "MEMBERSHIP_NOVEL_SHORT_CODES" not in text:
+    if "def get_membership_novels()" not in text:
         text = text.rstrip() + '''
 
-# ---------------- Membership Helpers ----------------
-
-MEMBERSHIP_NOVEL_SHORT_CODES = [
-]
-
-def get_membership_novel_short_codes():
-    """Returns short codes for novels currently available for membership."""
-    return [code.upper() for code in MEMBERSHIP_NOVEL_SHORT_CODES]
-
 def get_membership_novels():
-    """
-    Returns membership novels grouped by host.
-
-    Example:
-    {
-        "Mistmint Haven": {
-            "Novel Title": {...novel details...}
-        }
-    }
-    """
-    membership_codes = set(get_membership_novel_short_codes())
-    out = {}
-
-    for host, hostdata in HOSTING_SITE_DATA.items():
-        for title, novel in hostdata.get("novels", {}).items():
-            if novel.get("short_code", "").upper() in membership_codes:
-                out.setdefault(host, {})[title] = novel
-
-    return out
+    """Returns the list of novels currently available for membership."""
+    return [
+    ]
 '''
         changed = True
 
     return text, changed
 
 
-def mark_novel_as_membership(short_code: str):
-    short_code = short_code.upper().strip()
-
+def mark_novel_as_membership(novel_title: str):
     text = MAPPINGS_FILE.read_text(encoding="utf-8")
-    text, changed = ensure_membership_helpers_exist(text)
+    text, changed = ensure_membership_helper_exists(text)
 
     pattern = re.compile(
-        r"MEMBERSHIP_NOVEL_SHORT_CODES\s*=\s*\[(.*?)\]",
+        r"(def get_membership_novels\(\):.*?return\s*\[)(.*?)(\n\s*\])",
         re.DOTALL,
     )
 
     match = pattern.search(text)
     if not match:
-        raise RuntimeError("Could not find MEMBERSHIP_NOVEL_SHORT_CODES in novel_mappings.py")
+        raise RuntimeError("Could not find get_membership_novels() in novel_mappings.py")
 
-    body = match.group(1)
-    existing_codes = re.findall(r'["\']([^"\']+)["\']', body)
-    existing_codes = [code.upper() for code in existing_codes]
+    existing_titles = re.findall(r'["\']([^"\']+)["\']', match.group(2))
 
-    if short_code not in existing_codes:
-        existing_codes.append(short_code)
+    if novel_title not in existing_titles:
+        existing_titles.append(novel_title)
         changed = True
 
-    new_block = "MEMBERSHIP_NOVEL_SHORT_CODES = [\n"
-    for code in existing_codes:
-        new_block += f'    "{code}",\n'
-    new_block += "]"
+    new_body = ""
+    for title in existing_titles:
+        safe_title = title.replace("\\", "\\\\").replace('"', '\\"')
+        new_body += f'\n        "{safe_title}",'
 
-    text = text[:match.start()] + new_block + text[match.end():]
+    text = text[:match.start(2)] + new_body + text[match.end(2):]
 
     if changed:
         MAPPINGS_FILE.write_text(text.rstrip() + "\n", encoding="utf-8")
-        print(f"Marked {short_code} as membership in novel_mappings.py")
+        print(f"Marked {novel_title} as membership in novel_mappings.py")
     else:
-        print(f"{short_code} is already marked as membership in novel_mappings.py")
+        print(f"{novel_title} is already marked as membership in novel_mappings.py")
 
 
 def main():
-    if len(sys.argv) < 2:
+    if len(sys.argv) < 3:
         print("Usage: python tools/publish_membership_update.py <short_code> <banner_url>")
         sys.exit(1)
 
     short_code = sys.argv[1].upper().strip()
 
-    if len(sys.argv) < 3 or not sys.argv[2].strip():
+    if not sys.argv[2].strip():
         print("Error: banner_url is required.")
         print("Usage: python tools/publish_membership_update.py <short_code> <banner_url>")
         sys.exit(1)
-    
+
     banner_url = sys.argv[2].strip()
 
     host, novel_title, novel = find_novel_by_short_code(short_code)
@@ -355,7 +325,7 @@ def main():
         msg = post_message(channel_id, payload)
         print(f"Posted membership update to {channel_id}: message {msg.get('id')}")
 
-    mark_novel_as_membership(short_code)
+    mark_novel_as_membership(novel_title)
 
 
 if __name__ == "__main__":
