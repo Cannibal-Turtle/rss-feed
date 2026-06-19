@@ -264,12 +264,12 @@ def get_featured_image(novel_title, host):
     details = get_novel_details(host, novel_title)
     return details.get("featured_image", "")
 
+def get_coin_emoji(host):
+    """Emoji string used in <coin> for paid feed."""
+    return HOSTING_SITE_DATA.get(host, {}).get("coin_emoji", "")
+
 def get_nsfw_novels():
     """Returns the list of NSFW novel titles."""
     return [
         # e.g. "Some NSFW Novel Title"
     ]
-
-def get_coin_emoji(host):
-    """Emoji string used in <coin> for paid feed."""
-    return HOSTING_SITE_DATA.get(host, {}).get("coin_emoji", "")
