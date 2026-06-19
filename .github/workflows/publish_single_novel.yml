@@ -7,10 +7,6 @@ on:
         description: "Novel short code (e.g. TVITPA, TDLBKGC, ATVHE)"
         required: true
         type: string
-      channel_id:
-        description: "Discord channel ID to post into (optional)"
-        required: false
-        type: string
 
 permissions:
   contents: write
@@ -36,39 +32,31 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install \
-            discord.py>=2.3 \
-            requests>=2.31 \
-            python-dateutil
+            "discord.py>=2.3" \
+            "requests>=2.31" \
+            "python-dateutil"
 
       - name: Resolve arguments
         run: |
           echo "SHORT_CODE=${{ github.event.inputs.short_code }}" >> $GITHUB_ENV
-
-          if [ -n "${{ github.event.inputs.channel_id }}" ]; then
-            echo "CHANNEL_ID=${{ github.event.inputs.channel_id }}" >> $GITHUB_ENV
-            echo "📍 Posting to explicit channel: ${{ github.event.inputs.channel_id }}"
-          else
-            echo "📍 Using archive channel fallback (handled in script)"
-          fi
+          echo "📍 Using archive channel + NOVEL_META forum thread"
 
       - name: Run publish script
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         run: |
-          if [ -n "$CHANNEL_ID" ]; then
-            python tools/publish_single_novel.py "$SHORT_CODE" "$CHANNEL_ID"
-          else
-            python tools/publish_single_novel.py "$SHORT_CODE"
-          fi
+          python tools/publish_single_novel.py "$SHORT_CODE"
 
       - name: Commit updated novel_status_targets.json
         run: |
           git pull --rebase --autostash
           git add novel_status_targets.json
+
           if git diff --cached --quiet; then
             echo "No state changes to commit."
             exit 0
           fi
+
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git commit -m "ci: register novel embed target for $SHORT_CODE"
