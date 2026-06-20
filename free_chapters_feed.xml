@@ -4,7 +4,7 @@
     <title>Aggregated Free Chapters Feed</title>
     <link>https://github.com/cannibal-turtle/</link>
     <description>Aggregated RSS feed for free chapters across all hosting sites.</description>
-    <lastBuildDate>Sat, 20 Jun 2026 11:22:16 +0000</lastBuildDate>
+    <lastBuildDate>Sat, 20 Jun 2026 17:55:48 +0000</lastBuildDate>
     <docs>http://blogs.law.harvard.edu/tech/rss</docs>
     <generator>PyRSS2Gen-1.1.0</generator>
     <item>
@@ -57,7 +57,7 @@ Guide:
 3. Sliced soul. 1v1 ending.]]></description>
       <category>SFW</category>
       <translator>CannibalTurtle</translator>
-      <discord_role_id><![CDATA[<@&1517842780003635240>]]></discord_role_id>
+      <short_code>AMLWC</short_code>
       <featuredImage url="https://i.imgur.com/EBt5zTK.jpeg"/>
       <pubDate>Sat, 20 Jun 2026 10:21:23 +0000</pubDate>
       <host>Mistmint Haven</host>
@@ -85,7 +85,7 @@ Damn dog:
 ^_^]]></description>
       <category>SFW</category>
       <translator>CannibalTurtle</translator>
-      <discord_role_id><![CDATA[<@&1471460385348386847>]]></discord_role_id>
+      <short_code>HIAFLG</short_code>
       <featuredImage url="https://i.imgur.com/7LRK6Uw.png"/>
       <pubDate>Sat, 20 Jun 2026 05:00:00 +0000</pubDate>
       <host>Mistmint Haven</host>
@@ -111,7 +111,7 @@ Holding him in his arms, kissing him while coaxing him, his voice trembling with
 Netizens: redefining ‘hate to the extreme’. Fu Hanchuan! You brat, keep your hands off my bunny baby!]]></description>
       <category>SFW</category>
       <translator>CannibalTurtle</translator>
-      <discord_role_id><![CDATA[<@&1462773952144478334>]]></discord_role_id>
+      <short_code>WSMSC</short_code>
       <featuredImage url="https://i.imgur.com/zea8LXV.png"/>
       <pubDate>Sat, 20 Jun 2026 05:00:00 +0000</pubDate>
       <host>Mistmint Haven</host>
@@ -133,7 +133,7 @@ The zombie king of the apocalypse with an unwavering gaze: “Nuan Nuan, it’s 
 Sheng Nuan became even more panicked…]]></description>
       <category>SFW</category>
       <translator>CannibalTurtle</translator>
-      <discord_role_id><![CDATA[<@&1329391480435114005>]]></discord_role_id>
+      <short_code>TVITPA</short_code>
       <featuredImage url="https://i.imgur.com/5sxtfVf.jpeg"/>
       <pubDate>Sat, 20 Jun 2026 05:00:00 +0000</pubDate>
       <host>Mistmint Haven</host>
