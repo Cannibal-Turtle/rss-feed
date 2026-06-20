@@ -26,6 +26,75 @@ HOSTING_SITE_DATA = {
         "token_secret": "MISTMINT_COOKIE",
         "thread_id_map_url": "https://raw.githubusercontent.com/Cannibal-Turtle/mistmint-discord/main/thread_id_map.json",
         "novels": {
+            "After the Male Leads Went Crazy, They All Turned into Male Ghosts": {
+                "novelupdates_feed_url": "",
+                "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts/chapters",
+                "discord_role_id": "<@&1517842780003635240>",
+                "discord_color": "#c90016",
+                "novel_url": "https://www.mistminthaven.com/novels/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts",
+                "featured_image": "https://i.imgur.com/EBt5zTK.jpeg",
+                "novel_id": "4221504f-49cd-4c8b-9c98-89e8b67705df",
+                "short_code": "amlwc",
+
+                # ─── webhook-only fields ───
+                "chapter_count": "92 Chapters",
+                "last_chapter": "Chapter 92",
+                "start_date": "20/6/2026",
+                "free_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml",
+                "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
+                "comments_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml",
+                "custom_emoji": "<:ghostcat:1517845090779791490>",
+                "extra_ping_roles": "<@&1329500516304158901> <@&1329428642094256181> <@&1329427832077684736> <@&1330469306936328286> <@&1330469077784727562>",
+                "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
+                "history_file": "arc_history/amlwc_history.json",
+                "custom_description": """Shao Lang was once again hard at work being villainous, ready to “die” ten thousand deaths for the job without complaint.
+But lately, things had gotten kind of haunted.
+
+【The Charming Landlord Is Too Hard to Handle】
+Shao Lang’s landlord killed him, then fell into an abusive love-hate romance with the classmate who witnessed the scene.
+That was how it was supposed to go, but instead, the landlord “let him off.”
+Not only did the landlord not kill him, he also catered to his every request. If Shao Lang went even one day without asking the landlord for something, he would start having unspeakable dreams.
+Out of options, Shao Lang fled with his classmate into the deep mountains and old forests, only for his new landlord to still have that same gentle, warm-eyed face.
+And that wasn’t all. Strange things started happening in the village too…
+“The village hasn’t been peaceful lately,” the landlord informed him gently, while the twisted shadows of the trees behind him danced in silence. “Don’t be afraid. I’ll protect you.”
+The plot really was starting to go off the rails.
+Shao Lang braced himself: Don’t go crazy here.
+
+【The CEO Is Acting Up Again】
+Shao Lang was starting to feel afraid of dying, so he switched to a melodramatic mission instead.
+First, he had to become lovers with an amnesiac man he had picked up and carefully taken care of for a year. Then, he had to watch as the man, now revealed to be the heir of a financial conglomerate, got engaged to someone else.
+The man regained his memories, but forgot only him. He even wanted to draw a clear line between them and throw money in his face.
+Following the script, Shao Lang fake-cried for two days. From then on, he became the fuse that ignited the physical and emotional torment between the man and his fiancée, and prepared to happily clock out.
+But the man he hadn’t seen in more than half a year suddenly blocked his door, as if he had developed some unspeakable addiction. Instinct tortured his body, ravaged his mind, and extinguished his reason. Pleasure and pain split him into two halves; without the slightest mercy, his heart and body itched and ached as if ants were crawling over him.
+“You must have done something to me while I had amnesia!” the man gritted out, holding himself back, furious and unbearably restless. “My body… remembers you.”
+Shao Lang: How did it turn out like this?
+Can’t you just drink some herbal medicine and regulate yourself?
+
+【The Young Master Keeps Asking for a Scolding】
+Shao Lang had gotten smarter.
+The pay was a bit lower, but at least he could actually keep the money.
+This time, all he had to do was wait for the real young master, the crown prince swapped for a civet cat, to show up and kick him out.
+He viciously insulted the real young master, never expecting that the real young master wouldn’t get angry at all. The more he scolded him, the happier he got. The more he cursed him, the more excited he became.
+“Scold me more,” the young master pleaded earnestly.
+Shao Lang broke down.
+Why were all the male leads he met going crazy!?
+Never mind whether they were crazy or not—they weren’t even human!!
+People can’t, or at least shouldn’t, act like dogs.
+Nonhumans can’t either.
+
+—TL;DR version:
+A charming landlord clings and won’t let go, an aloof tyrant CEO loses it on the spot, a young master from a prestigious family becomes addicted to being cursed out—why are they all rushing to turn into dogs?
+Attracting perverts makes him unlucky; falling into traps is his fate.
+He runs, they chase, and even with wings, he can’t escape.
+The male leads go crazy and stop acting human; in the mission worlds, ghosts come knocking.
+Shao Lang, licked until he was soaking wet: …Well, damn, that really is seeing ghosts!!
+The tasks he signed up for clearly weren’t supposed to have ghosts!
+
+Guide:
+1. My own flavor of kink. I like self-sacrificing, big-chested nonhumans. I love plots where some fierce, tsundere kitty gets forcibly snatched by a scheming McDonald’s type and kissed until he meows. If that’s your thing, please enjoy.
+2. Contains supernatural elements. The protagonist has mild heartthrob energy, and because the others aren’t human, later on they’ll all get dragged into supernatural-horror set pieces. But since the author writes supernatural stuff at toddler-cartoon difficulty, everything only serves the nonhuman premise.
+3. Sliced soul. 1v1 ending."""
+            },
             "Entering the Cage": {
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/entering-the-cage/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/entering-the-cage/chapters",
