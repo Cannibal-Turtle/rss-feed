@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup
 import hashlib
 import requests
 
-from novel_mappings import HOSTING_SITE_DATA
+from novel_mappings import HOSTING_SITE_DATA, get_novel_short_code
 from host_utils import get_host_utils
 
 # --- token expiry → repository_dispatch (no Discord creds here) ---
@@ -171,10 +171,13 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
         # Get other metadata using host-specific functions.
         translator = utils.get("get_host_translator", lambda host: "")(self.host)
         writer.write(indent + "    <translator>%s</translator>" % escape(translator) + newl)
-        discord_role = utils["get_novel_discord_role"](self.host, self.novel_title)
-        writer.write(indent + "    <discord_role_id><![CDATA[%s]]></discord_role_id>" % discord_role + newl)
+        
+        short_code = get_novel_short_code(self.novel_title, self.host)
+        writer.write(indent + "    <short_code>%s</short_code>" % escape(short_code) + newl)
+        
         featured_image = utils["get_featured_image"](self.host, self.novel_title)
         writer.write(indent + '    <featuredImage url="%s"/>' % escape(featured_image) + newl)
+
         writer.write(indent + "    <host>%s</host>" % escape(self.host) + newl)
         host_logo = utils.get("get_host_logo", lambda host: "")(self.host)
         writer.write(indent + '    <hostLogo url="%s"/>' % escape(host_logo) + newl)
