@@ -46,6 +46,46 @@ def fetch_api(url, cookie_env):
 
 _THREAD_ID_MAP_CACHE = {}
 
+_NOVEL_ROLE_ID_MAP_CACHE = {}
+
+def normalize_role_id(value):
+    m = re.search(r"\d{5,}", str(value or ""))
+    return m.group(0) if m else ""
+
+def fetch_novel_role_id_map(hostdata):
+    """
+    Fetches short_code -> novel role ID from hostdata["novel_role_id_map_url"].
+    Values may be raw IDs or <@&...>; this normalizes to raw IDs.
+    """
+    url = (hostdata.get("novel_role_id_map_url") or "").strip()
+
+    if not url:
+        return {}
+
+    if url in _NOVEL_ROLE_ID_MAP_CACHE:
+        return _NOVEL_ROLE_ID_MAP_CACHE[url]
+
+    r = requests.get(url, timeout=15)
+    r.raise_for_status()
+    data = r.json()
+
+    if not isinstance(data, dict):
+        raise RuntimeError(f"novel_role_id_map_url did not return a JSON object: {url}")
+
+    normalized = {
+        str(k).upper(): normalize_role_id(v)
+        for k, v in data.items()
+        if normalize_role_id(v)
+    }
+
+    _NOVEL_ROLE_ID_MAP_CACHE[url] = normalized
+    return normalized
+
+def resolve_novel_role_mention(hostdata, short_code):
+    role_map = fetch_novel_role_id_map(hostdata)
+    role_id = role_map.get(short_code.upper())
+    return f"<@&{role_id}>" if role_id else ""
+    
 def fetch_thread_id_map(hostdata):
     """
     Fetches the host's thread_id_map_url from novel_mappings.py.
@@ -267,6 +307,7 @@ def build_embed_for_channel(
     last_free_dt,
     target_channel_id,
     forum_post_url,
+    novel_role_mention,
 ):
     status_lines = []
 
@@ -296,14 +337,12 @@ def build_embed_for_channel(
 
     # Only show Role field in your archive channel.
     # This keeps formatting based on WHERE the message is posted.
-    if target_channel_id == ARCHIVE_CHANNEL_ID:
-        role = novel.get("discord_role_id")
-        if role:
-            embed.add_field(
-                name=f"<:pastelflower:1365570061443530804> Role <:pastelflower:1365570061443530804>",
-                value=role,
-                inline=True,
-            )
+    if target_channel_id == ARCHIVE_CHANNEL_ID and novel_role_mention:
+        embed.add_field(
+            name=f"<:pastelflower:1365570061443530804> Role <:pastelflower:1365570061443530804>",
+            value=novel_role_mention,
+            inline=True,
+        )
 
     embed.add_field(
         name=f"<:pastelflower:1365570061443530804> Status <:pastelflower:1365570061443530804>",
@@ -367,6 +406,8 @@ async def on_ready():
 
             forum_post_url = await build_forum_post_url(forum_post_id)
 
+            novel_role_mention = resolve_novel_role_mention(hostdata, SHORT_CODE)
+
             # Always post to archive.
             # Only post to another channel/thread if you pass it as the second argument.
             # The mapped forum_post_id is ONLY used for the Forum Post link, not as a posting target.
@@ -393,6 +434,7 @@ async def on_ready():
                         last_free_dt=last_free_dt,
                         target_channel_id=int(channel.id),
                         forum_post_url=forum_post_url,
+                        novel_role_mention=novel_role_mention,
                     )
 
                     msg = await channel.send(embed=embed)
