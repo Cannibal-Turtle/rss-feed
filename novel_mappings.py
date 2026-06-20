@@ -25,11 +25,11 @@ HOSTING_SITE_DATA = {
         "coin_emoji": "<:mistmint_currency:1433046707121422487>",
         "token_secret": "MISTMINT_COOKIE",
         "thread_id_map_url": "https://raw.githubusercontent.com/Cannibal-Turtle/mistmint-discord/main/thread_id_map.json",
+        "novel_role_id_map_url": "https://raw.githubusercontent.com/Cannibal-Turtle/mistmint-discord/main/novel_role_id_map.json",
         "novels": {
             "After the Male Leads Went Crazy, They All Turned into Male Ghosts": {
                 "novelupdates_feed_url": "",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts/chapters",
-                "discord_role_id": "<@&1517842780003635240>",
                 "discord_color": "#c90016",
                 "novel_url": "https://www.mistminthaven.com/novels/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts",
                 "featured_image": "https://i.imgur.com/EBt5zTK.jpeg",
@@ -98,7 +98,6 @@ Guide:
             "Entering the Cage": {
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/entering-the-cage/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/entering-the-cage/chapters",
-                "discord_role_id": "<@&1488183093054406716>",
                 "discord_color": "#22aa58",
                 "novel_url": "https://www.mistminthaven.com/novels/entering-the-cage",
                 "featured_image": "https://i.imgur.com/hrscn54.jpeg",
@@ -139,7 +138,6 @@ His voice is cold as ice: “Who gave you the guts to touch him?”"""
             "Help! I Accidentally Flirted with the Lord God, What Do I Do?!": {
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do/chapters",
-                "discord_role_id": "<@&1471460385348386847>",
                 "discord_color": "#daa31a",
                 "novel_url": "https://www.mistminthaven.com/novels/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do",
                 "featured_image": "https://i.imgur.com/7LRK6Uw.png",
@@ -174,7 +172,6 @@ Damn dog:
             "Whose Simping Male Supporting Character Is Being Held and Kissed by the Male Lead?": {
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead/chapters",
-                "discord_role_id": "<@&1462773952144478334>",
                 "discord_color": "#8a95a7",
                 "novel_url": "https://www.mistminthaven.com/novels/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead",
                 "featured_image": "https://i.imgur.com/zea8LXV.png",
@@ -205,7 +202,6 @@ Netizens: redefining ‘hate to the extreme’. Fu Hanchuan! You brat, keep your
             "After Transmigrating into the Villain, I Got a HE with the Female Lead's Older Brother": {
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-leads-older-brother/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother/chapters",
-                "discord_role_id": "<@&1437846306625290260>",
                 "discord_color": "#9c8bb5",
                 "novel_url": "https://www.mistminthaven.com/novels/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother",
                 "featured_image": "https://i.imgur.com/lGogTew.png",
@@ -237,7 +233,6 @@ The one who had been drugged in the room was not the male lead at all. How was i
             "[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught": {
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/chapters",
-                "discord_role_id": "<@&1431675643078250646>",
                 "discord_color": "#90c3f2",
                 "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught",
                 "featured_image": "https://i.imgur.com/vqvVVz9.png",
@@ -268,7 +263,6 @@ It’s 1v1. Sweet, sweet, sweet."""
             "Quick Transmigration: The Villain Is Too Pampered and Alluring": {
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/quick-transmigration-the-villain-is-too-pampered-and-alluring/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/quick-transmigration-the-villain-is-too-pampered-and-alluring/chapters",
-                "discord_role_id": "<@&1329391480435114005>",
                 "discord_color":"#f8d8c9",
                 "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring",
                 "featured_image": "https://i.imgur.com/5sxtfVf.jpeg",
