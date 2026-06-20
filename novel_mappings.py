@@ -34,7 +34,7 @@ HOSTING_SITE_DATA = {
                 "novel_url": "https://www.mistminthaven.com/novels/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts",
                 "featured_image": "https://i.imgur.com/EBt5zTK.jpeg",
                 "novel_id": "4221504f-49cd-4c8b-9c98-89e8b67705df",
-                "short_code": "amlwc",
+                "short_code": "AMLWC",
 
                 # ─── webhook-only fields ───
                 "chapter_count": "92 Chapters",
@@ -102,7 +102,7 @@ Guide:
                 "novel_url": "https://www.mistminthaven.com/novels/entering-the-cage",
                 "featured_image": "https://i.imgur.com/hrscn54.jpeg",
                 "novel_id": "5536923a-4c2b-495c-b0dd-ac7a9b592df6",
-                "short_code": "ec",
+                "short_code": "EC",
 
                 # ─── webhook-only fields ───
                 "chapter_count": "72 chapters + 9 extras",
@@ -142,7 +142,7 @@ His voice is cold as ice: “Who gave you the guts to touch him?”"""
                 "novel_url": "https://www.mistminthaven.com/novels/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do",
                 "featured_image": "https://i.imgur.com/7LRK6Uw.png",
                 "novel_id": "5868afe3-4a39-43ed-ae1c-314a8b3ffebe",
-                "short_code": "hiaflg",
+                "short_code": "HIAFLG",
 
                 # ─── webhook-only fields ───
                 "chapter_count": "503 Chapters",
@@ -176,7 +176,7 @@ Damn dog:
                 "novel_url": "https://www.mistminthaven.com/novels/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead",
                 "featured_image": "https://i.imgur.com/zea8LXV.png",
                 "novel_id": "4ee66cf7-3d4f-4cd1-b958-8a2dac6e167b",
-                "short_code": "wsmsc",
+                "short_code": "WSMSC",
 
                 # ─── webhook-only fields ───
                 "chapter_count": "160 chapters + 3 extras",
@@ -206,7 +206,7 @@ Netizens: redefining ‘hate to the extreme’. Fu Hanchuan! You brat, keep your
                 "novel_url": "https://www.mistminthaven.com/novels/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother",
                 "featured_image": "https://i.imgur.com/lGogTew.png",
                 "novel_id": "8ae77ae4-8871-4ac3-8bc4-2a094f825ea0", #comment homepage for scraping reply chain
-                "short_code": "atvhe",
+                "short_code": "ATVHE",
 
                 # ─── webhook-only fields ───
                 "chapter_count": "130 chapters",
@@ -237,7 +237,7 @@ The one who had been drugged in the room was not the male lead at all. How was i
                 "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught",
                 "featured_image": "https://i.imgur.com/vqvVVz9.png",
                 "novel_id": "8ebd3484-d5b2-422d-a22d-11404bc8481f", #comment homepage for scraping reply chain
-                "short_code": "tdlbkgc",
+                "short_code": "TDLBKGC",
 
                 # ─── webhook-only fields ───
                 "chapter_count": "734 chapters + 3 extras",
@@ -267,7 +267,7 @@ It’s 1v1. Sweet, sweet, sweet."""
                 "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring",
                 "featured_image": "https://i.imgur.com/5sxtfVf.jpeg",
                 "novel_id": "24f3efce-5b52-4dfe-a90e-14bcfb3f56c6", #comment homepage for scraping reply chain
-                "short_code": "tvitpa",
+                "short_code": "TVITPA",
 
                 # ─── webhook-only fields ───
                 "chapter_count": "1184 chapters + 8 extras",
