@@ -38,6 +38,47 @@ def discord_headers():
     }
 
 
+_NOVEL_ROLE_ID_MAP_CACHE = {}
+
+def normalize_role_id(value):
+    m = re.search(r"\d{5,}", str(value or ""))
+    return m.group(0) if m else ""
+
+def fetch_novel_role_id_map(hostdata):
+    """
+    Fetches short_code -> novel role ID from hostdata["novel_role_id_map_url"].
+    Values may be raw IDs or <@&...>; this normalizes to raw IDs.
+    """
+    url = (hostdata.get("novel_role_id_map_url") or "").strip()
+
+    if not url:
+        return {}
+
+    if url in _NOVEL_ROLE_ID_MAP_CACHE:
+        return _NOVEL_ROLE_ID_MAP_CACHE[url]
+
+    r = requests.get(url, timeout=15)
+    r.raise_for_status()
+    data = r.json()
+
+    if not isinstance(data, dict):
+        raise RuntimeError(f"novel_role_id_map_url did not return a JSON object: {url}")
+
+    normalized = {
+        str(k).upper(): normalize_role_id(v)
+        for k, v in data.items()
+        if normalize_role_id(v)
+    }
+
+    _NOVEL_ROLE_ID_MAP_CACHE[url] = normalized
+    return normalized
+
+def resolve_novel_role_mention(hostdata, short_code):
+    role_map = fetch_novel_role_id_map(hostdata)
+    role_id = role_map.get(short_code.upper())
+    return f"<@&{role_id}>" if role_id else ""
+
+
 _THREAD_ID_MAP_CACHE = {}
 
 def fetch_thread_id_map(hostdata):
@@ -116,18 +157,14 @@ def role_ids_from_text(text: str):
     return re.findall(r"<@&(\d+)>", text or "")
 
 
-def build_global_mention(*, novel, channel_id, guild_id):
-    """
-    Your server/news channel:
-      novel role | membership role
-
-    Mistmint Haven / other server:
-      ||@everyone||
-    """
-    novel_role = novel.get("discord_role_id", "").strip()
-
+def build_global_mention(*, novel_role_mention, channel_id, guild_id):
     if int(channel_id) == NEWS_CHANNEL_ID or str(guild_id) == MY_SERVER_GUILD_ID:
-        mention = f"{novel_role} | <@&{MEMBERSHIP_ROLE_ID}>"
+        mention_parts = [
+            novel_role_mention,
+            f"<@&{MEMBERSHIP_ROLE_ID}>",
+        ]
+        mention = " | ".join(part for part in mention_parts if part)
+
         role_ids = role_ids_from_text(mention)
 
         return mention, {
@@ -140,11 +177,11 @@ def build_global_mention(*, novel, channel_id, guild_id):
     }
 
 
-def build_membership_payload(*, host, novel_title, novel, banner_url, channel_id, guild_id):
+def build_membership_payload(*, host, novel_title, novel, banner_url, channel_id, guild_id, novel_role_mention):
     novel_url = novel.get("novel_url", "").strip()
 
     global_mention, allowed_mentions = build_global_mention(
-        novel=novel,
+        novel_role_mention=novel_role_mention,
         channel_id=channel_id,
         guild_id=guild_id,
     )
@@ -321,6 +358,8 @@ def main():
         print(f"Unknown short_code: {short_code}")
         sys.exit(1)
 
+    novel_role_mention = resolve_novel_role_mention(hostdata, short_code)
+
     targets = [NEWS_CHANNEL_ID]
     
     thread_id = resolve_forum_thread_id(hostdata, short_code)
@@ -360,6 +399,7 @@ def main():
             banner_url=banner_url,
             channel_id=channel_id,
             guild_id=guild_id,
+            novel_role_mention=novel_role_mention,
         )
 
         msg = post_message(channel_id, payload)
