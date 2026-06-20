@@ -7,7 +7,7 @@ For each hosting site, we store:
   - host_logo: the URL for the site's logo.
   - coin_emoji: optional emoji for coin display in paid feed
   - novels: a dictionary mapping novel titles to their details:
-      - discord_role_id: the Discord role ID for the novel.
+      - short_code: stable novel identifier used by downstream Discord/webhook repos.
       - novel_url: canonical/series URL.
       - featured_image: cover URL.
       - pub_date_override: optional dict for forcing hh:mm:ss in output. only affects paid chapters.
@@ -312,17 +312,14 @@ def get_novel_details(host, novel_title):
     """Returns the details of a novel (as a dict) from the specified hosting site."""
     return HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(novel_title, {})
 
-def get_novel_discord_role(novel_title, host):
+def get_novel_short_code(novel_title, host):
     """
-    Returns the Discord role ID for the given novel.
-    If the novel title appears in the NSFW list (via get_nsfw_novels()),
-    appends the extra role.
+    Returns the stable short code for the given novel.
+    This is used by RSS feeds so downstream Discord repos can map
+    short_code -> server-specific role IDs.
     """
     details = get_novel_details(host, novel_title)
-    base_role = details.get("discord_role_id", "")
-    if novel_title in get_nsfw_novels():
-        base_role += " | <@&1343352825811439616>"
-    return base_role
+    return (details.get("short_code", "") or "").strip().upper()
 
 def get_novel_url(novel_title, host):
     """Returns the URL for the given novel on the specified hosting site."""
