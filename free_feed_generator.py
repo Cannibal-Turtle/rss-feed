@@ -14,7 +14,7 @@ from novel_mappings import (
     get_host_translator,
     get_host_logo,
     get_novel_details,
-    get_novel_discord_role,
+    get_novel_short_code,
     get_nsfw_novels,
 )
 
@@ -75,8 +75,8 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         translator = get_host_translator(self.host)
         writer.write(indent + "    <translator>%s</translator>" % escape(translator) + newl)
         
-        discord_role = get_novel_discord_role(self.title, self.host)
-        writer.write(indent + "    <discord_role_id><![CDATA[%s]]></discord_role_id>" % discord_role + newl)
+        short_code = get_novel_short_code(self.title, self.host)
+        writer.write(indent + "    <short_code>%s</short_code>" % escape(short_code) + newl)
         
         writer.write(indent + '    <featuredImage url="%s"/>' % escape(get_featured_image(self.title, self.host)) + newl)
         
