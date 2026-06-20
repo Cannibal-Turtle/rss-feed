@@ -193,10 +193,6 @@ def _build_nu_item_block(it: Dict[str, Any]) -> str:
     author      = _xml10(it.get("author", ""))
     desc        = _xml10(it.get("description", ""))
 
-    # role mention normalized to '<@&digits>' or ''
-    role_raw   = it.get("discord_role_id", "")
-    role_fixed = _role_mention(role_raw)
-
     lines = []
     lines.append("    <item>")
     lines.append(f"      <title>{_xesc(title)}</title>")
@@ -208,10 +204,10 @@ def _build_nu_item_block(it: Dict[str, Any]) -> str:
     lines.append("      <description>")
     lines.append(f"        {_cdata(desc)}")
     lines.append("      </description>")
+    short_code = _xml10((it.get("short_code") or "").strip().upper())
+    
     lines.append(f"      <translator>{_xesc(translator)}</translator>")
-    lines.append("      <discord_role_id>")
-    lines.append(f"        {_cdata(role_fixed)}")
-    lines.append("      </discord_role_id>")
+    lines.append(f"      <short_code>{_xesc(short_code)}</short_code>")
     if featured:
         lines.append(f"      <featuredImage url={_xqa(_xml10(str(featured)))}/>")
     lines.append(f"      <host>{_xesc(host)}</host>")
