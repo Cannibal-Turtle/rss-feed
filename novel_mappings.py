@@ -44,7 +44,7 @@ HOSTING_SITE_DATA = {
                 "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
                 "comments_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml",
                 "custom_emoji": "<:ghostcat:1517845090779791490>",
-                "extra_ping_roles": "<@&1329500516304158901> <@&1329428642094256181> <@&1329427832077684736> <@&1330469306936328286> <@&1330469077784727562>",
+                "tags": ["chinese", "supernatural", "quick transmigration", "comedy", "bl"],
                 "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
                 "history_file": "arc_history/amlwc_history.json",
                 "custom_description": """Shao Lang was once again hard at work being villainous, ready to “die” ten thousand deaths for the job without complaint.
@@ -112,7 +112,7 @@ Guide:
                 "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
                 "comments_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml",
                 "custom_emoji": "<:25396nokojail:1488194854893912185>",
-                "extra_ping_roles": "<@&1329500516304158901> <@&1330469077784727562>",
+                "tags": ["chinese", "bl"],
                 "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
                 "custom_description": """Everyone says Qi Cheng is the biggest failure of the Qi family.
 Spoiled, unruly, a well-known useless pretty boy in their circle.
@@ -154,7 +154,7 @@ His voice is cold as ice: “Who gave you the guts to touch him?”"""
                 "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
                 "comments_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml",
                 "custom_emoji": "<:piggy_warrior:1471462818489307283>",
-                "extra_ping_roles": "<@&1329500516304158901> <@&1329427832077684736> <@&1330469306936328286> <@&1330469077784727562>",
+                "tags": ["chinese", "quick transmigration", "comedy", "bl"],
                 "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
                 "history_file": "arc_history/hiaflg_history.json",
                 "custom_description": """【Quick Transmigration + Double Male Leads + Cannon Fodder Counterattack + Main Shou + 1v1 + Double Clean】
@@ -188,7 +188,7 @@ Damn dog:
                 "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
                 "comments_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml",
                 "custom_emoji": "<:neko_simp:1462777063705546763>",
-                "extra_ping_roles": "<@&1329500516304158901> <@&1437070731308699842> <@&1330469400553197588> <@&1330469077784727562>",
+                "tags": ["chinese", "reincarnation", "angst", "bl"],
                 "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
                 "custom_description": """【Universal-darling shou, bittersweet tone, sour first then sweet, livestream variety show, shura-field free-for-all, double male leads, double purity, HE】
 Wen Yanyu, a cannon-fodder supporting male universally hated online for obsessively clinging to the male lead and dragging himself into public controversy, suddenly awakens self-awareness and gets bound to a system, sent off to take missions.
@@ -219,7 +219,7 @@ Netizens: redefining ‘hate to the extreme’. Fu Hanchuan! You brat, keep your
                 "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
                 "comments_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml",
                 "custom_emoji": "<:hashigarakiheartlove:1437849521991454830>",
-                "extra_ping_roles": "<@&1329500516304158901> <@&1437070570582708345> <@&1330469077784727562>",
+                "tags": ["chinese", "transmigration", "bl"],
                 "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
                 "custom_description": """Calm, domineering CEO gong vs transmigrated clever shou【transmigration + 1v1 + double clean + sweet pampering】
 Song Wan fell gravely ill. Rescue efforts failed, and he died.
@@ -252,7 +252,7 @@ The one who had been drugged in the room was not the male lead at all. How was i
                 "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
                 "comments_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml",
                 "custom_emoji": "<:468087cutebunny:1431678613002125313>",
-                "extra_ping_roles": "<@&1329500516304158901> <@&1329427832077684736> <@&1330469077784727562>",
+                "tags": ["chinese", "quick transmigration", "bl"],
                 "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
                 "history_file": "arc_history/tdlbkgc_history.json",
                 "custom_description": """【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
@@ -283,7 +283,7 @@ It’s 1v1. Sweet, sweet, sweet."""
                 "paid_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml",
                 "comments_feed": "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml",
                 "custom_emoji": "<:emoji_62:1365400946330435654>",
-                "extra_ping_roles": "<@&1329500516304158901> <@&1329427832077684736> <@&1330469014895595620>",
+                "tags": ["chinese", "quick transmigration", "romance"],
                 "discord_role_url": "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458",
                 "history_file": "arc_history/tvitpa_history.json",
                 "custom_description": """To survive, Sheng Nuan must traverse different worlds, playing the role of self-destructive cannon fodder while saving the darkest villains. These villains are cold-blooded, obsessive, and ruthless—capable of annihilating millions with a smile and destroying the world with a wave of their hand. Holding the cannon fodder’s script, Sheng Nuan is terrified…
