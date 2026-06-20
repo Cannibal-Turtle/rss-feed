@@ -163,7 +163,7 @@ def _collect_nu_items_from_mappings() -> List[Dict[str, Any]]:
                     "novel_title": novel_title,
                     "host": NU_HOST_NAME,
                     "translator": translator,
-                    "discord_role_id": (nd.get("discord_role_id") or ""),
+                    "short_code": (nd.get("short_code") or "").strip().upper(),
                     "featured_image": (nd.get("featured_image") or ""),
                     "category": category_value,
                     "host_logo": NU_HOST_LOGO,
