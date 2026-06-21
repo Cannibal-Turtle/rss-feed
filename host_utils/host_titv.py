@@ -164,7 +164,7 @@ EXTRA_SUBTITLES = {
     # "rsg": {1: "The End"}
 }
 
-# Optional per-series canonicalization of <chaptername> wording:
+# Optional per-series canonicalization of <chapter> wording:
 #   "feed"   → keep whatever the feed says (default)
 #   "chapter"→ force "Chapter N" / "Chapter Extra N"
 SERIES_CANON = {
@@ -216,7 +216,7 @@ LABEL_PATTERNS = [
     (re.compile(r'(?i)\bch(?:apter)?\s+(\d+(?:\.\d+)?)'),    'main'),
 ]
 
-def _canonize_chaptername(short_code: str, kind: str, chapnum_txt: str, original_label: str) -> str:
+def _canonize_chapter(short_code: str, kind: str, chapnum_txt: str, original_label: str) -> str:
     """Keep feed wording unless SERIES_CANON says to force 'Chapter' wording."""
     mode = SERIES_CANON.get(short_code, "feed")
     if mode == "chapter" and chapnum_txt:
@@ -226,10 +226,10 @@ def _canonize_chaptername(short_code: str, kind: str, chapnum_txt: str, original
 
 def split_title_titv(full_title: str) -> Tuple[str, str, str]:
     """
-    Returns (main_title, chaptername, nameextend).
+    Returns (main_title, chapter, chaptername).
       main_title: series (from category prefix) or shortcode→title fallback
-      chaptername: either preserved from feed or forced to 'Chapter...' per SERIES_CANON
-      nameextend: subtitle from CHAPTER_SUBTITLES/EXTRA_SUBTITLES when available
+      chapter: either preserved from feed or forced to 'Chapter...' per SERIES_CANON
+      chaptername: subtitle from CHAPTER_SUBTITLES/EXTRA_SUBTITLES when available
     """
     s = (full_title or "").strip()
     s = DASH_RE.sub(" – ", s)
@@ -243,29 +243,29 @@ def split_title_titv(full_title: str) -> Tuple[str, str, str]:
     short_code = (m_code.group(1).lower() if m_code else "")
 
     # Find first recognizable chapter label
-    chaptername, chapnum_txt, kind = "", None, None
+    chapter, chapnum_txt, kind = "", None, None
     for pat, k in LABEL_PATTERNS:
         m = pat.search(rest)
         if m:
             chapnum_txt = m.group(1)
             kind = k
-            chaptername = _canonize_chaptername(short_code, kind, chapnum_txt, m.group(0))
+            chapter = _canonize_chapter(short_code, kind, chapnum_txt, m.group(0))
             break
 
     # Subtitle lookup (main vs extra), only if integer N
-    nameextend = ""
+    chaptername = ""
     if chapnum_txt and chapnum_txt.isdigit():
         n = int(chapnum_txt)
         if kind == "main":
-            nameextend = CHAPTER_SUBTITLES.get(short_code, {}).get(n, "")
+            chaptername = CHAPTER_SUBTITLES.get(short_code, {}).get(n, "")
         elif kind == "extra":
-            nameextend = EXTRA_SUBTITLES.get(short_code, {}).get(n, "")
+            chaptername = EXTRA_SUBTITLES.get(short_code, {}).get(n, "")
 
     # Fallback for series title via shortcode mapping
     if not main_title and short_code in CODE_TO_TITLE:
         main_title = CODE_TO_TITLE[short_code]
 
-    return main_title.strip(), chaptername.strip(), nameextend.strip()
+    return main_title.strip(), chapter.strip(), chaptername.strip()
 
 def extract_volume_titv(_full_title: str, _link: str) -> str:
     return ""  # TitV RSS exposes no volume
@@ -277,8 +277,8 @@ def clean_description_titv(raw_desc: str) -> str:
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
-def chapter_num(chaptername: str):
-    s = (chaptername or '').lower()
+def chapter_num(chapter: str):
+    s = (chapter or '').lower()
     # Put extras/side stories after normal chapters
     m = (re.search(r'\bchapter\s+extra\s+(\d+)', s) or
          re.search(r'\bextra\s+(\d+)', s) or
@@ -289,7 +289,7 @@ def chapter_num(chaptername: str):
     if m:
         return (10**9, int(m.group(1)))
 
-    nums = re.findall(r"\d+(?:\.\d+)?", chaptername)
+    nums = re.findall(r"\d+(?:\.\d+)?", chapter)
     if not nums:
         return (0,)
     out = [float(n) if "." in n else int(n) for n in nums]
