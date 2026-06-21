@@ -8,7 +8,7 @@ Usage (CI step after comments.py):
 Behavior:
 - Read existing aggregated XML as raw text
 - Extract existing <item>...</item> blocks verbatim
-- Fetch NU comment items from mappings (novelupdates_feed_url)
+- Fetch NU comment items from mappings (novelupdates_url)
 - Build NU items as raw <item> blocks (role mention normalized)
 - De-duplicate by GUID
 - Sort ALL blocks by <pubDate> DESC
