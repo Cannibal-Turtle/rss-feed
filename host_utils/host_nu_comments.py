@@ -28,7 +28,7 @@ from typing import Any, Dict, List
 import feedparser
 from xml.sax.saxutils import escape as _xesc, quoteattr as _xqa
 
-from novel_mappings import HOSTING_SITE_DATA
+from novel_mappings import HOSTING_SITE_DATA, get_novelupdates_feed_url
 try:
     from novel_mappings import get_nsfw_novels  # optional
 except Exception:
@@ -139,7 +139,7 @@ def _collect_nu_items_from_mappings() -> List[Dict[str, Any]]:
         novels = (cfg.get("novels") or {})
         translator = cfg.get("translator", "")
         for novel_title, nd in novels.items():
-            nu_url = (nd.get("novelupdates_feed_url") or "").strip()
+            nu_url = get_novelupdates_feed_url(nd)
             if not nu_url:
                 continue
             parsed = feedparser.parse(nu_url)
