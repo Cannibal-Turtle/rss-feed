@@ -64,8 +64,8 @@ def item_to_dict(item: PyRSS2Gen.RSSItem):
         "isPermaLink": getattr(item.guid, "isPermaLink", False) if isinstance(item.guid, PyRSS2Gen.Guid) else False,
         "pubDate": _dt_to_iso(item.pubDate),
         "volume": getattr(item, "volume", ""),
+        "chapter": getattr(item, "chapter", ""),
         "chaptername": getattr(item, "chaptername", ""),
-        "nameextend": getattr(item, "nameextend", ""),
         "coin": getattr(item, "coin", ""),
         "host": getattr(item, "host", ""),
         "is_nsfw": bool(getattr(item, "is_nsfw", False)),
@@ -79,8 +79,8 @@ def dict_to_item(d):
         guid=PyRSS2Gen.Guid(d.get("guid") or d["link"], isPermaLink=d.get("isPermaLink", False)),
         pubDate=_iso_to_dt(d["pubDate"]),
         volume=d.get("volume",""),
+        chapter=d.get("chapter",""),
         chaptername=d.get("chaptername",""),
-        nameextend=d.get("nameextend",""),
         coin=d.get("coin",""),
         host=d.get("host",""),
         is_nsfw=d.get("is_nsfw", False),
@@ -113,11 +113,11 @@ async def process_novel(session, host, novel_title):
         items = []
         if paid_chapters:
             for chap in paid_chapters:
-                raw_chaptername = chap["chaptername"].strip()
-                raw_nameextend  = chap["nameextend"].strip()
+                raw_chapter = chap["chapter"].strip()
+                raw_chaptername  = chap["chaptername"].strip()
 
-                chaptername = raw_chaptername
-                nameextend  = f"***{raw_nameextend}***" if raw_nameextend else ""
+                chapter = raw_chapter
+                chaptername  = f"***{raw_chaptername}***" if raw_chaptername else ""
                 volume = chap.get("volume", "")
 
                 pub_date = chap["pubDate"]
@@ -126,8 +126,8 @@ async def process_novel(session, host, novel_title):
 
                 # Case-insensitive detection for "(NSFW)", "(18+)", "(H)", "(HH)", "(HHH)"
                 is_nsfw = has_nsfw_marker(
+                    raw_chapter,
                     raw_chaptername,
-                    raw_nameextend,
                     chap.get("description", ""),
                     chap.get("volume", "")
                 )
@@ -139,8 +139,8 @@ async def process_novel(session, host, novel_title):
                     guid=PyRSS2Gen.Guid(chap["guid"], isPermaLink=False),
                     pubDate=pub_date,
                     volume=volume,
+                    chapter=chapter,
                     chaptername=chaptername,
-                    nameextend=nameextend,
                     coin=chap.get("coin", ""),
                     host=host,
                     is_nsfw=is_nsfw,
@@ -149,10 +149,10 @@ async def process_novel(session, host, novel_title):
         return items
 
 class MyRSSItem(PyRSS2Gen.RSSItem):
-    def __init__(self, *args, volume="", chaptername="", nameextend="", coin="", host="", is_nsfw=None, **kwargs):
+    def __init__(self, *args, volume="", chapter="", chaptername="", coin="", host="", is_nsfw=None, **kwargs):
         self.volume      = volume
-        self.chaptername = chaptername
-        self.nameextend  = nameextend
+        self.chapter = chapter
+        self.chaptername  = chaptername
         self.coin        = coin
         self.host        = host
         self.is_nsfw     = is_nsfw
@@ -162,10 +162,10 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         writer.write(indent + "  <item>" + newl)
         writer.write(indent + "    <title>%s</title>" % escape(self.title) + newl)
         writer.write(indent + "    <volume>%s</volume>" % escape(self.volume) + newl)
-        writer.write(indent + "    <chaptername>%s</chaptername>" % escape(self.chaptername) + newl)
+        writer.write(indent + "    <chapter>%s</chapter>" % escape(self.chapter) + newl)
 
-        formatted_nameextend = self.nameextend.strip()
-        writer.write(indent + "    <nameextend>%s</nameextend>" % escape(formatted_nameextend) + newl)
+        formatted_chaptername = self.chaptername.strip()
+        writer.write(indent + "    <chaptername>%s</chaptername>" % escape(formatted_chaptername) + newl)
 
         writer.write(indent + "    <link>%s</link>" % escape(self.link) + newl)
         writer.write(indent + "    <description><![CDATA[%s]]></description>" % self.description + newl)
@@ -278,7 +278,7 @@ async def main_async():
             NOVEL_ORDER.get((getattr(it, "host", "").lower(), it.title), 0),
             get_host_utils(getattr(it, "host", "")).get(
                 "chapter_num", lambda s: (0,)
-            )(getattr(it, "chaptername", "")),
+            )(getattr(it, "chapter", "")),
         ),
         reverse=True
     )
