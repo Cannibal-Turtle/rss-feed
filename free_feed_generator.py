@@ -41,10 +41,10 @@ def compact_cdata(xml_str):
     return pattern.sub(repl, xml_str)
 
 class MyRSSItem(PyRSS2Gen.RSSItem):
-    def __init__(self, *args, volume="", chaptername="", nameextend="", host="", is_nsfw=None, **kwargs):
+    def __init__(self, *args, volume="", chapter="", chaptername="", host="", is_nsfw=None, **kwargs):
         self.volume = volume
+        self.chapter = chapter
         self.chaptername = chaptername
-        self.nameextend = nameextend
         self.host = host
         self.is_nsfw = is_nsfw
         super().__init__(*args, **kwargs)
@@ -56,11 +56,11 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         writer.write(indent + "    <title>%s</title>" % escape(self.title) + newl)
 
         writer.write(indent + "    <volume>%s</volume>" % escape(self.volume) + newl)
-        writer.write(indent + "    <chaptername>%s</chaptername>" % escape(self.chaptername) + newl)
+        writer.write(indent + "    <chapter>%s</chapter>" % escape(self.chapter) + newl)
 
-        # Add *** around nameextend if it exists
-        formatted_nameextend = f"***{self.nameextend}***" if self.nameextend.strip() else ""
-        writer.write(indent + "    <nameextend>%s</nameextend>" % escape(formatted_nameextend) + newl)
+        # Add *** around chaptername if it exists
+        formatted_chaptername = f"***{self.chaptername}***" if self.chaptername.strip() else ""
+        writer.write(indent + "    <chaptername>%s</chaptername>" % escape(formatted_chaptername) + newl)
 
         writer.write(indent + "    <link>%s</link>" % escape(self.link) + newl)
 
@@ -169,7 +169,7 @@ def main():
             # host-specific title parsing
             # Dragonholic: "Novel Title - Chapter 123 - Extra blah"
             # Mistmint:   "Novel Title — Volume 1: Arc Name, Chapter 30 — Card Master"
-            main_title, chaptername, nameextend = utils["split_title"](entry.title)
+            main_title, chapter, chaptername = utils["split_title"](entry.title)
 
             # Make sure this novel is one YOU actually mapped.
             novel_details = get_novel_details(host, main_title)
@@ -199,8 +199,8 @@ def main():
 
             # Case-insensitive detection for "(NSFW)", "(18+)", "(H)", "(HH)", "(HHH)"
             is_nsfw = has_nsfw_marker(
+                chapter,
                 chaptername,
-                nameextend,
                 entry_title,
                 raw_desc
             )
@@ -213,8 +213,8 @@ def main():
                 guid=PyRSS2Gen.Guid(entry.id, isPermaLink=False),
                 pubDate=pub_date,
                 volume=volume,
+                chapter=chapter,
                 chaptername=chaptername,
-                nameextend=nameextend,
                 host=host,
                 is_nsfw=is_nsfw,
             )
@@ -226,7 +226,7 @@ def main():
         key=lambda item: (
             item.pubDate,
             NOVEL_ORDER.get((item.host.lower(), item.title), 0),
-            get_host_utils(item.host)["chapter_num"](item.chaptername),
+            get_host_utils(item.host)["chapter_num"](item.chapter),
         ),
         reverse=True
     )
