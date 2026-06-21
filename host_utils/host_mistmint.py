@@ -295,8 +295,8 @@ async def _scrape_paid_chapters_mistmint_from_state(session, novel_url: str, hos
             arc_local_index = ch - arc["start"] + 1
 
             volume      = f"Arc {arc_num}: {arc_title}"
-            chaptername = f"Chapter {ch}"
-            nameextend  = f"{arc_num}.{arc_local_index}"
+            chapter = f"Chapter {ch}"
+            chaptername  = f"{arc_num}.{arc_local_index}"
 
             arc_slug = _slug_arc(arc_num, arc_title)
             link = f"{BASE_APP}/novels/{novel_slug}/{arc_slug}-chapter-{ch}"
@@ -309,8 +309,8 @@ async def _scrape_paid_chapters_mistmint_from_state(session, novel_url: str, hos
 
             all_items.append({
                 "volume":      volume,
-                "chaptername": chaptername,
-                "nameextend":  nameextend,
+                "chapter": chapter,
+                "chaptername":  chaptername,
                 "link":        link,
                 "description": desc_html,
                 "pubDate":     pub_dt,
@@ -364,12 +364,12 @@ def split_title_mistmint(full_title: str):
     if ", Chapter " in middle:
         # "Volume 1: Dream’s Beginning, Chapter 30"
         _before, after = middle.split(", Chapter ", 1)
-        chaptername = f"Chapter {after.strip()}"
+        chapter = f"Chapter {after.strip()}"
     else:
         # "Chapter 13"
-        chaptername = middle.strip()
+        chapter = middle.strip()
 
-    return novel_title, chaptername, subtitle
+    return novel_title, chapter, subtitle
     
 def match_comment_on_homepage_by_id(novel_id: str, author: str, body_raw: str, posted_at: str):
     """
@@ -1352,8 +1352,8 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
     Only include chapters where isFree == False.
     Fields:
       volume      -> volumeTitle
-      chaptername -> "Chapter {chapterNumber}"
-      nameextend  -> title (e.g., "1.2")
+      chapter -> "Chapter {chapterNumber}"
+      chaptername  -> title (e.g., "1.2")
       link        -> https://www.mistminthaven.com/novels/<novel_slug>/<slug>
       description -> mapping.custom_description (per novel)
       pubDate     -> createdAt (UTC)
@@ -1400,7 +1400,7 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
                 continue
                 
             chapter_num = str(ch.get("chapterNumber") or "").strip()
-            nameextend  = (ch.get("title") or "").strip()           # e.g., "1.2"
+            chaptername  = (ch.get("title") or "").strip()           # e.g., "1.2"
             slug_tail   = (ch.get("slug") or "").strip()
             link        = base + slug_tail if slug_tail else novel_url
             api_uuid    = (ch.get("id") or "").strip() 
@@ -1418,8 +1418,8 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
         
             items.append({
                 "volume":      vol_title,
-                "chaptername": f"Chapter {chapter_num}" if chapter_num else "Chapter",
-                "nameextend":  nameextend,
+                "chapter": f"Chapter {chapter_num}" if chapter_num else "Chapter",
+                "chaptername":  chaptername,
                 "link":        link,
                 "description": desc_html,
                 "pubDate":     pub_dt,                                      # from createdAt
@@ -1557,7 +1557,7 @@ def load_feed_mistmint_via_api(host: str):
                     continue
 
                 chapter_num = str(ch.get("chapterNumber") or "").strip()
-                nameextend  = (ch.get("title") or "").strip()
+                chaptername  = (ch.get("title") or "").strip()
                 slug_tail   = (ch.get("slug") or "").strip()
 
                 link = f"{BASE_APP}/novels/{novel_slug}/{slug_tail}"
@@ -1579,8 +1579,8 @@ def load_feed_mistmint_via_api(host: str):
                 else:
                     full_title = f"{novel_title} — Chapter {chapter_num}"
 
-                if nameextend:
-                    full_title += f" — {nameextend}"
+                if chaptername:
+                    full_title += f" — {chaptername}"
 
                 entry = types.SimpleNamespace(
                     title=full_title,
@@ -1599,8 +1599,8 @@ def load_feed_mistmint_via_api(host: str):
 # OTHER SHARED HELPERS
 # =============================================================================
 
-def chapter_num(chaptername: str):
-    s = (chaptername or '').lower()
+def chapter_num(chapter: str):
+    s = (chapter or '').lower()
 
     # Extras → very large rank so they come after normal chapters
     m = re.search(r'chapter\s+extra\s+(\d+)', s)
@@ -1610,7 +1610,7 @@ def chapter_num(chaptername: str):
         return (10**9, int(m.group(1)))  # extras at the end
 
     # Normal numeric (supports decimals like 12.5)
-    nums = re.findall(r"\d+(?:\.\d+)?", chaptername)
+    nums = re.findall(r"\d+(?:\.\d+)?", chapter)
     if not nums:
         return (0,)
     out = []
