@@ -425,9 +425,18 @@ async def on_ready():
             state.setdefault(SHORT_CODE, [])
 
             for target_channel_id in target_channel_ids:
+                already_posted = any(
+                    str(item.get("channel_id")) == str(target_channel_id)
+                    for item in state.get(SHORT_CODE, [])
+                )
+            
+                if already_posted:
+                    print(f"↷ Already has novel card for {SHORT_CODE} in {target_channel_id}; skipping.")
+                    continue
+            
                 try:
                     channel = await resolve_channel(target_channel_id)
-
+            
                     embed = build_embed_for_channel(
                         title=title,
                         novel=novel,
@@ -439,7 +448,7 @@ async def on_ready():
                         forum_post_url=forum_post_url,
                         novel_role_mention=novel_role_mention,
                     )
-
+            
                     msg = await channel.send(embed=embed)
 
                     entry = {
