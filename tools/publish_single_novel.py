@@ -22,6 +22,9 @@ STATE_FILE = "novel_status_targets.json"
 
 ARCHIVE_CHANNEL_ID = 1463476725253144751
 
+NOVEL_ROLE_ID_MAP_URL = "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/novel_role_id_map.json"
+# currently only supports single server role attachment
+
 # ---------------- utils ----------------
 
 def load_state():
@@ -52,12 +55,12 @@ def normalize_role_id(value):
     m = re.search(r"\d{5,}", str(value or ""))
     return m.group(0) if m else ""
 
-def fetch_novel_role_id_map(hostdata):
+def fetch_novel_role_id_map():
     """
-    Fetches short_code -> novel role ID from hostdata["novel_role_id_map_url"].
+    Fetches short_code -> novel role ID from NOVEL_ROLE_ID_MAP_URL.
     Values may be raw IDs or <@&...>; this normalizes to raw IDs.
     """
-    url = (hostdata.get("novel_role_id_map_url") or "").strip()
+    url = NOVEL_ROLE_ID_MAP_URL
 
     if not url:
         return {}
@@ -81,8 +84,8 @@ def fetch_novel_role_id_map(hostdata):
     _NOVEL_ROLE_ID_MAP_CACHE[url] = normalized
     return normalized
 
-def resolve_novel_role_mention(hostdata, short_code):
-    role_map = fetch_novel_role_id_map(hostdata)
+def resolve_novel_role_mention(short_code):
+    role_map = fetch_novel_role_id_map()
     role_id = role_map.get(short_code.upper())
     return f"<@&{role_id}>" if role_id else ""
     
@@ -406,7 +409,7 @@ async def on_ready():
 
             forum_post_url = await build_forum_post_url(forum_post_id)
 
-            novel_role_mention = resolve_novel_role_mention(hostdata, SHORT_CODE)
+            novel_role_mention = resolve_novel_role_mention(SHORT_CODE)
 
             # Always post to archive.
             # Only post to another channel/thread if you pass it as the second argument.
