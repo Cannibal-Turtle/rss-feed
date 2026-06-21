@@ -14,6 +14,9 @@ TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 
 API_BASE = "https://discord.com/api/v10"
 
+NOVEL_ROLE_ID_MAP_URL = "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/novel_role_id_map.json"
+# currently only supports single server role attachment
+
 # Always post here first.
 # This is your server's news channel.
 NEWS_CHANNEL_ID = 1330049962129489930
@@ -44,12 +47,12 @@ def normalize_role_id(value):
     m = re.search(r"\d{5,}", str(value or ""))
     return m.group(0) if m else ""
 
-def fetch_novel_role_id_map(hostdata):
+def fetch_novel_role_id_map():
     """
-    Fetches short_code -> novel role ID from hostdata["novel_role_id_map_url"].
+    Fetches short_code -> novel role ID from NOVEL_ROLE_ID_MAP_URL.
     Values may be raw IDs or <@&...>; this normalizes to raw IDs.
     """
-    url = (hostdata.get("novel_role_id_map_url") or "").strip()
+    url = NOVEL_ROLE_ID_MAP_URL
 
     if not url:
         return {}
@@ -73,8 +76,8 @@ def fetch_novel_role_id_map(hostdata):
     _NOVEL_ROLE_ID_MAP_CACHE[url] = normalized
     return normalized
 
-def resolve_novel_role_mention(hostdata, short_code):
-    role_map = fetch_novel_role_id_map(hostdata)
+def resolve_novel_role_mention(short_code):
+    role_map = fetch_novel_role_id_map()
     role_id = role_map.get(short_code.upper())
     return f"<@&{role_id}>" if role_id else ""
 
@@ -358,7 +361,7 @@ def main():
         print(f"Unknown short_code: {short_code}")
         sys.exit(1)
 
-    novel_role_mention = resolve_novel_role_mention(hostdata, short_code)
+    novel_role_mention = resolve_novel_role_mention(short_code)
 
     targets = [NEWS_CHANNEL_ID]
     
