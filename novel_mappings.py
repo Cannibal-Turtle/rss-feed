@@ -27,7 +27,7 @@ HOSTING_SITE_DATA = {
         "thread_id_map_url": "https://raw.githubusercontent.com/Cannibal-Turtle/mistmint-discord/main/thread_id_map.json",
         "novels": {
             "After the Male Leads Went Crazy, They All Turned into Male Ghosts": {
-                "novelupdates_feed_url": "https://www.novelupdates.com/series/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts/feed/",
+                "novelupdates_url": "https://www.novelupdates.com/series/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts/chapters",
                 "discord_color": "#c90016",
                 "novel_url": "https://www.mistminthaven.com/novels/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts",
@@ -95,7 +95,7 @@ Guide:
 3. Sliced soul. 1v1 ending."""
             },
             "Entering the Cage": {
-                "novelupdates_feed_url": "https://www.novelupdates.com/series/entering-the-cage/feed/",
+                "novelupdates_url": "https://www.novelupdates.com/series/entering-the-cage",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/entering-the-cage/chapters",
                 "discord_color": "#22aa58",
                 "novel_url": "https://www.mistminthaven.com/novels/entering-the-cage",
@@ -135,7 +135,7 @@ His usually dignified older brother throws the real young master violently to th
 His voice is cold as ice: “Who gave you the guts to touch him?”"""
             },
             "Help! I Accidentally Flirted with the Lord God, What Do I Do?!": {
-                "novelupdates_feed_url": "https://www.novelupdates.com/series/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do/feed/",
+                "novelupdates_url": "https://www.novelupdates.com/series/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do/chapters",
                 "discord_color": "#daa31a",
                 "novel_url": "https://www.mistminthaven.com/novels/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do",
@@ -169,7 +169,7 @@ Damn dog:
 ^_^"""
             },
             "Whose Simping Male Supporting Character Is Being Held and Kissed by the Male Lead?": {
-                "novelupdates_feed_url": "https://www.novelupdates.com/series/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead/feed/",
+                "novelupdates_url": "https://www.novelupdates.com/series/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead/chapters",
                 "discord_color": "#8a95a7",
                 "novel_url": "https://www.mistminthaven.com/novels/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead",
@@ -199,7 +199,7 @@ Holding him in his arms, kissing him while coaxing him, his voice trembling with
 Netizens: redefining ‘hate to the extreme’. Fu Hanchuan! You brat, keep your hands off my bunny baby!"""
             },
             "After Transmigrating into the Villain, I Got a HE with the Female Lead's Older Brother": {
-                "novelupdates_feed_url": "https://www.novelupdates.com/series/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-leads-older-brother/feed/",
+                "novelupdates_url": "https://www.novelupdates.com/series/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-leads-older-brother",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother/chapters",
                 "discord_color": "#9c8bb5",
                 "novel_url": "https://www.mistminthaven.com/novels/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother",
@@ -230,7 +230,7 @@ What was going on?
 The one who had been drugged in the room was not the male lead at all. How was it the female lead’s brother instead!!!"""
             },
             "[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught": {
-                "novelupdates_feed_url": "https://www.novelupdates.com/series/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/feed/",
+                "novelupdates_url": "https://www.novelupdates.com/series/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/chapters",
                 "discord_color": "#90c3f2",
                 "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught",
@@ -260,7 +260,7 @@ The chieftain of a beautiful sea-serpent race coils around his trembling, tearfu
 It’s 1v1. Sweet, sweet, sweet."""
             },
             "Quick Transmigration: The Villain Is Too Pampered and Alluring": {
-                "novelupdates_feed_url": "https://www.novelupdates.com/series/quick-transmigration-the-villain-is-too-pampered-and-alluring/feed/",
+                "novelupdates_url": "https://www.novelupdates.com/series/quick-transmigration-the-villain-is-too-pampered-and-alluring",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/quick-transmigration-the-villain-is-too-pampered-and-alluring/chapters",
                 "discord_color":"#f8d8c9",
                 "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring",
@@ -327,6 +327,20 @@ def get_featured_image(novel_title, host):
 def get_coin_emoji(host):
     """Emoji string used in <coin> for paid feed."""
     return HOSTING_SITE_DATA.get(host, {}).get("coin_emoji", "")
+
+def get_novelupdates_url(novel: dict) -> str:
+    """
+    Returns the clean NovelUpdates series URL from novel["novelupdates_url"].
+    """
+    url = str(novel.get("novelupdates_url") or "").strip()
+    return url.rstrip("/") if url else ""
+
+def get_novelupdates_feed_url(novel: dict) -> str:
+    """
+    Returns the NovelUpdates RSS feed URL from novel["novelupdates_url"].
+    """
+    url = get_novelupdates_url(novel)
+    return f"{url}/feed/" if url else ""
 
 def get_nsfw_novels():
     """Returns the list of NSFW novel titles."""
