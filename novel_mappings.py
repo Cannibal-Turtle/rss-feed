@@ -28,7 +28,7 @@ HOSTING_SITE_DATA = {
         "novel_role_id_map_url": "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/novel_role_id_map.json",
         "novels": {
             "After the Male Leads Went Crazy, They All Turned into Male Ghosts": {
-                "novelupdates_feed_url": "",
+                "novelupdates_feed_url": "https://www.novelupdates.com/series/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts/feed/",
                 "paid_feed_url": "https://api.mistminthaven.com/api/novels/slug/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts/chapters",
                 "discord_color": "#c90016",
                 "novel_url": "https://www.mistminthaven.com/novels/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts",
