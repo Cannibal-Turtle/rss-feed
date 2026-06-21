@@ -79,8 +79,8 @@ def get_nsfw_novels():
 - Currently supports **Dragonholic**, but can be extended to other hosts.  
 
 ### **Dragonholic Functions**  
-- **`split_title_dragonholic(full_title)`** → Splits a chapter title into `main_title`, `chaptername`, and `nameextend`.  
-- **`chapter_num_dragonholic(chaptername)`** → Extracts numeric values from chapter names.  
+- **`split_title_dragonholic(full_title)`** → Splits a chapter title into `main_title`, `chapter`, and `chaptername`.  
+- **`chapter_num_dragonholic(chapter)`** → Extracts numeric values from chapter names.  
 - **`clean_description(raw_desc)`** → Cleans raw HTML descriptions by removing unnecessary elements.  
 - **`extract_pubdate_from_soup(chap)`** → Parses chapter `<li>` elements to extract absolute or relative publication dates.
 - **`novel_has_paid_update_async(session, novel_url)`** → Checks if a novel has a premium (paid) update within the last 7 days.
@@ -117,8 +117,8 @@ Each generated .xml feed (free or paid) will contain structured <item> entries e
 <item>
   <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
   <volume>【Arc 5】The Fake Daughter Will Not Be a Cannon Fodder</volume>
-  <chaptername>Chapter 250</chaptername>
-  <nameextend>***Uglier Than a Monkey***</nameextend>
+  <chapter>Chapter 250</chapter>
+  <chaptername>***Uglier Than a Monkey***</chaptername>
   <link>https://dragonholic.com/novel/.../chapter-250/</link>
   <description><![CDATA[A deadly twist awaits in the mirror world...]]></description>
   <category>SFW</category>
@@ -165,7 +165,7 @@ HOSTING_SITE_DATA["Mistmint Haven"] = {
 
 ## NSFW Catch Update
 
-Now also updates `<category>` if `<chaptername>` and `<nameextend>` has these keywords:
+Now also updates `<category>` if `<chapter>` and `<chaptername>` has these keywords:
 
 ### Will match (✅) - Not case sensitive
 
