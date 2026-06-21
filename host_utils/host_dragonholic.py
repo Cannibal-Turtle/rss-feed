@@ -146,8 +146,8 @@ async def scrape_paid_chapters_async(session, novel_url: str, host: str):
             paid.append({
                 "source":      "rss", 
                 "volume":      "",
-                "chaptername": chap,
-                "nameextend":  ext,
+                "chapter": chap,
+                "chaptername":  ext,
                 "link":        e.link,
                 "description": e.description,
                 "pubDate":     pub_dt,
@@ -223,8 +223,8 @@ async def scrape_paid_chapters_async(session, novel_url: str, host: str):
         return {
             "source": "html", 
             "volume":      vol_label,
-            "chaptername": chap_name,
-            "nameextend":  nameext,
+            "chapter": chap_name,
+            "chaptername":  nameext,
             "link":        link,
             "description": main_desc,
             "pubDate":     tuned_pub,
@@ -384,8 +384,8 @@ def pick_comment_html_dragonholic(entry) -> str:
 # OTHER SHARED HELPERS
 # =============================================================================
 
-def chapter_num(chaptername: str):
-    s = (chaptername or '').lower()
+def chapter_num(name: str):
+    s = (name or '').lower()
 
     # Extras → very large rank so they come after normal chapters
     m = re.search(r'chapter\s+extra\s+(\d+)', s)
@@ -395,7 +395,7 @@ def chapter_num(chaptername: str):
         return (10**9, int(m.group(1)))  # extras at the end
 
     # Normal numeric (supports decimals like 12.5)
-    nums = re.findall(r"\d+(?:\.\d+)?", chaptername)
+    nums = re.findall(r"\d+(?:\.\d+)?", name)
     if not nums:
         return (0,)
     out = []
