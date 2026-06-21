@@ -15,7 +15,7 @@ from dateutil import parser as dateparser
 import discord
 from discord import Embed
 
-from novel_mappings import HOSTING_SITE_DATA
+from novel_mappings import HOSTING_SITE_DATA, get_novelupdates_url
 
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 STATE_FILE = "novel_status_targets.json"
@@ -361,9 +361,8 @@ def build_embed_for_channel(
         links.append(f"[{host}]({host_url})")
 
     # NovelUpdates link
-    nu_feed = novel.get("novelupdates_feed_url")
-    if nu_feed:
-        nu = nu_feed.rstrip("/").replace("/feed", "")
+    nu = get_novelupdates_url(novel)
+    if nu:
         links.append(f"[NU]({nu})")
 
     # Forum post
