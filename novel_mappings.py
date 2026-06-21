@@ -25,7 +25,6 @@ HOSTING_SITE_DATA = {
         "coin_emoji": "<:mistmint_currency:1433046707121422487>",
         "token_secret": "MISTMINT_COOKIE",
         "thread_id_map_url": "https://raw.githubusercontent.com/Cannibal-Turtle/mistmint-discord/main/thread_id_map.json",
-        "novel_role_id_map_url": "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/novel_role_id_map.json",
         "novels": {
             "After the Male Leads Went Crazy, They All Turned into Male Ghosts": {
                 "novelupdates_feed_url": "https://www.novelupdates.com/series/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts/feed/",
