@@ -26,6 +26,45 @@ def has_nsfw_marker(*texts: str) -> bool:
             return True
     return False
 
+def _normalized_pubdate(item):
+    dt = getattr(item, "pubDate", None)
+
+    if not isinstance(dt, datetime.datetime):
+        return datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+
+    return dt.astimezone(datetime.timezone.utc).replace(microsecond=0)
+
+def _novel_alpha_sort_key(item):
+    return (
+        getattr(item, "host", "").casefold(),
+        getattr(item, "title", "").casefold(),
+    )
+
+def _chapter_sort_key(item):
+    return get_host_utils(getattr(item, "host", "")).get(
+        "chapter_num", lambda s: (0,)
+    )(getattr(item, "chapter", ""))
+
+def sort_feed_items(items):
+    """
+    Sort newest pubDate first.
+
+    Tie-breakers:
+      1. host/title alphabetical
+      2. chapter number newest first within the same novel/date
+    """
+    # weakest tie-breaker first
+    items.sort(key=_chapter_sort_key, reverse=True)
+
+    # then alphabetical novel tie-breaker
+    items.sort(key=_novel_alpha_sort_key)
+
+    # strongest sort last
+    items.sort(key=_normalized_pubdate, reverse=True)
+
 def compact_cdata(xml_str):
     """
     Finds <description><![CDATA[ ... ]]></description> sections and replaces
@@ -136,16 +175,6 @@ class CustomRSS2(PyRSS2Gen.RSS2):
         writer.write(indent + "</channel>" + newl)
         writer.write("</rss>" + newl)
 
-# ─── Novel order derived from HOSTING_SITE_DATA insertion order ───
-NOVEL_ORDER = {}
-
-for host, data in HOSTING_SITE_DATA.items():
-    novels = data.get("novels", {})
-    total = len(novels)
-    for idx, title in enumerate(novels.keys()):
-        # earlier in mapping = newer novel = higher priority
-        NOVEL_ORDER[(host.lower(), title)] = total - idx
-
 def main():
     rss_items = []
 
@@ -221,15 +250,11 @@ def main():
             rss_items.append(item)
 
     # Sort all items newest-first.
-    # Tie-breaker: within same novel, sort by parsed chapter number.
-    rss_items.sort(
-        key=lambda item: (
-            item.pubDate,
-            NOVEL_ORDER.get((item.host.lower(), item.title), 0),
-            get_host_utils(item.host)["chapter_num"](item.chapter),
-        ),
-        reverse=True
-    )
+    # Tie-breaker: host/title alphabetical, then chapter number.
+    sort_feed_items(rss_items)
+
+    # --- Mimic paid feed behavior for Mistmint API ---
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
 
     # --- Mimic paid feed behavior for Mistmint API ---
     now_utc = datetime.datetime.now(datetime.timezone.utc)
