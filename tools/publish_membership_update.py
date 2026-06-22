@@ -5,6 +5,11 @@ import re
 import requests
 from pathlib import Path
 
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -31,7 +36,7 @@ MEMBERSHIP_ROLE_ID = "1329502951764525187"
 # #c9d3ff
 ACCENT_COLOR = 0xC9D3FF
 
-MAPPINGS_FILE = ROOT / "novel_mappings.py"
+NOVELS_DIR = ROOT / "mappings" / "novels"
 
 
 def discord_headers():
