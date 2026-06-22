@@ -1,89 +1,88 @@
-RSS Feed Template Placeholder Reference
-======================================
+# RSS Template Placeholders
 
-Purpose
--------
-Use this as the placeholder reference for future MonitoRSS-style TOML message templates.
+This document lists placeholders that can be used when building Discord message templates from the generated RSS feeds.
 
-Rule of thumb:
-- XML tag text becomes {tag_name}.
-- XML attribute URLs become friendly snake_case placeholders.
-- Optional/missing fields should render as an empty string, not crash the bot.
-- Discord-only values come from bot config, not directly from RSS.
+These placeholders are intended for future TOML-based Discord message templates.
 
-Source feeds
-------------
-free_chapters_feed.xml
-paid_chapters_feed.xml
-aggregated_comments_feed.xml
+Example:
 
-Recommended renderer behavior
------------------------------
-If a placeholder is missing from a feed item, render it as "".
-Example: {coin} exists in paid chapters only. In free/comments templates, it should become empty.
+```toml
+content = "{role_mention}"
 
-Common placeholders shared by all three feeds
----------------------------------------------
-{title}
-  From: <title>
-  Meaning: novel title / series title.
+[[embeds]]
+title = "{custom_emoji} {title}"
+url = "{link}"
+description = """
+## {chapter} — {chaptername}
 
-{link}
-  From: <link>
-  Meaning: chapter URL or comment target URL.
+{volume}
 
 {description}
-  From: <description>
-  Meaning:
-    - Free/paid feeds: novel/chapter description text.
-    - Comments feed: comment body.
+"""
+color = "paid_chapter"
+```
 
-{category}
-  From: <category>
-  Meaning: SFW / NSFW category.
+---
 
-{translator}
-  From: <translator>
-  Meaning: translator name.
+# Common item placeholders
 
-{short_code}
-  From: <short_code>
-  Meaning: stable novel short code, e.g. AMLWC, HIAFLG, TDLBKGC.
+These are shared or commonly useful across the generated RSS feeds.
 
-{featured_image}
-  From: <featuredImage url="..."/>
-  Meaning: novel cover / featured image URL.
+| Placeholder            | Meaning                                                     |
+| ---------------------- | ----------------------------------------------------------- |
+| `{title}`              | Feed item title. Usually the novel title for chapter feeds. |
+| `{volume}`             | Arc or volume label, if present.                            |
+| `{chapter}`            | Chapter label, e.g. `Chapter 2`.                            |
+| `{chaptername}`        | Chapter display name, e.g. `***1.2***`.                     |
+| `{link}`               | Main link for the item. Usually chapter URL or comment URL. |
+| `{description}`        | RSS item description.                                       |
+| `{category}`           | Category such as `SFW` or `NSFW`, if present.               |
+| `{translator}`         | Translator name.                                            |
+| `{short_code}`         | Stable novel short code, e.g. `AMLWC`, `TDLBKGC`, `EC`.     |
+| `{featured_image}`     | Featured image URL.                                         |
+| `{featured_image_url}` | Alias for `{featured_image}`.                               |
+| `{pub_date}`           | RSS publication date.                                       |
+| `{host}`               | Hosting site name, e.g. `Mistmint Haven`.                   |
+| `{host_logo}`          | Host logo URL.                                              |
+| `{host_logo_url}`      | Alias for `{host_logo}`.                                    |
+| `{guid}`               | RSS item GUID.                                              |
+| `{guid_is_permalink}`  | Whether the GUID is marked as a permalink.                  |
 
-{featured_image_url}
-  Alias for: {featured_image}
+---
 
-{host}
-  From: <host>
-  Meaning: source host, e.g. Mistmint Haven, Novel Updates, Dragonholic.
+# Free chapter feed placeholders
 
-{host_logo}
-  From: <hostLogo url="..."/>
-  Meaning: source host logo URL.
+Source feed:
 
-{host_logo_url}
-  Alias for: {host_logo}
+```text
+free_chapters_feed.xml
+```
 
-{pub_date}
-  From: <pubDate>
-  Meaning: RSS publication date string.
+Expected item fields:
 
-{guid}
-  From: <guid>
-  Meaning: RSS item GUID.
+| Placeholder            | RSS source                  |
+| ---------------------- | --------------------------- |
+| `{title}`              | `<title>`                   |
+| `{volume}`             | `<volume>`                  |
+| `{chapter}`            | `<chapter>`                 |
+| `{chaptername}`        | `<chaptername>`             |
+| `{link}`               | `<link>`                    |
+| `{description}`        | `<description>`             |
+| `{category}`           | `<category>`                |
+| `{translator}`         | `<translator>`              |
+| `{short_code}`         | `<short_code>`              |
+| `{featured_image}`     | `<featuredImage url="...">` |
+| `{featured_image_url}` | `<featuredImage url="...">` |
+| `{pub_date}`           | `<pubDate>`                 |
+| `{host}`               | `<host>`                    |
+| `{host_logo}`          | `<hostLogo url="...">`      |
+| `{host_logo_url}`      | `<hostLogo url="...">`      |
+| `{guid}`               | `<guid>`                    |
+| `{guid_is_permalink}`  | `<guid isPermaLink="...">`  |
 
-{guid_is_permalink}
-  From: <guid isPermaLink="...">
-  Meaning: usually false.
+Useful free chapter template fields:
 
-Free chapter feed placeholders
-------------------------------
-Feed: free_chapters_feed.xml
-
+```text
 {title}
 {volume}
 {chapter}
@@ -101,17 +100,69 @@ Feed: free_chapters_feed.xml
 {host_logo_url}
 {guid}
 {guid_is_permalink}
+```
 
-Free-specific notes:
-- {volume} comes from <volume>.
-- {chapter} comes from <chapter>, e.g. Chapter 40.
-- {chaptername} comes from <chaptername>, e.g. ***Peace Talk*** or ***15.3***.
-- {chaptername} may already include Markdown styling.
+Example:
 
-Paid chapter feed placeholders
-------------------------------
-Feed: paid_chapters_feed.xml
+```toml
+content = "{role_mention}"
 
+[[embeds]]
+title = "{custom_emoji} {title}"
+url = "{link}"
+description = """
+## {chapter}
+
+{chaptername}
+
+{description}
+"""
+color = "free_chapter"
+
+[embeds.thumbnail]
+url = "{featured_image}"
+
+[embeds.footer]
+text = "{host} · {translator}"
+icon_url = "{host_logo}"
+```
+
+---
+
+# Paid chapter feed placeholders
+
+Source feed:
+
+```text
+paid_chapters_feed.xml
+```
+
+Expected item fields:
+
+| Placeholder            | RSS source                  |
+| ---------------------- | --------------------------- |
+| `{title}`              | `<title>`                   |
+| `{volume}`             | `<volume>`                  |
+| `{chapter}`            | `<chapter>`                 |
+| `{chaptername}`        | `<chaptername>`             |
+| `{link}`               | `<link>`                    |
+| `{description}`        | `<description>`             |
+| `{category}`           | `<category>`                |
+| `{translator}`         | `<translator>`              |
+| `{short_code}`         | `<short_code>`              |
+| `{featured_image}`     | `<featuredImage url="...">` |
+| `{featured_image_url}` | `<featuredImage url="...">` |
+| `{coin}`               | `<coin>`                    |
+| `{pub_date}`           | `<pubDate>`                 |
+| `{host}`               | `<host>`                    |
+| `{host_logo}`          | `<hostLogo url="...">`      |
+| `{host_logo_url}`      | `<hostLogo url="...">`      |
+| `{guid}`               | `<guid>`                    |
+| `{guid_is_permalink}`  | `<guid isPermaLink="...">`  |
+
+Useful paid chapter template fields:
+
+```text
 {title}
 {volume}
 {chapter}
@@ -130,100 +181,22 @@ Feed: paid_chapters_feed.xml
 {host_logo_url}
 {guid}
 {guid_is_permalink}
+```
 
-Paid-specific notes:
-- {coin} comes from <coin>, e.g. <:mistmint_currency:1433046707121422487> 5.
-- {chaptername} may contain arc-local numbering, e.g. ***1.2***.
-- {volume} is useful for arc display, e.g. Arc 1: The Charming Landlord Is Too Hard to Handle.
+Example:
 
-Comments feed placeholders
---------------------------
-Feed: aggregated_comments_feed.xml
-
-{title}
-{chapter}
-{link}
-{creator}
-{author}
-{description}
-{reply_chain}
-{category}
-{translator}
-{short_code}
-{featured_image}
-{featured_image_url}
-{pub_date}
-{host}
-{host_logo}
-{host_logo_url}
-{guid}
-{guid_is_permalink}
-
-Comments-specific notes:
-- {creator} comes from <dc:creator>.
-- {author} should be an alias for {creator}, because feed parsers may expose dc:creator as author/dc_creator.
-- {description} is the comment text.
-- {reply_chain} comes from <reply_chain> and is optional.
-- Comments feed does not normally have {volume}, {chaptername}, or {coin}.
-
-Discord-enriched placeholders
------------------------------
-These do not come directly from RSS. They should be added by the Discord bot renderer using config/novel_discord_map.toml and local config.
-
-{role_id}
-  From: config/novel_discord_map.toml -> role_id.
-
-{role_mention}
-  Derived from: {role_id}, formatted as <@&role_id>.
-
-{custom_emoji}
-  From: config/novel_discord_map.toml -> custom_emoji.
-
-{discord_role_url}
-  From: config/novel_discord_map.toml -> role_url.
-
-{role_url}
-  Alias for: {discord_role_url}.
-
-{tags}
-  From: mapping/config if available, not RSS.
-
-{novel_url}
-  From: mapping/config if available, not RSS.
-
-{theme_color}
-  Optional future alias for novel branding color / discord_color.
-
-Suggested aliases
------------------
-These aliases make templates easier to read while preserving old feed tag names.
-
-{chapter_name}
-  Alias for: {chaptername}
-
-{featured_image_url}
-  Alias for: {featured_image}
-
-{host_logo_url}
-  Alias for: {host_logo}
-
-{author}
-  Alias for: {creator} in comments feed.
-
-{role_url}
-  Alias for: {discord_role_url}.
-
-Example TOML template using these placeholders
-----------------------------------------------
+```toml
 content = "{role_mention}"
 
 [[embeds]]
 title = "{custom_emoji} {title}"
 url = "{link}"
 description = """
-## {chapter} {chaptername}
+## {chapter} — {chaptername}
 
 {volume}
+
+{coin}
 
 {description}
 """
@@ -235,6 +208,161 @@ url = "{featured_image}"
 [embeds.footer]
 text = "{host} · {translator}"
 icon_url = "{host_logo}"
+```
+
+---
+
+# Comments feed placeholders
+
+Source feed:
+
+```text
+aggregated_comments_feed.xml
+```
+
+Expected item fields may vary depending on comment source.
+
+| Placeholder           | RSS source                                   |
+| --------------------- | -------------------------------------------- |
+| `{title}`             | `<title>`                                    |
+| `{link}`              | `<link>`                                     |
+| `{description}`       | `<description>`                              |
+| `{creator}`           | `<dc:creator>` or equivalent creator field   |
+| `{author}`            | `<author>` or equivalent author field        |
+| `{pub_date}`          | `<pubDate>`                                  |
+| `{host}`              | `<host>`                                     |
+| `{short_code}`        | `<short_code>`, if present                   |
+| `{reply_chain}`       | Reply-chain/custom comment field, if present |
+| `{guid}`              | `<guid>`                                     |
+| `{guid_is_permalink}` | `<guid isPermaLink="...">`                   |
+
+Useful comments template fields:
+
+```text
+{title}
+{link}
+{description}
+{creator}
+{author}
+{pub_date}
+{host}
+{short_code}
+{reply_chain}
+{guid}
+{guid_is_permalink}
+```
+
+Example:
+
+```toml
+content = ""
+
+[[embeds]]
+title = "{title}"
+url = "{link}"
+description = """
+{description}
+
+{reply_chain}
+"""
+color = "comments"
+
+[embeds.footer]
+text = "{host} · {creator}"
+```
+
+---
+
+# Discord-enriched placeholders
+
+These are not directly from RSS. They are added by the Discord bot using local config or mapping data.
+
+| Placeholder          | Source                                                    |
+| -------------------- | --------------------------------------------------------- |
+| `{role_mention}`     | Discord role mention from novel short code.               |
+| `{role_id}`          | Discord role ID from novel short code.                    |
+| `{custom_emoji}`     | Novel custom emoji from Discord config.                   |
+| `{discord_role_url}` | Novel role selection URL from Discord config.             |
+| `{tags}`             | Novel tags from mapping metadata.                         |
+| `{novel_url}`        | Novel page URL from mapping metadata.                     |
+| `{theme_color}`      | Novel theme color, if later renamed from `discord_color`. |
+| `{discord_color}`    | Novel branding color from mapping metadata, if exposed.   |
+
+Useful Discord-enriched fields:
+
+```text
+{role_mention}
+{role_id}
+{custom_emoji}
+{discord_role_url}
+{tags}
+{novel_url}
+{theme_color}
+{discord_color}
+```
+
+---
+
+# Suggested aliases
+
+These aliases make templates easier to write and reduce confusion.
+
+| Alias                  | Same as            |
+| ---------------------- | ------------------ |
+| `{featured_image_url}` | `{featured_image}` |
+| `{host_logo_url}`      | `{host_logo}`      |
+
+---
+
+# Suggested raw placeholders for later
+
+If the renderer later supports raw RSS access, use this style:
+
+```text
+{raw:title}
+{raw:link}
+{raw:description}
+{raw:volume}
+{raw:chapter}
+{raw:chaptername}
+{raw:short_code}
+{raw:featuredImage}
+{raw:hostLogo}
+```
+
+These are optional future placeholders. They are useful if a template needs direct access to an RSS element before the bot normalizes it.
+
+---
+
+# Suggested TOML message-builder format
+
+A flexible template should support message content plus one or more embeds.
+
+```toml
+content = "{role_mention}"
+
+[[embeds]]
+title = "{custom_emoji} {title}"
+url = "{link}"
+description = """
+## {chapter} — {chaptername}
+
+{volume}
+
+{description}
+"""
+color = "paid_chapter"
+
+[embeds.author]
+name = "{translator}"
+icon_url = "{host_logo}"
+
+[embeds.thumbnail]
+url = "{featured_image}"
+
+[embeds.footer]
+text = "{host}"
+icon_url = "{host_logo}"
 
 [[embeds.fields]]
 name = "Novel"
@@ -242,16 +370,31 @@ value = "[{title}]({novel_url})"
 inline = true
 
 [[embeds.fields]]
+name = "Chapter"
+value = "[{chapter}]({link})"
+inline = true
+
+[[embeds.fields]]
 name = "Short code"
 value = "`{short_code}`"
 inline = true
+```
 
-Implementation notes
---------------------
-- The renderer should use a SafeDict-style formatter so missing placeholders render as empty strings.
-- For image URLs, skip the whole image/thumbnail block if the rendered URL is empty.
-- For embed fields, skip fields where both name and value render empty.
-- For color, allow either:
-    color = "paid_chapter"  # lookup from config/embeds.json
-    color = "A87676"        # direct hex fallback
-- Do not use eval for placeholders.
+---
+
+# Minimum renderer behavior
+
+The template renderer should replace unknown placeholders with an empty string instead of crashing.
+
+Example:
+
+```text
+{missing_field}
+```
+
+should render as:
+
+```text
+```
+
+This makes templates safer to edit directly in GitHub.
