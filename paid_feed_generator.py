@@ -92,6 +92,45 @@ semaphore = asyncio.Semaphore(100)
 def normalize_date(dt):
     return dt.replace(microsecond=0)
 
+def _normalized_pubdate(item):
+    dt = getattr(item, "pubDate", None)
+
+    if not isinstance(dt, datetime.datetime):
+        return datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+
+    return dt.astimezone(datetime.timezone.utc).replace(microsecond=0)
+
+def _novel_alpha_sort_key(item):
+    return (
+        getattr(item, "host", "").casefold(),
+        getattr(item, "title", "").casefold(),
+    )
+
+def _chapter_sort_key(item):
+    return get_host_utils(getattr(item, "host", "")).get(
+        "chapter_num", lambda s: (0,)
+    )(getattr(item, "chapter", ""))
+
+def sort_feed_items(items):
+    """
+    Sort newest pubDate first.
+
+    Tie-breakers:
+      1. host/title alphabetical
+      2. chapter number newest first within the same novel/date
+    """
+    # weakest tie-breaker first
+    items.sort(key=_chapter_sort_key, reverse=True)
+
+    # then alphabetical novel tie-breaker
+    items.sort(key=_novel_alpha_sort_key)
+
+    # strongest sort last
+    items.sort(key=_normalized_pubdate, reverse=True)
+
 async def process_novel(session, host, novel_title):
     async with semaphore:
         novel_url = get_novel_url(novel_title, host)
@@ -232,16 +271,6 @@ class CustomRSS2(PyRSS2Gen.RSS2):
         writer.write(indent + "</channel>" + newl)
         writer.write("</rss>" + newl)
 
-# ─── Novel order derived from HOSTING_SITE_DATA insertion order ───
-NOVEL_ORDER = {}
-
-for host, data in HOSTING_SITE_DATA.items():
-    novels = data.get("novels", {})
-    total = len(novels)
-    for idx, title in enumerate(novels.keys()):
-        # earlier in mapping = newer novel = higher priority
-        NOVEL_ORDER[(host.lower(), title)] = total - idx
-
 async def main_async():
     # 1) scrape fresh items
     scraped = []
@@ -272,16 +301,8 @@ async def main_async():
     seven_days_ago = now_utc - datetime.timedelta(days=7)
     kept = [it for it in merged.values() if it.pubDate >= seven_days_ago]
 
-    kept.sort(
-        key=lambda it: (
-            normalize_date(it.pubDate),
-            NOVEL_ORDER.get((getattr(it, "host", "").lower(), it.title), 0),
-            get_host_utils(getattr(it, "host", "")).get(
-                "chapter_num", lambda s: (0,)
-            )(getattr(it, "chapter", "")),
-        ),
-        reverse=True
-    )
+    sort_feed_items(kept)
+    
     kept = kept[:200]
 
     # 5) save history back
