@@ -256,8 +256,6 @@ def main():
     # --- Mimic paid feed behavior for Mistmint API ---
     now_utc = datetime.datetime.now(datetime.timezone.utc)
 
-    # --- Mimic paid feed behavior for Mistmint API ---
-    now_utc = datetime.datetime.now(datetime.timezone.utc)
     seven_days_ago = now_utc - datetime.timedelta(days=7)
     
     rss_items = [item for item in rss_items if item.pubDate >= seven_days_ago]
