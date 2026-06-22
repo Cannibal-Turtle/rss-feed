@@ -15,11 +15,7 @@ has_paid = true
 is_nsfw = false
 is_membership = false
 
-# Temporary compatibility fields for Discord repos.
-# Move these to discord-webhook config before deleting them here.
 discord_color = "#22aa58"
-custom_emoji = "<:25396nokojail:1488194854893912185>"
-discord_role_url = "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458"
 
 tags = ["chinese", "bl"]
 
