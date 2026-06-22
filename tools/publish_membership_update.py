@@ -297,53 +297,59 @@ def post_message(channel_id: int, payload: dict):
     return r.json()
 
 
-def ensure_membership_helper_exists(text: str):
-    changed = False
-
-    if "def get_membership_novels()" not in text:
-        text = text.rstrip() + '''
-
-def get_membership_novels():
-    """Returns the list of novels currently available for membership."""
-    return [
-    ]
-'''
-        changed = True
-
-    return text, changed
+def load_toml_file(path: Path) -> dict:
+    return tomllib.loads(path.read_text(encoding="utf-8"))
 
 
-def mark_novel_as_membership(novel_title: str):
-    text = MAPPINGS_FILE.read_text(encoding="utf-8")
-    text, changed = ensure_membership_helper_exists(text)
+def find_novel_toml_by_short_code(short_code: str):
+    short_code = (short_code or "").strip().upper()
 
-    pattern = re.compile(
-        r"(def get_membership_novels\(\):.*?return\s*\[)(.*?)(\n\s*\])",
-        re.DOTALL,
+    for path in sorted(NOVELS_DIR.glob("*.toml")):
+        data = load_toml_file(path)
+
+        if (data.get("short_code", "") or "").strip().upper() == short_code:
+            return path, data
+
+    return None, None
+
+
+def mark_short_code_as_membership(short_code: str):
+    path, data = find_novel_toml_by_short_code(short_code)
+
+    if not path:
+        raise RuntimeError(f"Could not find novel TOML for short_code: {short_code}")
+
+    if data.get("is_membership") is True:
+        print(f"{short_code} is already marked as membership in {path}")
+        return
+
+    text = path.read_text(encoding="utf-8")
+
+    # Main case:
+    # is_membership = false
+    new_text, count = re.subn(
+        r"(?m)^(\s*is_membership\s*=\s*)false(\s*(?:#.*)?)$",
+        r"\1true\2",
+        text,
+        count=1,
     )
 
-    match = pattern.search(text)
-    if not match:
-        raise RuntimeError("Could not find get_membership_novels() in novel_mappings.py")
+    if count == 0:
+        # If is_membership is missing, add it after is_nsfw if possible.
+        new_text, count = re.subn(
+            r"(?m)^(\s*is_nsfw\s*=\s*(?:true|false)\s*(?:#.*)?\n)",
+            r"\1is_membership = true\n",
+            text,
+            count=1,
+        )
 
-    existing_titles = re.findall(r'["\']([^"\']+)["\']', match.group(2))
+    if count == 0:
+        # Last fallback: append it at the end.
+        new_text = text.rstrip() + "\n\nis_membership = true\n"
 
-    if novel_title not in existing_titles:
-        existing_titles.append(novel_title)
-        changed = True
+    path.write_text(new_text, encoding="utf-8")
 
-    new_body = ""
-    for title in existing_titles:
-        safe_title = title.replace("\\", "\\\\").replace('"', '\\"')
-        new_body += f'\n        "{safe_title}",'
-
-    text = text[:match.start(2)] + new_body + text[match.end(2):]
-
-    if changed:
-        MAPPINGS_FILE.write_text(text.rstrip() + "\n", encoding="utf-8")
-        print(f"Marked {novel_title} as membership in novel_mappings.py")
-    else:
-        print(f"{novel_title} is already marked as membership in novel_mappings.py")
+    print(f"Marked {short_code} as membership in {path}")
 
 
 def main():
@@ -413,7 +419,7 @@ def main():
         msg = post_message(channel_id, payload)
         print(f"Posted membership update to {channel_id}: message {msg.get('id')}")
 
-    mark_novel_as_membership(novel_title)
+    mark_short_code_as_membership(short_code)
 
 
 if __name__ == "__main__":
