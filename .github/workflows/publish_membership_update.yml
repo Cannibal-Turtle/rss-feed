@@ -48,10 +48,10 @@ jobs:
         run: |
           python tools/publish_membership_update.py "$SHORT_CODE" "$BANNER_URL"
 
-      - name: Commit updated novel_mappings.py
+      - name: Commit updated novel TOML
         run: |
           git pull --rebase --autostash
-          git add novel_mappings.py
+          git add mappings/novels/*.toml
 
           if git diff --cached --quiet; then
             echo "No mapping changes to commit."
