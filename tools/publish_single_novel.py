@@ -15,6 +15,11 @@ from dateutil import parser as dateparser
 import discord
 from discord import Embed
 
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+
 from novel_mappings import HOSTING_SITE_DATA, get_novelupdates_url
 
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
@@ -22,7 +27,8 @@ STATE_FILE = "novel_status_targets.json"
 
 ARCHIVE_CHANNEL_ID = 1463476725253144751
 
-NOVEL_ROLE_ID_MAP_URL = "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/novel_role_id_map.json"
+NOVEL_DISCORD_MAP_URL = "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/config/novel_discord_map.toml"
+# Reads role IDs from discord-webhook's rich novel Discord TOML map.
 # currently only supports single server role attachment
 
 # ---------------- utils ----------------
@@ -49,7 +55,7 @@ def fetch_api(url, cookie_env):
 
 _THREAD_ID_MAP_CACHE = {}
 
-_NOVEL_ROLE_ID_MAP_CACHE = {}
+_NOVEL_DISCORD_MAP_URL_CACHE = {}
 
 def normalize_role_id(value):
     m = re.search(r"\d{5,}", str(value or ""))
@@ -57,31 +63,39 @@ def normalize_role_id(value):
 
 def fetch_novel_role_id_map():
     """
-    Fetches short_code -> novel role ID from NOVEL_ROLE_ID_MAP_URL.
-    Values may be raw IDs or <@&...>; this normalizes to raw IDs.
+    Fetches discord-webhook/config/novel_discord_map.toml
+    and returns short_code -> raw novel role ID.
     """
-    url = NOVEL_ROLE_ID_MAP_URL
+    url = NOVEL_DISCORD_MAP_URL
 
     if not url:
         return {}
 
-    if url in _NOVEL_ROLE_ID_MAP_CACHE:
-        return _NOVEL_ROLE_ID_MAP_CACHE[url]
+    if url in _NOVEL_DISCORD_MAP_URL_CACHE:
+        return _NOVEL_DISCORD_MAP_URL_CACHE[url]
 
     r = requests.get(url, timeout=15)
     r.raise_for_status()
-    data = r.json()
+
+    data = tomllib.loads(r.text)
 
     if not isinstance(data, dict):
-        raise RuntimeError(f"novel_role_id_map_url did not return a JSON object: {url}")
+        raise RuntimeError(f"novel_discord_map_url did not return a TOML table: {url}")
 
-    normalized = {
-        str(k).upper(): normalize_role_id(v)
-        for k, v in data.items()
-        if normalize_role_id(v)
-    }
+    normalized = {}
 
-    _NOVEL_ROLE_ID_MAP_CACHE[url] = normalized
+    for short_code, value in data.items():
+        code = str(short_code).strip().upper()
+
+        if not code or not isinstance(value, dict):
+            continue
+
+        role_id = normalize_role_id(value.get("role_id", ""))
+
+        if role_id:
+            normalized[code] = role_id
+
+    _NOVEL_DISCORD_MAP_URL_CACHE[url] = normalized
     return normalized
 
 def resolve_novel_role_mention(short_code):
