@@ -1,219 +1,698 @@
 # Guide for Updating Novel/Translator Mappings and Host Utilities
 
-This guide explains which elements need to be updated whenever a new novel, translator, or hosting site is added. Please update the following files accordingly.
+This guide explains which files need to be updated whenever a new novel, translator, hosting site, feed, or Discord publishing target is added.
+
+The RSS repo now uses **split TOML mapping files** instead of keeping all novel data directly inside `novel_mappings.py`.
 
 ---
 
-## 1. `novel_mappings.py`
+## Repository Structure
 
-This file contains mapping data for each hosting site. When adding a **new novel** or **new hosting site**, you will update:
+Important files and folders:
 
-- **`HOSTING_SITE_DATA`**  
-  - `feed_url`: The URL for the feed (e.g., free chapters)
-  - `paid_feed_url`: If site has URL for paid feed
-  - `comments_feed_url`: If site has URL for comments.
-  - `translator`: Your username on that site  
-  - `host_logo`: The URL for the hosting site's logo
-  - `coin_emoji`: currency used for paid chapters like 🔥 or 🪙
-  - `novels`: A dictionary that maps each novel title to:
-    - `discord_role_id`: The Discord role ID  
-    - `novel_url`: The manual URL for the novel’s main page  
-    - `featured_image`: The URL for the novel’s featured image
-    - `pub_date_override`: The override for the system's default time of scraping
-    - `webhook-only fields`: Contains information needed for [webhook-discord](https://github.com/Cannibal-Turtle/discord-webhook/tree/main) scripts.
-
-> 📦 `pyproject.toml` lets other projects (like the Discord webhook script) install this repo as a package using pip. It tells Python where to find `novel_mappings.py` so the webhook scripts can always pull the latest novel data straight from here 🔄✨.
-
-### Example
-
-```python
-HOSTING_SITE_DATA = {
-    "Dragonholic": {
-        "feed_url": "https://dragonholic.com/feed/manga-chapters/",
-        "comments_feed_url": "https://dragonholic.com/comments/feed/",
-        "translator": "Cannibal Turtle",
-        "host_logo": "https://dragonholic.com/wp-content/uploads/2025/01/Web-Logo-White.png",
-        "coin_emoji": "🔥",
-        "novels": {
-            "Quick Transmigration: The Villain Is Too Pampered and Alluring": {
-                "discord_role_id": "<@&1329391480435114005>",
-                "novel_url": "https://dragonholic.com/novel/quick-transmigration-the-villain-is-too-pampered-and-alluring/",
-                "featured_image": "https://dragonholic.com/wp-content/uploads/2024/08/177838.jpg",
-                "pub_date_override": {"hour": 12, "minute": 0, "second": 0}
-                # ─── webhook-only fields ───
-                "chapter_count": "1184 chapters + 8 extras",
-                "last_chapter": "Extra 8",
-                "start_date": "31/8/2024",
-                "free_feed": "https://cannibal-turtle.github.io/rss-feed/free_chapters_feed.xml",
-                "paid_feed": "https://cannibal-turtle.github.io/rss-feed/paid_chapters_feed.xml",
-                "history_file":   "tvitpa_history.json"
-
-            },
-            # Second novel here
-            },
-            # Add more novels as needed.
-        }
-    },
-    # Add additional hosting sites here.
-}
-```
-
-- **`get_nsfw_novels()`**  
-  If you have **NSFW** novel titles, add them to this list so that the feed generator can mark them accordingly.
-
-```python
-def get_nsfw_novels():
-    return [
-        # List NSFW novel titles here, e.g.:
-        "Some NSFW Novel Title"
-    ]
+```text
+rss-feed/
+├─ novel_mappings.py
+├─ host_utils.py
+├─ free_feed_generator.py
+├─ paid_feed_generator.py
+├─ comments.py
+├─ update_novel_status.py
+├─ novel_status_targets.json
+├─ mappings/
+│  ├─ __init__.py
+│  ├─ output_feeds.toml
+│  ├─ hosts/
+│  │  └─ mistmint_haven.toml
+│  └─ novels/
+│     ├─ tvitpa.toml
+│     ├─ tdlbkgc.toml
+│     ├─ hiaflg.toml
+│     └─ ...
+├─ tools/
+│  ├─ publish_single_novel.py
+│  └─ publish_membership_update.py
+└─ pyproject.toml
 ```
 
 ---
 
-## **2. `host_utils.py`**  
+## 1. Mapping Files
 
-- Manages host-specific logic under one module.  
-- Currently supports **Dragonholic**, but can be extended to other hosts.  
+### `novel_mappings.py`
 
-### **Dragonholic Functions**  
-- **`split_title_dragonholic(full_title)`** → Splits a chapter title into `main_title`, `chapter`, and `chaptername`.  
-- **`chapter_num_dragonholic(chapter)`** → Extracts numeric values from chapter names.  
-- **`clean_description(raw_desc)`** → Cleans raw HTML descriptions by removing unnecessary elements.  
-- **`extract_pubdate_from_soup(chap)`** → Parses chapter `<li>` elements to extract absolute or relative publication dates.
-- **`novel_has_paid_update_async(session, novel_url)`** → Checks if a novel has a premium (paid) update within the last 7 days.
-- **`scrape_paid_chapters_async(session, novel_url, host)`** → Scrapes the paid chapter list from Dragonholic.
-- **`format_volume_from_url(url, main_title)`** → Utility to infer volume names from URLs.
-- **`split_comment_title_dragonholic(comment_title)`** → Extracts the novel title from the comment title string.
-- **`extract_chapter_dragonholic(link)`** → Extracts a readable chapter label from a URL.
-> 💡 Note: For Dragonholic paid chapters, volume names are scraped directly from the DOM (e.g., li.parent.has-child > a.has-child). No need to reconstruct them from URLs.
-  
-### **Host Utility Dispatcher**  
-To get the appropriate utility functions for a specific host, use:  
+`novel_mappings.py` is now the **loader/front door**.
+
+Other scripts and repos can still import:
+
 ```python
-get_host_utils("Dragonholic")
+from novel_mappings import HOSTING_SITE_DATA
+```
+
+This keeps existing dependent scripts working, while the actual editable data lives in TOML files under:
+
+```text
+mappings/
+```
+
+`novel_mappings.py` loads:
+
+```text
+mappings/output_feeds.toml
+mappings/hosts/*.toml
+mappings/novels/*.toml
+```
+
+and builds `HOSTING_SITE_DATA` automatically.
 
 ---
+
+## 2. Output Feed Config
+
+### `mappings/output_feeds.toml`
+
+This file stores the generated RSS feed URLs.
+
+These are global repo-level feeds, not host-specific feeds.
+
+```toml
+free_feed = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml"
+paid_feed = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml"
+comments_feed = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml"
 ```
+
+Novel TOML files use flags like:
+
+```toml
+has_free = true
+has_paid = true
+has_comments = true
+```
+
+Then `novel_mappings.py` injects the correct feed URLs automatically.
+
+---
+
+## 3. Host Mapping Files
+
+Host-level data lives in:
+
+```text
+mappings/hosts/
+```
+
+Example:
+
+```text
+mappings/hosts/mistmint_haven.toml
+```
+
+Example structure:
+
+```toml
+host = "Mistmint Haven"
+
+translator = "Cannibal Turtle"
+host_logo = "https://example.com/logo.png"
+coin_emoji = "🪙"
+
+# Name of the GitHub secret that stores this host's login token/cookie.
+token_secret = "MISTMINT_COOKIE"
+```
+
+Host files should contain data shared by all novels on that host.
+
+Examples:
+
+* `host`
+* `translator`
+* `host_logo`
+* `coin_emoji`
+* `token_secret`
+
+Do **not** put per-novel data here.
+
+---
+
+## 4. Novel Mapping Files
+
+Novel-level data lives in:
+
+```text
+mappings/novels/
+```
+
+Each novel gets its own TOML file.
+
+Example:
+
+```text
+mappings/novels/amlwc.toml
+```
+
+Example:
+
+```toml
+host = "Mistmint Haven"
+
+title = "After the Male Leads Went Crazy, They All Turned Into Male Ghosts"
+short_code = "AMLWC"
+
+novel_url = "https://mistminthaven.com/novel/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts/"
+novelupdates_url = "https://www.novelupdates.com/series/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts/"
+featured_image = "https://mistminthaven.com/wp-content/uploads/example-cover.jpg"
+
+has_free = true
+has_paid = true
+has_comments = true
+
+is_nsfw = false
+is_membership = false
+
+# Optional display/status fields.
+chapter_count = "92 Chapters"
+last_chapter = "Chapter 92"
+start_date = ""
+
+# Used only by arc checker novels.
+# Leave empty if this novel does not use arc tracking.
+history_file = ""
+
+# Optional novel-specific embed color.
+# Discord bots can use this when config/embeds.json says "paid_chapter": "novel".
+discord_color = "#c90016"
+
+custom_description = """
+Optional multiline description here.
+
+TOML supports triple-quoted multiline strings, so summaries are easier to paste and edit than JSON.
+"""
+```
+
+---
+
+## 5. Important Novel Fields
+
+### Required Fields
+
+| Field            | Purpose                                                                  |
+| ---------------- | ------------------------------------------------------------------------ |
+| `host`           | Must match a host file, e.g. `"Mistmint Haven"`                          |
+| `title`          | Novel title used in feeds and status matching                            |
+| `short_code`     | Stable short code used across bots and workflows                         |
+| `novel_url`      | Main novel page                                                          |
+| `featured_image` | Cover image URL                                                          |
+| `has_free`       | Whether this novel appears in the free feed                              |
+| `has_paid`       | Whether this novel appears in the paid feed                              |
+| `has_comments`   | Whether this novel appears in the comments feed                          |
+| `is_nsfw`        | Whether this novel should be categorized as NSFW                         |
+| `is_membership`  | Whether this novel is currently membership-only/available for membership |
+
+### Optional Fields
+
+| Field                | Purpose                                                          |
+| -------------------- | ---------------------------------------------------------------- |
+| `novelupdates_url`   | NovelUpdates page URL                                            |
+| `chapter_count`      | Display text for completion/status cards                         |
+| `last_chapter`       | Completion checker target                                        |
+| `start_date`         | Used to calculate “After X of updates...” in completion messages |
+| `history_file`       | Arc checker history file                                         |
+| `discord_color`      | Novel-specific embed color                                       |
+| `theme_color`        | Future/alias field for novel-specific color                      |
+| `custom_description` | Multiline manual description                                     |
+
+---
+
+## 6. Empty Optional Fields
+
+These are safe to leave empty:
+
+```toml
+start_date = ""
+history_file = ""
+chapter_count = ""
+```
+
+Notes:
+
+* `start_date = ""` means completion messages skip the “After X of updates...” phrase.
+* `history_file = ""` means arc tracking should skip that novel.
+* `last_chapter = ""` means completion checking should skip that novel.
+
+For safety, scripts should read optional strings like:
+
+```python
+start_date = (details.get("start_date", "") or "").strip()
+history_file = (details.get("history_file", "") or "").strip()
+```
+
+---
+
+## 7. NSFW and Membership Tracking
+
+NSFW and membership are now stored per novel in TOML.
+
+### NSFW
+
+Use:
+
+```toml
+is_nsfw = true
+```
+
+`get_nsfw_novels()` is now derived from TOML data.
+
+Do **not** manually maintain a hardcoded title list unless absolutely needed.
+
+### Membership
+
+Use:
+
+```toml
+is_membership = true
+```
+
+`get_membership_novels()` is now derived from TOML data.
+
+`tools/publish_membership_update.py` automatically updates the matching novel TOML file from:
+
+```toml
+is_membership = false
+```
+
+to:
+
+```toml
+is_membership = true
+```
+
+The workflow should commit:
+
+```bash
+git add mappings/novels/*.toml
+```
+
+not `novel_mappings.py`.
+
+---
+
+## 8. Helper Functions from `novel_mappings.py`
+
+The loader exposes helper functions used by RSS scripts and Discord bots.
+
+Useful helpers include:
+
+```python
+get_nsfw_novels()
+get_membership_novels()
+
+get_novel_details_by_short_code(short_code)
+find_novel_by_short_code(short_code)
+
+novel_has_free_chapters(host, novel_title)
+novel_has_paid_chapters(host, novel_title)
+novel_has_comments_feed(host, novel_title)
+
+short_code_has_free_chapters(short_code)
+short_code_has_paid_chapters(short_code)
+short_code_has_comments_feed(short_code)
+```
+
+Short-code helpers are preferred for cross-repo workflows.
+
+---
+
+## 9. `pyproject.toml`
+
+`pyproject.toml` lets other projects install this repo as a package.
+
+This allows other repos, such as `discord-webhook` and `mistmint-discord`, to import:
+
+```python
+from novel_mappings import HOSTING_SITE_DATA
+```
+
+Make sure TOML mapping files are included as package data:
+
+```toml
+[tool.setuptools.package-data]
+mappings = [
+  "hosts/*.toml",
+  "novels/*.toml",
+  "output_feeds.toml",
+]
+```
+
+If Python versions below 3.11 need support, include:
+
+```toml
+dependencies = [
+  "tomli>=2.0.1; python_version < '3.11'",
+]
+```
+
+---
+
+## 10. `host_utils.py`
+
+`host_utils.py` manages host-specific scraping and parsing logic.
+
+It keeps each host’s weird chapter/title/date behavior separate from the main feed generators.
+
+### Common Host Utility Functions
+
+Host utility dictionaries may include functions like:
+
+```python
+split_title
+chapter_num
+clean_description
+extract_pubdate_from_soup
+novel_has_paid_update_async
+scrape_paid_chapters_async
+format_volume_from_url
+split_comment_title
+extract_chapter
+```
+
+### Dispatcher
+
+Use:
+
+```python
+get_host_utils("Mistmint Haven")
+```
+
+or:
+
+```python
+get_host_utils(host)
+```
+
+The dispatcher returns the correct function set for that host.
+
+When adding a new host, add that host’s functions and register them in `get_host_utils(host)`.
+
+---
+
 ## Summary Checklist
 
-1. **Add a New Novel on an Existing Host:**
-   - In `novel_mappings.py`, add or update the `novels` dictionary under the appropriate host in `HOSTING_SITE_DATA`.
-   - If the novel is NSFW, also add it to `get_nsfw_novels()`.
+### Add a New Novel on an Existing Host
 
-2. **Add a New Hosting Site:**
-   - In `novel_mappings.py`, create a new entry in `HOSTING_SITE_DATA` with:
-     - `feed_url`, `translator`, `host_logo`, and a `novels` dictionary.
-   - In `host_utils.py`, create new site‑specific functions and group them in a new dictionary. Update `get_host_utils(host)` to return that dictionary.
+1. Create a new TOML file in:
 
-Following these steps keeps your feed generator modular and easy to update.
+   ```text
+   mappings/novels/
+   ```
 
-## 📄 Sample Output (What the Final RSS Feed Looks Like)
-Each generated .xml feed (free or paid) will contain structured <item> entries enriched with metadata like volume, chapter name, link, description, translator, Discord role, hosting site, and more.
+2. Add required fields:
 
-```
+   ```toml
+   host = "Mistmint Haven"
+   title = "Novel Title"
+   short_code = "CODE"
+   novel_url = "https://..."
+   featured_image = "https://..."
+
+   has_free = true
+   has_paid = true
+   has_comments = true
+
+   is_nsfw = false
+   is_membership = false
+   ```
+
+3. Fill optional fields when available:
+
+   ```toml
+   novelupdates_url = ""
+   chapter_count = ""
+   last_chapter = ""
+   start_date = ""
+   history_file = ""
+   discord_color = ""
+   custom_description = """
+   """
+   ```
+
+4. If the novel is NSFW:
+
+   ```toml
+   is_nsfw = true
+   ```
+
+5. If the novel is membership:
+
+   ```toml
+   is_membership = true
+   ```
+
+6. Add Discord role/emoji/thread data in the Discord repo, not here.
+
+---
+
+### Add a New Hosting Site
+
+1. Create a new TOML file in:
+
+   ```text
+   mappings/hosts/
+   ```
+
+2. Add host-level metadata:
+
+   ```toml
+   host = "Host Name"
+   translator = "Translator Name"
+   host_logo = "https://..."
+   coin_emoji = "🪙"
+   token_secret = ""
+   ```
+
+3. Add host-specific logic in `host_utils.py`.
+
+4. Update `get_host_utils(host)` to return the new host’s utility dictionary.
+
+5. Add novel TOML files under `mappings/novels/`.
+
+---
+
+## 📄 Sample Output: RSS Feed Item
+
+Each generated `.xml` feed contains structured `<item>` entries enriched with metadata like title, volume, chapter, chapter name, link, description, translator, hosting site, short code, cover image, and more.
+
+Example:
+
+```xml
 <item>
-  <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
-  <volume>【Arc 5】The Fake Daughter Will Not Be a Cannon Fodder</volume>
-  <chapter>Chapter 250</chapter>
-  <chaptername>***Uglier Than a Monkey***</chaptername>
-  <link>https://dragonholic.com/novel/.../chapter-250/</link>
-  <description><![CDATA[A deadly twist awaits in the mirror world...]]></description>
+  <title>After the Male Leads Went Crazy, They All Turned Into Male Ghosts</title>
+  <volume>Arc 1: The Charming Landlord Is Too Hard to Handle</volume>
+  <chapter>Chapter 2</chapter>
+  <chaptername>***1.2***</chaptername>
+  <link>https://mistminthaven.com/novel/.../chapter-2/</link>
+  <description><![CDATA[A short chapter summary or excerpt...]]></description>
   <category>SFW</category>
   <translator>Cannibal Turtle</translator>
-  <discord_role_id><![CDATA[<@&1329XXXXXX>]]></discord_role_id>
-  <featuredImage url="https://dragonholic.com/.../cover.jpg"/>
-  <coin>🔥 10</coin>
+  <short_code>AMLWC</short_code>
+  <featuredImage url="https://mistminthaven.com/.../cover.jpg"/>
+  <coin>🪙 5</coin>
   <pubDate>Fri, 18 Apr 2025 12:00:00 +0000</pubDate>
-  <host>Dragonholic</host>
-  <hostLogo url="https://dragonholic.com/.../logo.png"/>
-  <guid isPermaLink="false">chapter-250-guid</guid>
+  <host>Mistmint Haven</host>
+  <hostLogo url="https://mistminthaven.com/.../logo.png"/>
+  <guid isPermaLink="false">amlwc-chapter-2</guid>
 </item>
 ```
 
-## 🆕 Mistmint Haven (Quick Setup) [UPDATE 4.0]
+---
 
-### Modes
-- **API mode** when `MISTMINT_FORCE_STATE="0"`. Runs on schedule
-- **STATE mode** when `MISTMINT_FORCE_STATE="1"` **or** no cookie. Accepts manual paid chapter entry via `manual_scripts/mistmint_state.json` and updates `manual_scripts/paid_history.json`. If mode is switched, clear `paid_history.json` and update `mistmint_state.json`.
+## Feed Sorting
 
-### Mapping (`novel_mappings.py`)
-Add:
-```python
-HOSTING_SITE_DATA["Mistmint Haven"] = {
-  "token_secret": "MISTMINT_COOKIE",   # name of the repo secret to read at runtime
-}
+Feed items are sorted newest first by `pubDate`.
+
+When multiple items have the same timestamp, the tie-breaker is alphabetical instead of mapping insertion order.
+
+Tie-breakers:
+
+```text
+1. pubDate newest first
+2. host/title alphabetical
+3. chapter number newest first within the same novel/date
 ```
 
-### Required repo secrets
-- `MISTMINT_COOKIE` – logged-in cookie string  
-- `PAT_GITHUB` – for repo dispatch to other bots  
-- `DISCORD_BOT_TOKEN`, `DISCORD_MOD_CHANNEL_ID` – for alert posts
+This avoids depending on the order of novels inside mapping files.
+
+---
+
+## 🆕 Mistmint Haven Quick Setup
+
+### Modes
+
+* **API mode** when `MISTMINT_FORCE_STATE="0"`.
+* **STATE mode** when `MISTMINT_FORCE_STATE="1"` or no cookie is available.
+
+STATE mode accepts manual paid chapter entry via:
+
+```text
+manual_scripts/mistmint_state.json
+```
+
+and updates:
+
+```text
+manual_scripts/paid_history.json
+```
+
+If mode is switched, clear `paid_history.json` and update `mistmint_state.json`.
+
+---
+
+### Mapping
+
+Host-level data goes in:
+
+```text
+mappings/hosts/mistmint_haven.toml
+```
+
+Example:
+
+```toml
+host = "Mistmint Haven"
+translator = "Cannibal Turtle"
+host_logo = "https://..."
+coin_emoji = "🪙"
+token_secret = "MISTMINT_COOKIE"
+```
+
+Novel-level data goes in:
+
+```text
+mappings/novels/*.toml
+```
+
+Example:
+
+```toml
+host = "Mistmint Haven"
+title = "Novel Title"
+short_code = "CODE"
+novel_url = "https://..."
+featured_image = "https://..."
+
+has_free = true
+has_paid = true
+has_comments = true
+
+is_nsfw = false
+is_membership = false
+```
+
+---
+
+### Required Repo Secrets
+
+| Secret                   | Purpose                           |
+| ------------------------ | --------------------------------- |
+| `MISTMINT_COOKIE`        | Logged-in cookie/token string     |
+| `PAT_GITHUB`             | Cross-repo dispatch to other bots |
+| `DISCORD_BOT_TOKEN`      | Discord bot authentication        |
+| `DISCORD_MOD_CHANNEL_ID` | Alert/mod channel posts           |
 
 ---
 
 ## Token-Expiry Alerts
 
-1. Hourly job runs `comments.py` → calls `maybe_dispatch_token_alerts` if token is expiring → `send_token_alert.yml` → `send_token_alert.py`.
-2. For each host with `token_secret`, it reads that env var, decodes JWT `exp`, and if `≤ 1 day`, fires:
-   `repository_dispatch` → `event_type: token-expiring`.
-3. `.token_alert_state.json` stores the last `exp` per `(host, token_secret)` so you aren’t spammed hourly.
+1. Hourly job runs `comments.py`.
+2. If a host has `token_secret`, the script checks the matching environment variable.
+3. If the token is expiring soon, it calls `maybe_dispatch_token_alerts`.
+4. That triggers `send_token_alert.yml`.
+5. `send_token_alert.py` posts the alert.
+6. `.token_alert_state.json` stores the last `exp` per `(host, token_secret)` so alerts do not spam hourly.
+
+Example host config:
+
+```toml
+token_secret = "MISTMINT_COOKIE"
+```
+
+The actual cookie/token must be available as an environment variable with that name.
 
 ---
 
 ## NSFW Catch Update
 
-Now also updates `<category>` if `<chapter>` and `<chaptername>` has these keywords:
+The feed generator can mark items as NSFW if `<chapter>` or `<chaptername>` contains NSFW keywords.
 
-### Will match (✅) - Not case sensitive
+### Will match, not case-sensitive
 
-- (NSFW) , (nsfw scene) , (extended nsfw)
-- (R-18) , (r18) , (ver. R-18+ patch) , (R-18+)
-- (18+)
-- (H) , (HH) , (HHH) , (bonus H chapter)
+* `(NSFW)`
+* `(nsfw scene)`
+* `(extended nsfw)`
+* `(R-18)`
+* `(r18)`
+* `(ver. R-18+ patch)`
+* `(R-18+)`
+* `(18+)`
+* `(H)`
+* `(HH)`
+* `(HHH)`
+* `(bonus H chapter)`
+
+Novel-wide NSFW status should still be set in the novel TOML:
+
+```toml
+is_nsfw = true
+```
 
 ---
 
-## 🆕 Automatic Novel Status Updater (Cross-Bot Integration)
+## 🆕 Automatic Novel Status Updater
 
-This system keeps **existing Discord novel cards up-to-date** whenever new free chapters are announced, without reposting or changing formatting.
+This system keeps existing Discord novel cards up-to-date whenever new free chapters are announced.
 
-It is designed to work **across repositories and servers**.
+It works across repositories and servers.
 
 ---
 
 ## 🔁 Overview: How Status Auto-Updates Work
 
-When a **new free chapter** is detected and posted:
+When a new free chapter is detected and posted:
 
-1. **Free Chapters Bot** (discord-webhook repo)  
-   - Posts the chapter announcement to Discord  
-   - Collects:
-     - Novel **title**
-     - **Host** (e.g. Mistmint Haven, Dragonholic)
-   - Fires a `repository_dispatch` event to the **rss-feed repo**
+1. **Free Chapters Bot**
+   Usually in `discord-webhook`.
 
-2. **rss-feed Repo**  
-   - Receives the dispatch
-   - Runs the **status updater script**
-   - Resolves:
-     ```
-     title + host → short_code (via HOSTING_SITE_DATA)
-     ```
-   - Updates only the **Status field** of existing embeds
+   It posts the chapter announcement to Discord and collects:
 
-3. **Target Discord Messages**  
-   - Are edited in-place
-   - Formatting, emojis, and layout are preserved
-   - No reposts, no duplication
+   * Novel title
+   * Host
+
+2. **rss-feed Repo**
+   Receives the dispatch and runs the status updater script.
+
+   It resolves:
+
+   ```text
+   title + host
+      ↓
+   HOSTING_SITE_DATA
+      ↓
+   short_code
+   ```
+
+3. **Target Discord Messages**
+   Are edited in-place.
+
+   Formatting, emojis, and layout are preserved.
+
+   No reposts. No duplication.
 
 ---
 
-## 📍 Where the Mapping Happens (Important)
+## 📍 Where the Mapping Happens
 
-> 🔑 **Short codes are NOT passed between repos**
+Short codes do not need to be passed between repos for status updates.
 
-Resolution happens **only inside the updater Python script**, using mappings.
+Resolution happens inside the updater Python script, using `HOSTING_SITE_DATA`.
 
 ```text
 Title + Host
@@ -223,13 +702,21 @@ HOSTING_SITE_DATA
 short_code
 ```
 
+Because `HOSTING_SITE_DATA` is still exposed by `novel_mappings.py`, dependent scripts can keep importing it even though the source data is now TOML.
+
 ---
 
 ## 📄 Status Target Mapping
 
-The updater uses a static map of **existing Discord messages** that should be updated.
+The updater uses:
 
-Example (`novel_status_targets.json`):
+```text
+novel_status_targets.json
+```
+
+This file stores existing Discord messages that should be edited.
+
+Example:
 
 ```json
 {
@@ -245,7 +732,7 @@ Example (`novel_status_targets.json`):
       "message_id": "123456789"
     }
   ],
-  "ATVHE": [
+  "AMLWC": [
     {
       "channel_id": "123456789",
       "message_id": "123456789"
@@ -255,72 +742,100 @@ Example (`novel_status_targets.json`):
 ```
 
 ### Notes
-- A **single novel can have multiple targets**  
-  (e.g. different servers, channels, or forum posts)
-- Forum thread messages are supported  
-  (threads are just channels internally)
+
+* A single novel can have multiple targets.
+* Targets can be in different servers, channels, or threads.
+* Forum threads are supported because Discord treats threads as channels internally.
 
 ---
 
-## ✏️ What the Updater Changes (and What It Doesn’t)
+## ✏️ What the Updater Changes
 
-### ✅ Updated
-- **Status field value only**
-  - `*Ongoing*` / `*Completed*`
-  - `Next free chapter live <t:UNIX:R>`
-  - `All chapters are now free`
+### Updated
 
-### ❌ Not touched
-- Title
-- Emojis
-- Role field (if present)
-- Links
-- Thumbnail
-- Embed color
-- Any other formatting
+Only the status field value is updated.
 
-> If a server’s embed **does not have a Role field**, the updater skips it safely.
+Examples:
+
+```text
+*Ongoing*
+*Completed*
+Next free chapter live <t:UNIX:R>
+All chapters are now free
+```
+
+### Not Touched
+
+The updater does not change:
+
+* Title
+* Emojis
+* Role field
+* Links
+* Thumbnail
+* Embed color
+* Other formatting
+
+If a target embed does not have the expected status field, the updater skips it safely.
 
 ---
 
 ## 🧠 How Status Is Calculated
 
 The updater:
-1. Fetches the **paid/free chapter API**
-2. Determines:
-   - Whether **all paid chapters are released**
-   - Whether **future free chapters exist**
-3. Produces one of:
-   - `*Completed*`
-   - `*Ongoing*`
-   - `Next free chapter live <t:…:R>`
-   - `All chapters are now free`
-   - `_Free release schedule not available_`
+
+1. Fetches paid/free chapter data.
+2. Determines whether all paid chapters are released.
+3. Determines whether future free chapters exist.
+4. Produces one of:
+
+```text
+*Completed*
+*Ongoing*
+Next free chapter live <t:…:R>
+All chapters are now free
+_Free release schedule not available_
+```
 
 ---
 
-## 🔐 Required Secrets (Cross-Repo)
+## 🔐 Required Secrets for Cross-Repo Status Updates
 
-Because this system triggers **across repositories**, a PAT is required.
+Because this system triggers across repositories, a PAT is required.
 
-### Required Secrets
-| Secret | Repo | Purpose |
-|---|---|---|
-| `PAT_GITHUB` | **Source repo (in this case discord-webhook)** | Dispatch events to rss-feed |
-| `DISCORD_BOT_TOKEN` | rss-feed | Edit existing Discord messages |
-| `MISTMINT_COOKIE` | rss-feed | Paid/free API access (if applicable) |
+| Secret              | Repo                                   | Purpose                             |
+| ------------------- | -------------------------------------- | ----------------------------------- |
+| `PAT_GITHUB`        | Source repo, usually `discord-webhook` | Dispatch events to `rss-feed`       |
+| `DISCORD_BOT_TOKEN` | `rss-feed`                             | Edit existing Discord messages      |
+| `MISTMINT_COOKIE`   | `rss-feed`                             | Paid/free API access, if applicable |
 
-> ⚠️ `GITHUB_TOKEN` is **not sufficient** for cross-repo dispatch.
+`GITHUB_TOKEN` is not sufficient for cross-repo dispatch.
 
 ---
 
-## 🧩 Adding a New Novel (With Auto-Updates)
+## 🧩 Adding a New Novel With Auto-Updates
 
-To enable automatic status updates for a new novel:
+To enable automatic status updates:
 
-1. Add the novel to `HOSTING_SITE_DATA`
-2. Assign it a unique `short_code`
-3. Add its Discord message(s) to `novel_status_targets.json`
+1. Add the novel TOML file in:
+
+   ```text
+   mappings/novels/
+   ```
+
+2. Assign a unique:
+
+   ```toml
+   short_code = "CODE"
+   ```
+
+3. Run the manual publishing workflow to create/register the novel card.
+
+4. Confirm the message was added to:
+
+   ```text
+   novel_status_targets.json
+   ```
 
 ---
 
@@ -328,7 +843,21 @@ To enable automatic status updates for a new novel:
 
 These tools are used when manually publishing Discord announcement cards for novels.
 
-They work together with `novel_mappings.py`, `NOVEL_META`, and `novel_status_targets.json`.
+They use:
+
+```text
+mappings/novels/*.toml
+novel_mappings.py
+novel_status_targets.json
+```
+
+The Discord-specific role ID, custom emoji, and role URL should live in the Discord repo, not in `rss-feed`.
+
+For example:
+
+```text
+discord-webhook/config/novel_discord_map.toml
+```
 
 ---
 
@@ -336,82 +865,103 @@ They work together with `novel_mappings.py`, `NOVEL_META`, and `novel_status_tar
 
 This script manually publishes a normal novel status embed.
 
-It is usually used for the first-time setup of a novel card, so that future status updates know which Discord message to edit.
+It is usually used for first-time setup of a novel card, so future status updates know which Discord message to edit.
 
 ### What it does
 
-- Takes a novel `short_code`
-- Finds the novel in `HOSTING_SITE_DATA`
-- Posts a novel status embed to:
-  - the private/archive channel
-  - the novel forum/thread, if one exists
-- Registers the posted message ID in `novel_status_targets.json`
+* Takes a novel `short_code`.
+* Finds the novel through `novel_mappings.py`.
+* Posts a novel status embed to the private/archive channel.
+* Optionally posts to a forum/thread if a thread ID is provided.
+* Registers the posted message ID in `novel_status_targets.json`.
 
-### Important channel behavior
+### Channel Behavior
 
-The script uses:
+The private/archive channel is the default posting target.
 
-```python
-ARCHIVE_CHANNEL_ID = 1463476725253144751
+If a forum/thread ID is provided:
+
+```text
+numeric thread ID
 ```
 
-as the private/archive channel.
+the script posts to both:
 
-It also checks `NOVEL_META`:
-
-```python
-NOVEL_META = {
-    "TVITPA": {"forum_post_id": "1444214902322368675"},
-    "TDLBKGC": {"forum_post_id": "1438462596381413417"},
-    "BOE": {"forum_post_id": "N/A"},
-}
+```text
+private/archive channel
+forum/thread
 ```
 
-### `NOVEL_META` rules
+If the thread value is:
 
-| Value | Meaning |
-|---|---|
-| Numeric `forum_post_id` | Post to private/archive channel + that thread |
-| `"N/A"` | Post only to the private/archive channel |
-| Missing short code | Stop with error, because the mapping may have been forgotten |
-| Empty `forum_post_id` | Stop with error |
-
-Use `"N/A"` intentionally when a novel has no Mistmint Haven forum/thread.
-
-Example:
-
-```python
-"BOE": {"forum_post_id": "N/A"},
+```text
+N/A
 ```
 
-This prevents accidental silent private-only posting when a thread ID was simply forgotten.
+the script posts only to the private/archive channel.
+
+Use `N/A` intentionally when a novel has no forum/thread.
 
 ---
 
 ## 🎟 `tools/publish_membership_update.py`
 
-This script manually publishes a Discord Components V2 membership announcement.
+This script manually publishes a membership announcement.
 
 It is used when a novel becomes available for membership.
 
 ### What it does
 
-- Takes a novel `short_code`
-- Takes a required membership `banner_url`
-- Finds the novel in `HOSTING_SITE_DATA`
-- Reads `NOVEL_META` from `tools/publish_single_novel.py`
-- Posts the membership announcement to:
-  - the private/news channel
-  - the novel forum/thread, if one exists
-- Adds the novel title to `get_membership_novels()` in `novel_mappings.py`
+* Takes a novel `short_code`.
+* Takes a required membership `banner_url`.
+* Finds the novel through `novel_mappings.py`.
+* Posts the membership announcement to the private/news channel.
+* Optionally posts to a forum/thread if a thread ID is provided.
+* Marks the novel TOML as membership.
 
-### Required workflow inputs
+It changes:
 
-The GitHub workflow requires:
+```toml
+is_membership = false
+```
+
+to:
+
+```toml
+is_membership = true
+```
+
+in the matching file under:
+
+```text
+mappings/novels/
+```
+
+It does **not** update a hardcoded `get_membership_novels()` list in `novel_mappings.py`.
+
+---
+
+## Required Workflow Inputs
+
+### `publish_single_novel.yml`
 
 ```yaml
 short_code:
-  description: "Novel short code, e.g. TVITPA, TDLBKGC, ATVHE"
+  description: "Novel short code, e.g. TVITPA, TDLBKGC, AMLWC"
+  required: true
+  type: string
+
+forum_post_id:
+  description: "Optional Discord forum/thread ID. Use N/A if none."
+  required: true
+  type: string
+```
+
+### `publish_membership_update.yml`
+
+```yaml
+short_code:
+  description: "Novel short code, e.g. TVITPA, TDLBKGC, AMLWC"
   required: true
   type: string
 
@@ -419,54 +969,47 @@ banner_url:
   description: "Membership banner image URL"
   required: true
   type: string
+
+forum_post_id:
+  description: "Optional Discord forum/thread ID. Use N/A if none."
+  required: true
+  type: string
 ```
 
-There is no default banner image. A banner URL must be entered every time.
-
-### Posting behavior
-
-The script always posts first to:
-
-```python
-NEWS_CHANNEL_ID = 1330049962129489930
-```
-
-Then it checks `NOVEL_META`.
-
-| Value | Meaning |
-|---|---|
-| Numeric `forum_post_id` | Post to private/news channel + that thread |
-| `"N/A"` | Post only to the private/news channel |
-| Missing short code | Stop with error |
-| Empty `forum_post_id` | Stop with error |
-
-Example:
-
-```python
-"BOE": {"forum_post_id": "N/A"},
-```
-
-means the membership update will only post to the private/news channel.
+There is no default membership banner image. A banner URL must be entered every time.
 
 ---
 
-## 🧾 Membership Tracking in `novel_mappings.py`
+## Posting Behavior
 
-When `publish_membership_update.py` runs successfully, it automatically updates `novel_mappings.py`.
+| Thread Value       | Meaning                               |
+| ------------------ | ------------------------------------- |
+| Numeric thread ID  | Post to private channel + that thread |
+| `"N/A"`            | Post only to private channel          |
+| Empty value        | Stop with error                       |
+| Missing short code | Stop with error                       |
 
-It adds or updates:
+This prevents accidental silent private-only posting when a thread ID was simply forgotten.
 
-```python
-def get_membership_novels():
-    """Returns the list of novels currently available for membership."""
-    return [
-        "Novel Title Here",
-    ]
+---
+
+## 🧾 Membership Tracking
+
+Membership is tracked in the matching novel TOML file:
+
+```toml
+is_membership = true
 ```
 
-This works like `get_nsfw_novels()`, but for membership novels.
+The helper:
 
-Do not manually add this function unless needed. The membership publish script can create it automatically.
+```python
+get_membership_novels()
+```
+
+returns membership novels dynamically from TOML.
+
+Do not manually maintain a separate membership list.
 
 ---
 
@@ -480,13 +1023,16 @@ Input:
 
 ```yaml
 short_code
+forum_post_id
 ```
 
 Result:
 
-- Posts the novel card
-- Updates `novel_status_targets.json`
-- Commits the updated target mapping
+* Posts the novel card.
+* Updates `novel_status_targets.json`.
+* Commits the updated target mapping.
+
+---
 
 ### `publish_membership_update.yml`
 
@@ -497,13 +1043,20 @@ Inputs:
 ```yaml
 short_code
 banner_url
+forum_post_id
 ```
 
 Result:
 
-- Posts the membership update
-- Updates `novel_mappings.py`
-- Commits the updated membership list
+* Posts the membership update.
+* Updates the matching novel TOML file.
+* Commits the changed TOML file.
+
+Commit target should include:
+
+```bash
+git add mappings/novels/*.toml
+```
 
 ---
 
@@ -511,47 +1064,81 @@ Result:
 
 When adding a new novel:
 
-1. Add the novel to `HOSTING_SITE_DATA`
-2. Add a unique `short_code`
-3. Add the short code to `NOVEL_META`
-   - use a real thread ID if the novel has one
-   - use `"N/A"` if it has no thread
-4. Run `publish_single_novel.yml` to create/register the normal novel card
-5. If the novel enters membership, run `publish_membership_update.yml` with:
-   - `short_code`
-   - membership banner URL
+1. Create a novel TOML file in:
+
+   ```text
+   mappings/novels/
+   ```
+
+2. Add a unique:
+
+   ```toml
+   short_code = "CODE"
+   ```
+
+3. Add Discord role/emoji/role URL data in the Discord repo:
+
+   ```text
+   discord-webhook/config/novel_discord_map.toml
+   ```
+
+4. Run `publish_single_novel.yml`.
+
+5. Confirm `novel_status_targets.json` was updated.
+
+6. If the novel enters membership, run `publish_membership_update.yml` with:
+
+   * `short_code`
+   * `banner_url`
+   * `forum_post_id` or `N/A`
+
+7. Confirm the novel TOML now has:
+
+   ```toml
+   is_membership = true
+   ```
 
 ---
 
 ## ✅ Design Guarantees
 
-- `tools/publish_single_novel.py` can serve as template for first run.
-- `Update `NOVEL_META` in `tools/publish_single_novel.py` for every new novel; Color = embed color; Omit forum_post_id if it doesn't belong to any forum. Example:
-```
-  NOVEL_META = {
-    "TVITPA": {"color": "#f8d8c9", "forum_post_id": "1444214902322368675"},
-```
-- `update_novel_status.py` looks for the `status` field for updates.
-- `Role` field only shows for `ARCHIVE_CHANNEL_ID` listed and is omitted unless message is sent to that channel.
-- env needed:
-> ⚠️ Cookie must be available as the environment variable named MISTMINT_COOKIE (or whatever name you put in `token_secret` under `HOSTING_SITE_DATA`)
+* `novel_mappings.py` remains import-compatible for dependent scripts.
+* Actual mapping data lives in TOML files.
+* Novel descriptions can use TOML multiline strings.
+* NSFW status comes from `is_nsfw`.
+* Membership status comes from `is_membership`.
+* Output feed URLs are centralized in `mappings/output_feeds.toml`.
+* Paid/free feed sorting no longer depends on mapping insertion order.
+* `history_file = ""` safely means no arc tracking.
+* `start_date = ""` safely means no duration phrase in completion messages.
+* `update_novel_status.py` edits existing Discord messages instead of reposting.
+* `novel_status_targets.json` stores message targets by short code.
+* Discord role IDs, custom emojis, and role URLs belong in Discord bot repos, not in `rss-feed`.
 
-- Run the `publish_single_novel.yml` script with a shortcode and channel ID for the first run, and it will update `novel_status_targets.json` automatically.
-- `update_novel_status.py` trigerred automatically by `update_novel_status.yml` everytime **new free chapter** is announced, will use the shortcode, channel, and message ID stored in `novel_status_targets.json`.
-- Workflow:
-  
-```
-Discord free chapter announcement
+---
+
+## Workflow Overview
+
+```text
+New free chapter announced
    ↓
-Trigger GitHub event
+Discord bot posts announcement
    ↓
-Recompute novel status
+Cross-repo dispatch to rss-feed
    ↓
-Edit existing embeds
+rss-feed resolves title + host → short_code
+   ↓
+update_novel_status.py recalculates status
+   ↓
+Existing Discord novel cards are edited in-place
 ```
 
 ---
 
-Result:
+## Example Result
+
+The final Discord status card is created once, then updated automatically when new free chapters are posted.
+
+The status updater preserves the existing card layout and only edits the status field.
 
 <img width="441" height="197" alt="image" src="https://github.com/user-attachments/assets/36e3c6e0-5dfd-4960-921f-e9c1cf3dd96c" />
