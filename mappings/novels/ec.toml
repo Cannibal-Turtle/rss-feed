@@ -1,0 +1,48 @@
+host = "Mistmint Haven"
+title = "Entering the Cage"
+short_code = "EC"
+
+novelupdates_url = "https://www.novelupdates.com/series/entering-the-cage"
+paid_feed_url = "https://api.mistminthaven.com/api/novels/slug/entering-the-cage/chapters"
+novel_url = "https://www.mistminthaven.com/novels/entering-the-cage"
+featured_image = "https://i.imgur.com/hrscn54.jpeg"
+novel_id = "5536923a-4c2b-495c-b0dd-ac7a9b592df6"
+
+chapter_count = "72 chapters + 9 extras"
+last_chapter = "Chapter 81"
+has_free = true
+has_paid = true
+is_nsfw = false
+is_membership = false
+
+# Temporary compatibility fields for Discord repos.
+# Move these to discord-webhook config before deleting them here.
+discord_color = "#22aa58"
+custom_emoji = "<:25396nokojail:1488194854893912185>"
+discord_role_url = "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458"
+
+tags = ["chinese", "bl"]
+
+custom_description = """
+Everyone says Qi Cheng is the biggest failure of the Qi family.
+Spoiled, unruly, a well-known useless pretty boy in their circle.
+Looking him over from head to toe, aside from his status as the Qi family’s second young master, the only thing worth mentioning is his face.
+As for his older brother, Qi Huaizhou, he seems like Qi Cheng’s complete opposite.
+Calm and reserved, highly capable, he took over their father’s position at a young age and now controls the family business.
+If the older brother is the moon in the sky, then Qi Cheng is the mud on the ground.
+Even outsiders say they don’t look like real brothers at all.
+On the eve of Qi Cheng’s 21st birthday, their father brings home his sworn school rival and announces that this person is his real son.
+Qi Cheng was just the wrongly switched fake young master.
+In a single moment, he falls from the clouds into the dust, and anyone can kick him while he’s down.
+Especially that rival, the real young master, who takes every opportunity to go against him.
+Until one banquet, in front of a crowd of guests, Qi Cheng pours a glass of red wine straight over the real young master from head to toe.
+Chin lifted, arrogant and beautiful, his tone wildly overbearing: “A mangy dog raised in the mud is still something that can’t be presented, no matter how you dress it up.”
+He smashes the wine glass. Amid the uproar, he looks toward the older brother he hasn’t seen in a long time, eyes reddened as he stubbornly demands:
+“Are you choosing him, or choosing me?”
+—
+Until one drunken night.
+Qi Cheng is pinned down in the darkness by the real young master. Soft lips brush past his cheek. He’s so shocked he hasn’t even begun to struggle when the person on top of him is suddenly yanked away.
+The lights snap on. Sitting on the bed, Qi Cheng stares in alarm at the chaotic scene before him.
+His usually dignified older brother throws the real young master violently to the ground.
+His voice is cold as ice: “Who gave you the guts to touch him?”
+"""

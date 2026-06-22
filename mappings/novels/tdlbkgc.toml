@@ -1,0 +1,38 @@
+host = "Mistmint Haven"
+title = "[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught"
+short_code = "TDLBKGC"
+
+novelupdates_url = "https://www.novelupdates.com/series/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught"
+paid_feed_url = "https://api.mistminthaven.com/api/novels/slug/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/chapters"
+novel_url = "https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught"
+featured_image = "https://i.imgur.com/vqvVVz9.png"
+novel_id = "8ebd3484-d5b2-422d-a22d-11404bc8481f"
+
+chapter_count = "734 chapters + 3 extras"
+last_chapter = "Extra 3"
+start_date = "1/11/2025"
+has_free = true
+has_paid = true
+is_nsfw = false
+is_membership = false
+
+# Temporary compatibility fields for Discord repos.
+# Move these to discord-webhook config before deleting them here.
+discord_color = "#90c3f2"
+custom_emoji = "<:468087cutebunny:1431678613002125313>"
+discord_role_url = "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458"
+
+tags = ["chinese", "quick transmigration", "bl"]
+history_file = "arc_history/tdlbkgc_history.json"
+
+custom_description = """
+【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
+Dark room, forced confinement, obsessive pampering.
+Shen Yu is bound to a system. His task is to enter various mission worlds and stop anomalous data from causing the worlds' collapse.
+He’s been completing the missions beautifully, except… the process seems a bit off—
+A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
+A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
+The sound of metal chains clatters—
+The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
+It’s 1v1. Sweet, sweet, sweet.
+"""

@@ -1,0 +1,42 @@
+host = "Mistmint Haven"
+title = "Help! I Accidentally Flirted with the Lord God, What Do I Do?!"
+short_code = "HIAFLG"
+
+novelupdates_url = "https://www.novelupdates.com/series/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do"
+paid_feed_url = "https://api.mistminthaven.com/api/novels/slug/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do/chapters"
+novel_url = "https://www.mistminthaven.com/novels/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do"
+featured_image = "https://i.imgur.com/7LRK6Uw.png"
+novel_id = "5868afe3-4a39-43ed-ae1c-314a8b3ffebe"
+
+chapter_count = "503 Chapters"
+last_chapter = "Chapter 503"
+start_date = "13/2/2026"
+has_free = true
+has_paid = true
+is_nsfw = false
+is_membership = false
+
+# Temporary compatibility fields for Discord repos.
+# Move these to discord-webhook config before deleting them here.
+discord_color = "#daa31a"
+custom_emoji = "<:piggy_warrior:1471462818489307283>"
+discord_role_url = "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458"
+
+tags = ["chinese", "quick transmigration", "comedy", "bl"]
+history_file = "arc_history/hiaflg_history.json"
+
+custom_description = """
+【Quick Transmigration + Double Male Leads + Cannon Fodder Counterattack + Main Shou + 1v1 + Double Clean】
+The Lord God got scammed in an online relationship!
+The other party even ran off on the way to meet in person!
+Enraged, the Lord God issued a special-class wanted order, determined to drag back the wife who suddenly disappeared on him.
+......
+Xie Yaochen, who has already hidden himself inside a small world to carry out missions, blinks innocently.
+“Dating? Never done that.”
+“Online dating scam? No idea.”
+“Special-class wanted criminal? Don’t know him either.”
+Bound to a cannon fodder counterattack system, he happily travels through various small worlds. While cleaning up idiots, he even starts a sweet romance on the side.
+His boyfriend is tall and handsome and loves him so much. If certain parts of him didn’t keep making him see that damn dog Lord God, it would be perfect...
+Damn dog:
+^_^
+"""
