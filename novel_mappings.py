@@ -73,7 +73,7 @@ def _load_hosting_site_data() -> dict:
         if host_name not in hosts:
             raise RuntimeError(f"Unknown host {host_name!r} in {path}")
 
-        feeds = output_feeds.get(host_name, {})
+        feeds = output_feeds
 
         if novel.get("has_free", False) and feeds.get("free_feed"):
             novel["free_feed"] = feeds["free_feed"]
