@@ -16,11 +16,7 @@ has_paid = true
 is_nsfw = false
 is_membership = false
 
-# Temporary compatibility fields for Discord repos.
-# Move these to discord-webhook config before deleting them here.
 discord_color = "#daa31a"
-custom_emoji = "<:piggy_warrior:1471462818489307283>"
-discord_role_url = "https://discord.com/channels/1329384099609051136/1329419555600203776/1330466188349800458"
 
 tags = ["chinese", "quick transmigration", "comedy", "bl"]
 history_file = "arc_history/hiaflg_history.json"
