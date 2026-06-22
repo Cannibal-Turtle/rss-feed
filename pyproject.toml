@@ -18,7 +18,16 @@ classifiers = [
 Homepage = "https://github.com/Cannibal-Turtle/rss-feed"
 
 [tool.setuptools]
-# explicitly list each standalone .py you want installed
 py-modules = [
   "novel_mappings",
+]
+packages = [
+  "mappings",
+]
+
+[tool.setuptools.package-data]
+mappings = [
+  "hosts/*.json",
+  "novels/*.json",
+  "output_feeds.json",
 ]
