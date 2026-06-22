@@ -1,78 +1,96 @@
 """
 novel_mappings.py
 
-Compatibility loader/front door for JSON-backed novel mapping data.
+Compatibility loader for novel mapping data.
 
-Dependent scripts can keep using:
+The actual mapping data now lives in:
+
+mappings/
+├─ hosts/
+│  └─ *.toml
+├─ novels/
+│  └─ *.toml
+└─ output_feeds.toml
+
+Dependent scripts can still import:
 
     from novel_mappings import HOSTING_SITE_DATA
-
-Actual mapping data lives in:
-
-    mappings/hosts/*.json
-    mappings/novels/*.json
-    mappings/output_feeds.json
 """
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
+from importlib import resources
 from typing import Any
 
-ROOT = Path(__file__).resolve().parent
-MAPPINGS_DIR = ROOT / "mappings"
-HOSTS_DIR = MAPPINGS_DIR / "hosts"
-NOVELS_DIR = MAPPINGS_DIR / "novels"
-OUTPUT_FEEDS_FILE = MAPPINGS_DIR / "output_feeds.json"
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 
 
-def _read_json(path: Path) -> Any:
-    return json.loads(path.read_text(encoding="utf-8"))
+MAPPINGS_PACKAGE = "mappings"
 
 
-def _iter_json_files(folder: Path):
-    if not folder.exists():
-        return
-
-    for path in sorted(folder.glob("*.json"), key=lambda p: p.name.casefold()):
-        yield path
+def _read_toml_text(text: str) -> dict[str, Any]:
+    return tomllib.loads(text)
 
 
-def _load_output_feeds() -> dict:
-    if not OUTPUT_FEEDS_FILE.exists():
+def _read_toml_resource(*parts: str) -> dict[str, Any]:
+    path = resources.files(MAPPINGS_PACKAGE).joinpath(*parts)
+    return _read_toml_text(path.read_text(encoding="utf-8"))
+
+
+def _iter_toml_resources(folder: str):
+    base = resources.files(MAPPINGS_PACKAGE).joinpath(folder)
+
+    for item in sorted(base.iterdir(), key=lambda p: p.name.casefold()):
+        if item.name.endswith(".toml"):
+            yield item
+
+
+def _read_resource_toml(item) -> dict[str, Any]:
+    return _read_toml_text(item.read_text(encoding="utf-8"))
+
+
+def _load_output_feeds() -> dict[str, Any]:
+    try:
+        data = _read_toml_resource("output_feeds.toml")
+    except FileNotFoundError:
         return {}
 
-    data = _read_json(OUTPUT_FEEDS_FILE)
     return data if isinstance(data, dict) else {}
 
 
-def _load_hosting_site_data() -> dict:
-    hosts: dict[str, dict] = {}
+def _load_hosting_site_data() -> dict[str, dict[str, Any]]:
+    hosts: dict[str, dict[str, Any]] = {}
 
-    for path in _iter_json_files(HOSTS_DIR):
-        host_cfg = _read_json(path)
-        host_name = str(host_cfg.pop("name", "") or host_cfg.pop("host", "")).strip()
+    for item in _iter_toml_resources("hosts"):
+        host_cfg = _read_resource_toml(item)
+        host_name = str(
+            host_cfg.pop("name", "") or host_cfg.pop("host", "") or ""
+        ).strip()
 
         if not host_name:
-            raise RuntimeError(f"Missing host name in {path}")
+            raise RuntimeError(f"Missing host name in {item.name}")
 
         host_cfg.setdefault("novels", {})
         hosts[host_name] = host_cfg
 
     output_feeds = _load_output_feeds()
 
-    for path in _iter_json_files(NOVELS_DIR):
-        novel = _read_json(path)
+    for item in _iter_toml_resources("novels"):
+        novel = _read_resource_toml(item)
+
         host_name = str(novel.pop("host", "") or "").strip()
         title = str(novel.pop("title", "") or "").strip()
 
         if not host_name or not title:
-            raise RuntimeError(f"Novel JSON must include host and title: {path}")
+            raise RuntimeError(f"Novel TOML must include host and title: {item.name}")
 
         if host_name not in hosts:
-            raise RuntimeError(f"Unknown host {host_name!r} in {path}")
+            raise RuntimeError(f"Unknown host {host_name!r} in {item.name}")
 
+        # output_feeds.toml is repo-level/global, not host-specific.
         feeds = output_feeds
 
         if novel.get("has_free", False) and feeds.get("free_feed"):
@@ -85,15 +103,11 @@ def _load_hosting_site_data() -> dict:
         else:
             novel.pop("paid_feed", None)
 
-        # Default true for compatibility with your current all-novels comments feed.
-        # Add "has_comments": false later only if a novel should opt out.
         if novel.get("has_comments", True) and feeds.get("comments_feed"):
             novel["comments_feed"] = feeds["comments_feed"]
         else:
             novel.pop("comments_feed", None)
 
-        novel.setdefault("has_free", False)
-        novel.setdefault("has_paid", False)
         novel.setdefault("is_nsfw", False)
         novel.setdefault("is_membership", False)
 
@@ -125,6 +139,7 @@ def get_novel_details(host, novel_title):
 def get_novel_short_code(novel_title, host):
     """
     Returns the stable short code for the given novel.
+
     This is used by RSS feeds so downstream Discord repos can map
     short_code -> server-specific role IDs.
     """
@@ -166,7 +181,7 @@ def get_novelupdates_feed_url(novel: dict) -> str:
 
 
 def get_nsfw_novels():
-    """Returns the list of NSFW novel titles based on novel JSON flags."""
+    """Returns the list of NSFW novel titles."""
     return [
         title
         for host_data in HOSTING_SITE_DATA.values()
@@ -176,7 +191,7 @@ def get_nsfw_novels():
 
 
 def get_membership_novels():
-    """Returns the list of membership novel titles based on novel JSON flags."""
+    """Returns the list of membership novel titles."""
     return [
         title
         for host_data in HOSTING_SITE_DATA.values()
@@ -185,64 +200,10 @@ def get_membership_novels():
     ]
 
 
-def find_novel_by_short_code(short_code: str):
-    """
-    Returns (host, host_data, title, novel) for a short code.
-    Returns (None, None, None, None) if no match is found.
-    """
-    target = (short_code or "").strip().upper()
-
-    for host, host_data in HOSTING_SITE_DATA.items():
-        for title, novel in host_data.get("novels", {}).items():
-            code = (novel.get("short_code", "") or "").strip().upper()
-            if code == target:
-                return host, host_data, title, novel
-
-    return None, None, None, None
-
-def novel_has_free_chapters(host, novel_title):
-    """
-    Returns True if this novel should be treated as having free/public chapters.
-    Prefer this helper over checking has_free directly in downstream repos.
-    """
-    details = get_novel_details(host, novel_title)
-
-    if "has_free" in details:
-        return bool(details.get("has_free"))
-
-    # Backward compatibility for older mappings
-    return bool(details.get("free_feed"))
-
-
-def novel_has_paid_chapters(host, novel_title):
-    """
-    Returns True if this novel should be treated as having paid/member chapters.
-    Prefer this helper over checking has_paid directly in downstream repos.
-    """
-    details = get_novel_details(host, novel_title)
-
-    if "has_paid" in details:
-        return bool(details.get("has_paid"))
-
-    # Backward compatibility for older mappings
-    return bool(details.get("paid_feed"))
-
-
-def novel_has_comments_feed(host, novel_title):
-    """
-    Returns True if this novel should be included in comments feed logic.
-    Defaults to True unless explicitly disabled with has_comments: false.
-    """
-    details = get_novel_details(host, novel_title)
-
-    if "has_comments" in details:
-        return bool(details.get("has_comments"))
-
-    return bool(details.get("comments_feed"))
-
 def get_novel_details_by_short_code(short_code):
     """
     Returns (host, title, details) for a short_code.
+
     If not found, returns ("", "", {}).
     """
     short_code = (short_code or "").strip().upper()
@@ -255,7 +216,63 @@ def get_novel_details_by_short_code(short_code):
     return "", "", {}
 
 
+def find_novel_by_short_code(short_code):
+    """
+    Backward-friendly alias.
+
+    Returns (host, host_data, title, details).
+    If not found, returns (None, None, None, None).
+    """
+    short_code = (short_code or "").strip().upper()
+
+    for host, host_data in HOSTING_SITE_DATA.items():
+        for title, details in host_data.get("novels", {}).items():
+            if (details.get("short_code", "") or "").strip().upper() == short_code:
+                return host, host_data, title, details
+
+    return None, None, None, None
+
+
+def novel_has_free_chapters(host, novel_title):
+    """
+    Returns True if this novel should be treated as having free/public chapters.
+    """
+    details = get_novel_details(host, novel_title)
+
+    if "has_free" in details:
+        return bool(details.get("has_free"))
+
+    return bool(details.get("free_feed"))
+
+
+def novel_has_paid_chapters(host, novel_title):
+    """
+    Returns True if this novel should be treated as having paid/member chapters.
+    """
+    details = get_novel_details(host, novel_title)
+
+    if "has_paid" in details:
+        return bool(details.get("has_paid"))
+
+    return bool(details.get("paid_feed"))
+
+
+def novel_has_comments_feed(host, novel_title):
+    """
+    Returns True if this novel should be included in comments feed logic.
+
+    Defaults to True unless explicitly disabled with has_comments = false.
+    """
+    details = get_novel_details(host, novel_title)
+
+    if "has_comments" in details:
+        return bool(details.get("has_comments"))
+
+    return bool(details.get("comments_feed"))
+
+
 def short_code_has_free_chapters(short_code):
+    """Short-code version of novel_has_free_chapters()."""
     host, title, details = get_novel_details_by_short_code(short_code)
 
     if not details:
@@ -268,6 +285,7 @@ def short_code_has_free_chapters(short_code):
 
 
 def short_code_has_paid_chapters(short_code):
+    """Short-code version of novel_has_paid_chapters()."""
     host, title, details = get_novel_details_by_short_code(short_code)
 
     if not details:
@@ -277,3 +295,16 @@ def short_code_has_paid_chapters(short_code):
         return bool(details.get("has_paid"))
 
     return bool(details.get("paid_feed"))
+
+
+def short_code_has_comments_feed(short_code):
+    """Short-code version of novel_has_comments_feed()."""
+    host, title, details = get_novel_details_by_short_code(short_code)
+
+    if not details:
+        return False
+
+    if "has_comments" in details:
+        return bool(details.get("has_comments"))
+
+    return bool(details.get("comments_feed"))
