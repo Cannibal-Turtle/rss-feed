@@ -126,6 +126,21 @@ def get_host_translator(host):
     return HOSTING_SITE_DATA.get(host, {}).get("translator", "")
 
 
+def get_translator(host, novel_title=""):
+    """
+    Returns per-novel translator if set.
+    Falls back to host translator.
+    """
+    host_data = HOSTING_SITE_DATA.get(host, {})
+    novel = host_data.get("novels", {}).get(novel_title, {}) if novel_title else {}
+
+    return (
+        novel.get("translator")
+        or host_data.get("translator")
+        or ""
+    ).strip()
+
+
 def get_host_logo(host):
     """Returns the hosting site's logo URL for the given host."""
     return HOSTING_SITE_DATA.get(host, {}).get("host_logo", "")
