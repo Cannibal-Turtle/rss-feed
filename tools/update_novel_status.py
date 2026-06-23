@@ -9,12 +9,17 @@ from dateutil import parser as dateparser
 
 import discord
 from discord import Embed
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from novel_mappings import HOSTING_SITE_DATA
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
-TARGETS_FILE = "novel_status_targets.json"
+TARGETS_FILE = ROOT / "novel_status_targets.json"
 # ────────────────────────────────────────────────────────────────────────────────
 
 
