@@ -8,6 +8,7 @@ Mistmint Haven revenue adapter.
 This file only:
 - fetches Mistmint novel revenue data
 - matches Mistmint API novels to local TOML mappings
+- keeps only novels where is_paid = true in the novel TOML
 - normalizes rows for revenue/report.py
 
 It does NOT:
@@ -86,6 +87,14 @@ def as_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def as_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
 def fallback_short_code(slug: str, title: str) -> str:
     base = slug or title or "UNKNOWN"
     base = re.sub(r"[^A-Za-z0-9]+", "_", base).strip("_").upper()
@@ -129,9 +138,8 @@ def load_local_novel_indexes() -> Dict[str, Dict[str, Dict[str, Any]]]:
     """
     Load local Mistmint novel TOMLs and index them by id, slug, and title.
 
-    This is how report.py knows:
-      is_membership = true
-    fresh every run.
+    report.py only receives novels whose local TOML has:
+      is_paid = true
     """
     by_id: Dict[str, Dict[str, Any]] = {}
     by_slug: Dict[str, Dict[str, Any]] = {}
@@ -291,15 +299,12 @@ def fetch_my_novels(host_cfg: Optional[Mapping[str, Any]] = None) -> List[Dict[s
 
 def normalize_row(
     api_novel: Mapping[str, Any],
-    local: Optional[Mapping[str, Any]],
+    local: Mapping[str, Any],
     host_cfg: Mapping[str, Any],
 ) -> Dict[str, Any]:
     api_title = str(api_novel.get("title") or "").strip()
     api_slug = str(api_novel.get("slug") or "").strip().lower()
     api_id = str(api_novel.get("id") or "").strip()
-
-    is_mapped = local is not None
-    local = local or {}
 
     short_code = str(local.get("short_code") or "").strip().upper()
     if not short_code:
@@ -308,10 +313,6 @@ def normalize_row(
     novel_url = str(local.get("novel_url") or "").strip()
     if not novel_url and api_slug:
         novel_url = f"https://www.mistminthaven.com/novels/{api_slug}"
-
-    # Missing is_membership = false.
-    # This is read fresh from novel TOML every run.
-    is_membership = bool(local.get("is_membership", False))
 
     return {
         "host_key": HOST_KEY,
@@ -325,30 +326,38 @@ def normalize_row(
         "novel_url": novel_url,
         "coins": as_int(api_novel.get("coins"), 0),
         "tickets": as_int(api_novel.get("membershipTicketCount"), 0),
-        "is_membership": is_membership,
+        "is_paid": as_bool(local.get("is_paid", False)),
+        "is_membership": as_bool(local.get("is_membership", False)),
         "coin_emoji": str(host_cfg.get("coin_emoji") or "").strip(),
         "ticket_emoji": str(host_cfg.get("ticket_emoji") or "").strip(),
         "latest_chapter": str(api_novel.get("latestChapter") or "").strip(),
         "total_chapters": as_int(api_novel.get("totalChapters"), 0),
         "views": as_int(api_novel.get("views"), 0),
-        "is_mapped": is_mapped,
+        "is_mapped": True,
     }
 
 
 def collect_revenue_rows() -> List[Dict[str, Any]]:
     """
     Main function used by revenue/report.py.
+
+    Only returns novels whose local novel TOML has:
+      is_paid = true
     """
     host_cfg = load_host_config()
     indexes = load_local_novel_indexes()
     api_novels = fetch_my_novels(host_cfg)
 
-    rows = [
-        normalize_row(n, match_local_mapping(n, indexes), host_cfg)
-        for n in api_novels
-    ]
+    rows: List[Dict[str, Any]] = []
+    for api_novel in api_novels:
+        local = match_local_mapping(api_novel, indexes)
+        if not local:
+            continue
+        if not as_bool(local.get("is_paid", False)):
+            continue
+        rows.append(normalize_row(api_novel, local, host_cfg))
 
-    rows.sort(key=lambda r: (not r["is_mapped"], r["short_code"]))
+    rows.sort(key=lambda r: r["short_code"])
     return rows
 
 
@@ -364,14 +373,6 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         rows = collect_revenue_rows()
         print(json.dumps(rows, ensure_ascii=False, indent=2))
-
-        unmapped = [r for r in rows if not r.get("is_mapped")]
-        for r in unmapped:
-            print(
-                f"[warn] unmapped Mistmint novel: {r['title']} ({r['slug']})",
-                file=sys.stderr,
-            )
-
         return 0
     except Exception as e:
         print(f"[error] {e}", file=sys.stderr)
