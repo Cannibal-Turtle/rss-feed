@@ -24,7 +24,8 @@ jobs:
           
       - name: Seed token alert state if missing
         run: |
-          [ -f .token_alert_state.json ] || echo '{}' > .token_alert_state.json
+          mkdir -p token
+          [ -f token/token_alert_state.json ] || echo '{}' > token/token_alert_state.json
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -59,7 +60,7 @@ jobs:
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
-          git add aggregated_comments_feed.xml .token_alert_state.json
+          git add aggregated_comments_feed.xml token/token_alert_state.json
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
