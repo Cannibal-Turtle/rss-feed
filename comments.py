@@ -20,16 +20,17 @@ from host_utils import get_host_utils
 
 # --- token expiry → repository_dispatch (no Discord creds here) ---
 
-ALERT_STATE_FILE = ".token_alert_state.json"
+ALERT_STATE_FILE = Path(__file__).resolve().parent / "token" / "token_alert_state.json"
 
 def _load_alert_state() -> dict:
     try:
-        return json.loads(Path(ALERT_STATE_FILE).read_text(encoding="utf-8"))
+        return json.loads(ALERT_STATE_FILE.read_text(encoding="utf-8"))
     except Exception:
         return {}
 
 def _save_alert_state(d: dict) -> None:
-    Path(ALERT_STATE_FILE).write_text(json.dumps(d, indent=2), encoding="utf-8")
+    ALERT_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    ALERT_STATE_FILE.write_text(json.dumps(d, indent=2), encoding="utf-8")
 
 def _jwt_expiry_unix(token: str):
     try:
