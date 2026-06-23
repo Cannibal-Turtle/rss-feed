@@ -49,14 +49,20 @@ DISCORD_API_BASE = "https://discord.com/api/v10"
 
 TITLE_BOX = (
     "╔══.·:·.☽✧    ✦    ✧☾.·:·.══╗\n"
-    "          monthly revenue\n"
+    "            monthly revenue\n"
     "╚══.·:·.☽✧    ✦    ✧☾.·:·.══╝"
 )
 
-# Optional. If set, @novel roles are shown instead of plain @SHORT_CODE.
-# Example value:
-# https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/config/novel_discord_map.toml
-NOVEL_DISCORD_MAP_URL = os.environ.get("NOVEL_DISCORD_MAP_URL", "").strip()
+DEFAULT_NOVEL_DISCORD_MAP_URL = (
+    "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/"
+    "main/config/novel_discord_map.toml"
+)
+
+# Uses the default public role map unless you override it with a GitHub secret/env.
+NOVEL_DISCORD_MAP_URL = (
+    os.environ.get("NOVEL_DISCORD_MAP_URL", "").strip()
+    or DEFAULT_NOVEL_DISCORD_MAP_URL
+)
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +183,7 @@ def build_next_state(rows: Iterable[Mapping[str, Any]]) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Optional novel role map
+# Novel role map
 # ---------------------------------------------------------------------------
 
 def normalize_role_id(value: Any) -> str:
@@ -187,8 +193,7 @@ def normalize_role_id(value: Any) -> str:
 
 def load_role_map(url: str = NOVEL_DISCORD_MAP_URL) -> Dict[str, str]:
     """
-    Optional helper. If NOVEL_DISCORD_MAP_URL is set, the report uses role mentions.
-    Otherwise it falls back to plain @SHORT_CODE labels.
+    Loads novel role IDs from discord-webhook/config/novel_discord_map.toml.
 
     Supports TOML like:
       [AMLWC]
@@ -205,7 +210,7 @@ def load_role_map(url: str = NOVEL_DISCORD_MAP_URL) -> Dict[str, str]:
         r.raise_for_status()
         data = tomllib.loads(r.text)
     except Exception as exc:
-        print(f"[warn] could not load NOVEL_DISCORD_MAP_URL: {exc}", file=sys.stderr)
+        print(f"[warn] could not load novel Discord map: {exc}", file=sys.stderr)
         return {}
 
     out: Dict[str, str] = {}
@@ -307,22 +312,27 @@ def format_monthly_totals(rows: List[Mapping[str, Any]], state: Mapping[str, Any
 
     return (
         "**Total earned coins this month:**\n"
-        f"> {coin_emoji} ̟ !! ***{fmt_month_total(total_coins, 'coin')}***\n"
+        f"### {coin_emoji} ̟ !! ***{fmt_month_total(total_coins, 'coin')}***\n"
         "**Total tickets sold this month:**\n"
-        f"> {ticket_emoji} ̟ !! ***{fmt_month_total(total_tickets, 'ticket')}***"
+        f"### {ticket_emoji} ̟ !! ***{fmt_month_total(total_tickets, 'ticket')}***"
     )
 
 
 def chunk_description(parts: List[str], summary: str, *, first_run: bool, max_chars: int = 3900) -> List[str]:
-    prefix = ""
-    if first_run:
-        prefix = "_First run: baseline saved. Monthly deltas start next run._\n\n"
+    """
+    Build embed description chunks.
 
+    Uses single newlines between novel blocks to avoid the huge vertical gaps.
+    Keeps one blank line before the bottom total summary.
+    """
     chunks: List[str] = []
-    current = prefix
+    current = ""
+
+    if first_run:
+        current = "_First run: baseline saved. Monthly deltas start next run._"
 
     for part in parts:
-        add = part if not current.strip() else "\n\n" + part
+        add = part if not current.strip() else "\n" + part
         if len(current) + len(add) > max_chars and current.strip():
             chunks.append(current.strip())
             current = part
@@ -400,7 +410,7 @@ def send_discord_embeds(
     payload = {
         "content": "",
         "embeds": list(embeds)[:10],
-        # Keep content safe. Embed role mentions normally display without pinging.
+        # Role mentions in embeds are for display here; this prevents accidental content pings.
         "allowed_mentions": {"parse": []},
     }
 
