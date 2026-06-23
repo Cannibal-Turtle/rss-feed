@@ -265,7 +265,7 @@ def format_row(row: Mapping[str, Any], prev: Optional[Mapping[str, Any]], role_m
 
     coins_delta, tickets_delta = row_deltas(row, prev)
 
-    header = f"{label} ༺♡༻ ***{fmt_total(coins_total, 'coin')}***"
+    header = f"{label} ༺<:mascot_mistmint:1517514042930106559>༻ ***{fmt_total(coins_total, 'coin')}***"
     if is_membership:
         header += f" · ***{fmt_total(tickets_total, 'ticket')}***"
 
