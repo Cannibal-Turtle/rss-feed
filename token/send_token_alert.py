@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 import os, json, time, datetime, requests
 
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 # Optional: pull logo/host pretty names from your mapping
 try:
     from novel_mappings import HOSTING_SITE_DATA
