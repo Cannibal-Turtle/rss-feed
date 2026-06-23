@@ -137,8 +137,8 @@ def _collect_nu_items_from_mappings() -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for host, cfg in (HOSTING_SITE_DATA or {}).items():
         novels = (cfg.get("novels") or {})
-        translator = cfg.get("translator", "")
         for novel_title, nd in novels.items():
+            translator = (nd.get("translator") or cfg.get("translator") or "").strip()
             nu_url = get_novelupdates_feed_url(nd)
             if not nu_url:
                 continue

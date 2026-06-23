@@ -11,7 +11,7 @@ from host_utils import get_host_utils
 from novel_mappings import (
     HOSTING_SITE_DATA,
     get_featured_image,
-    get_host_translator,
+    get_translator,
     get_host_logo,
     get_novel_details,
     get_novel_short_code,
@@ -111,7 +111,7 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         is_nsfw = bool(self.is_nsfw) or (self.title in nsfw_list)
         writer.write(indent + "    <category>%s</category>" % ("NSFW" if is_nsfw else "SFW") + newl)
         
-        translator = get_host_translator(self.host)
+        translator = get_translator(self.host, self.title)
         writer.write(indent + "    <translator>%s</translator>" % escape(translator) + newl)
         
         short_code = get_novel_short_code(self.title, self.host)

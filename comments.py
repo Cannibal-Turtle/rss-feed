@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup
 import hashlib
 import requests
 
-from novel_mappings import HOSTING_SITE_DATA, get_novel_short_code
+from novel_mappings import HOSTING_SITE_DATA, get_novel_short_code, get_translator
 from host_utils import get_host_utils
 
 # --- token expiry → repository_dispatch (no Discord creds here) ---
@@ -170,7 +170,7 @@ class MyCommentRSSItem(PyRSS2Gen.RSSItem):
             writer.write(indent + "    <reply_chain><![CDATA[ᯓ✿ %s]]></reply_chain>" % escape(rc) + newl)
 
         # Get other metadata using host-specific functions.
-        translator = utils.get("get_host_translator", lambda host: "")(self.host)
+        translator = get_translator(self.host, self.novel_title)
         writer.write(indent + "    <translator>%s</translator>" % escape(translator) + newl)
         
         short_code = get_novel_short_code(self.novel_title, self.host)
