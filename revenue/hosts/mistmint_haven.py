@@ -5,8 +5,15 @@ revenue/hosts/mistmint_haven.py
 
 Mistmint Haven revenue adapter.
 
-Used by revenue/report.py. This file only fetches + normalizes Mistmint data.
-It does not calculate monthly deltas, save state, or send Discord messages.
+This file only:
+- fetches Mistmint novel revenue data
+- matches Mistmint API novels to local TOML mappings
+- normalizes rows for revenue/report.py
+
+It does NOT:
+- calculate monthly deltas
+- save state
+- send Discord messages
 """
 from __future__ import annotations
 
@@ -21,8 +28,8 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import requests
 
 try:
-    import tomllib  # Python 3.11+
-except ModuleNotFoundError:  # Python 3.10/local fallback
+    import tomllib
+except ModuleNotFoundError:
     import tomli as tomllib  # type: ignore
 
 
@@ -51,16 +58,18 @@ def load_host_config() -> Dict[str, Any]:
 
 
 def slug_from_url(url: str) -> str:
-    """Extract slug from /novels/<slug> or /api/novels/slug/<slug>/chapters."""
     parts = [p for p in urlparse(url or "").path.split("/") if p]
+
     if "novels" in parts:
         i = parts.index("novels")
         if i + 1 < len(parts):
             return parts[i + 1].strip().lower()
+
     if "slug" in parts:
         i = parts.index("slug")
         if i + 1 < len(parts):
             return parts[i + 1].strip().lower()
+
     return ""
 
 
@@ -83,12 +92,46 @@ def fallback_short_code(slug: str, title: str) -> str:
     return base or "UNKNOWN"
 
 
+def set_query_param(url: str, **params: Any) -> str:
+    parsed = urlparse(url)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    for k, v in params.items():
+        query[k] = str(v)
+    return urlunparse(parsed._replace(query=urlencode(query)))
+
+
+def revenue_novels_url(host_cfg: Mapping[str, Any]) -> str:
+    """
+    URL priority:
+    1. GitHub secret/env MISTMINT_REVENUE_NOVELS_URL
+    2. revenue_novels_url in mappings/hosts/mistmint_haven.toml
+    3. novel_api in mappings/hosts/mistmint_haven.toml
+
+    Your current host TOML can simply use:
+      novel_api = "https://api.mistminthaven.com/api/my-novels"
+    """
+    url = (
+        os.getenv("MISTMINT_REVENUE_NOVELS_URL", "").strip()
+        or str(host_cfg.get("revenue_novels_url") or "").strip()
+        or str(host_cfg.get("novel_api") or "").strip()
+    )
+
+    if not url:
+        raise RuntimeError(
+            "Missing Mistmint revenue URL. Add `novel_api` to "
+            "mappings/hosts/mistmint_haven.toml."
+        )
+
+    return set_query_param(url, skipPage=0, limit=100)
+
+
 def load_local_novel_indexes() -> Dict[str, Dict[str, Dict[str, Any]]]:
     """
     Load local Mistmint novel TOMLs and index them by id, slug, and title.
 
-    Required for the ticket display condition:
+    This is how report.py knows:
       is_membership = true
+    fresh every run.
     """
     by_id: Dict[str, Dict[str, Any]] = {}
     by_slug: Dict[str, Dict[str, Any]] = {}
@@ -125,7 +168,10 @@ def load_local_novel_indexes() -> Dict[str, Dict[str, Dict[str, Any]]]:
     return {"id": by_id, "slug": by_slug, "title": by_title}
 
 
-def match_local_mapping(api_novel: Mapping[str, Any], indexes: Mapping[str, Dict[str, Dict[str, Any]]]) -> Optional[Dict[str, Any]]:
+def match_local_mapping(
+    api_novel: Mapping[str, Any],
+    indexes: Mapping[str, Dict[str, Dict[str, Any]]],
+) -> Optional[Dict[str, Any]]:
     """Match API novel to local TOML: novel_id first, then slug, then title."""
     api_id = str(api_novel.get("id") or "").strip().lower()
     api_slug = str(api_novel.get("slug") or "").strip().lower()
@@ -141,7 +187,9 @@ def match_local_mapping(api_novel: Mapping[str, Any], indexes: Mapping[str, Dict
 def resolve_cookie(host_cfg: Mapping[str, Any]) -> str:
     """
     Prefer MISTMINT_COOKIE directly.
-    Also supports token_secret = "MISTMINT_COOKIE" in host TOML.
+    Also supports:
+      token_secret = "MISTMINT_COOKIE"
+    in host TOML.
     """
     cookie = os.getenv("MISTMINT_COOKIE", "").strip()
     if cookie:
@@ -173,12 +221,18 @@ def mistmint_headers(host_cfg: Mapping[str, Any]) -> Dict[str, str]:
 def is_auth_error(status: int, text: str, payload: Any) -> bool:
     if status in (401, 403):
         return True
+
     if isinstance(payload, dict):
         code = str(payload.get("code") or payload.get("statusCode") or "")
         if code in ("401", "403"):
             return True
+
     low = (text or "").lower()
-    return "you must be logged in" in low or '"code":401' in low or '"statuscode":401' in low
+    return (
+        "you must be logged in" in low
+        or '"code":401' in low
+        or '"statuscode":401' in low
+    )
 
 
 def fetch_json(url: str, host_cfg: Optional[Mapping[str, Any]] = None) -> Any:
@@ -188,9 +242,9 @@ def fetch_json(url: str, host_cfg: Optional[Mapping[str, Any]] = None) -> Any:
     if not headers.get("Cookie") and not headers.get("Authorization"):
         raise RuntimeError("Missing Mistmint auth. Set GitHub secret MISTMINT_COOKIE.")
 
-    print(f"[info] Fetching Mistmint revenue URL: {url}")
     r = requests.get(url, headers=headers, timeout=30)
     text = r.text
+
     try:
         payload = r.json()
     except Exception:
@@ -198,55 +252,36 @@ def fetch_json(url: str, host_cfg: Optional[Mapping[str, Any]] = None) -> Any:
 
     if is_auth_error(r.status_code, text, payload):
         raise RuntimeError("AUTH_ERROR: Mistmint unauthorized. MISTMINT_COOKIE may be expired.")
+
     if r.status_code // 100 != 2:
         raise RuntimeError(f"Mistmint HTTP {r.status_code}: {text[:500]}")
+
     if payload is None:
         raise RuntimeError(f"Mistmint returned non-JSON response: {text[:500]}")
 
     return payload
 
 
-def set_query_param(url: str, **params: Any) -> str:
-    parsed = urlparse(url)
-    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
-    for k, v in params.items():
-        query[k] = str(v)
-    return urlunparse(parsed._replace(query=urlencode(query)))
-
-
-def revenue_novels_url(host_cfg: Mapping[str, Any]) -> str:
-    url = (
-        os.getenv("MISTMINT_REVENUE_NOVELS_URL", "").strip()
-        or str(host_cfg.get("revenue_novels_url") or "").strip()
-        or str(host_cfg.get("novel_api") or "").strip()
-    )
-
-    if not url:
-        raise RuntimeError(
-            "Missing Mistmint revenue URL. Set `novel_api` in "
-            "mappings/hosts/mistmint_haven.toml."
-        )
-
-    return set_query_param(url, skipPage=0, limit=100)
-
-
 def fetch_my_novels(host_cfg: Optional[Mapping[str, Any]] = None) -> List[Dict[str, Any]]:
-    """Fetch all novels from the my-novels revenue/list endpoint."""
+    """Fetch all novels from the Mistmint my-novels endpoint."""
     cfg = host_cfg or load_host_config()
     url = revenue_novels_url(cfg)
 
     payload = fetch_json(url, cfg)
     data = payload.get("data", []) if isinstance(payload, dict) else []
+
     if not isinstance(data, list):
         raise RuntimeError("Mistmint my-novels response does not have data: list.")
 
     novels = [x for x in data if isinstance(x, dict)]
 
-    # Fetch later pages if Mistmint ever returns more than one page.
+    # Fetch later pages if Mistmint returns more than one page.
     paging = payload.get("paging", {}) if isinstance(payload, dict) else {}
     total_pages = as_int(paging.get("totalPages"), 1) if isinstance(paging, dict) else 1
+
     for skip_page in range(1, max(total_pages, 1)):
-        page_payload = fetch_json(set_query_param(url, skipPage=skip_page), cfg)
+        page_url = set_query_param(url, skipPage=skip_page, limit=100)
+        page_payload = fetch_json(page_url, cfg)
         page_data = page_payload.get("data", []) if isinstance(page_payload, dict) else []
         if isinstance(page_data, list):
             novels.extend(x for x in page_data if isinstance(x, dict))
@@ -254,14 +289,11 @@ def fetch_my_novels(host_cfg: Optional[Mapping[str, Any]] = None) -> List[Dict[s
     return novels
 
 
-def require_host_value(host_cfg: Mapping[str, Any], key: str) -> str:
-    value = str(host_cfg.get(key) or "").strip()
-    if not value:
-        raise RuntimeError(f"Missing `{key}` in {HOST_TOML.relative_to(ROOT)}.")
-    return value
-
-
-def normalize_row(api_novel: Mapping[str, Any], local: Optional[Mapping[str, Any]], host_cfg: Mapping[str, Any]) -> Dict[str, Any]:
+def normalize_row(
+    api_novel: Mapping[str, Any],
+    local: Optional[Mapping[str, Any]],
+    host_cfg: Mapping[str, Any],
+) -> Dict[str, Any]:
     api_title = str(api_novel.get("title") or "").strip()
     api_slug = str(api_novel.get("slug") or "").strip().lower()
     api_id = str(api_novel.get("id") or "").strip()
@@ -277,12 +309,14 @@ def normalize_row(api_novel: Mapping[str, Any], local: Optional[Mapping[str, Any
     if not novel_url and api_slug:
         novel_url = f"https://www.mistminthaven.com/novels/{api_slug}"
 
-    # Missing is_membership = false. report.py should hide ticket stats when false.
+    # Missing is_membership = false.
+    # This is read fresh from novel TOML every run.
     is_membership = bool(local.get("is_membership", False))
 
     return {
         "host_key": HOST_KEY,
         "host_name": str(host_cfg.get("name") or HOST_NAME).strip(),
+        "host_emoji": str(host_cfg.get("host_emoji") or "").strip(),
         "state_key": f"{HOST_KEY}:{short_code}",
         "short_code": short_code,
         "title": str(local.get("title") or api_title).strip(),
@@ -292,8 +326,8 @@ def normalize_row(api_novel: Mapping[str, Any], local: Optional[Mapping[str, Any
         "coins": as_int(api_novel.get("coins"), 0),
         "tickets": as_int(api_novel.get("membershipTicketCount"), 0),
         "is_membership": is_membership,
-        "coin_emoji": require_host_value(host_cfg, "coin_emoji"),
-        "ticket_emoji": require_host_value(host_cfg, "ticket_emoji"),
+        "coin_emoji": str(host_cfg.get("coin_emoji") or "").strip(),
+        "ticket_emoji": str(host_cfg.get("ticket_emoji") or "").strip(),
         "latest_chapter": str(api_novel.get("latestChapter") or "").strip(),
         "total_chapters": as_int(api_novel.get("totalChapters"), 0),
         "views": as_int(api_novel.get("views"), 0),
@@ -303,29 +337,21 @@ def normalize_row(api_novel: Mapping[str, Any], local: Optional[Mapping[str, Any
 
 def collect_revenue_rows() -> List[Dict[str, Any]]:
     """
-    Main function for revenue/report.py.
-
-    Returns rows like:
-      {
-        "state_key": "mistmint_haven:EC",
-        "short_code": "EC",
-        "coins": 1240,
-        "tickets": 0,
-        "is_membership": false,
-        "coin_emoji": "<:mistmint_currency:...>",
-        "ticket_emoji": "<:mistmint_ticket:...>"
-      }
+    Main function used by revenue/report.py.
     """
     host_cfg = load_host_config()
     indexes = load_local_novel_indexes()
     api_novels = fetch_my_novels(host_cfg)
 
-    rows = [normalize_row(n, match_local_mapping(n, indexes), host_cfg) for n in api_novels]
+    rows = [
+        normalize_row(n, match_local_mapping(n, indexes), host_cfg)
+        for n in api_novels
+    ]
+
     rows.sort(key=lambda r: (not r["is_mapped"], r["short_code"]))
     return rows
 
 
-# Friendly aliases if report.py wants shorter names later.
 def collect() -> List[Dict[str, Any]]:
     return collect_revenue_rows()
 
@@ -341,7 +367,10 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         unmapped = [r for r in rows if not r.get("is_mapped")]
         for r in unmapped:
-            print(f"[warn] unmapped Mistmint novel: {r['title']} ({r['slug']})", file=sys.stderr)
+            print(
+                f"[warn] unmapped Mistmint novel: {r['title']} ({r['slug']})",
+                file=sys.stderr,
+            )
 
         return 0
     except Exception as e:
