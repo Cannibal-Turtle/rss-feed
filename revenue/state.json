@@ -1,1 +1,89 @@
-{}
+{
+  "last_updated": "2026-06-23T11:50:27.217942Z",
+  "items": {
+    "mistmint_haven:AMLWC": {
+      "host_key": "mistmint_haven",
+      "host_name": "Mistmint Haven",
+      "short_code": "AMLWC",
+      "title": "After the Male Leads Went Crazy, They All Turned into Male Ghosts",
+      "coins": 0,
+      "tickets": 0,
+      "is_membership": false,
+      "novel_id": "4221504f-49cd-4c8b-9c98-89e8b67705df",
+      "slug": "after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts",
+      "novel_url": "https://www.mistminthaven.com/novels/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts"
+    },
+    "mistmint_haven:ATVHE": {
+      "host_key": "mistmint_haven",
+      "host_name": "Mistmint Haven",
+      "short_code": "ATVHE",
+      "title": "After Transmigrating into the Villain, I Got a HE with the Female Lead's Older Brother",
+      "coins": 2060,
+      "tickets": 0,
+      "is_membership": false,
+      "novel_id": "8ae77ae4-8871-4ac3-8bc4-2a094f825ea0",
+      "slug": "after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother",
+      "novel_url": "https://www.mistminthaven.com/novels/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother"
+    },
+    "mistmint_haven:EC": {
+      "host_key": "mistmint_haven",
+      "host_name": "Mistmint Haven",
+      "short_code": "EC",
+      "title": "Entering the Cage",
+      "coins": 1240,
+      "tickets": 0,
+      "is_membership": false,
+      "novel_id": "5536923a-4c2b-495c-b0dd-ac7a9b592df6",
+      "slug": "entering-the-cage",
+      "novel_url": "https://www.mistminthaven.com/novels/entering-the-cage"
+    },
+    "mistmint_haven:HIAFLG": {
+      "host_key": "mistmint_haven",
+      "host_name": "Mistmint Haven",
+      "short_code": "HIAFLG",
+      "title": "Help! I Accidentally Flirted with the Lord God, What Do I Do?!",
+      "coins": 3260,
+      "tickets": 0,
+      "is_membership": false,
+      "novel_id": "5868afe3-4a39-43ed-ae1c-314a8b3ffebe",
+      "slug": "help-i-accidentally-flirted-with-the-lord-god-what-do-i-do",
+      "novel_url": "https://www.mistminthaven.com/novels/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do"
+    },
+    "mistmint_haven:TDLBKGC": {
+      "host_key": "mistmint_haven",
+      "host_name": "Mistmint Haven",
+      "short_code": "TDLBKGC",
+      "title": "[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught",
+      "coins": 23445,
+      "tickets": 0,
+      "is_membership": false,
+      "novel_id": "8ebd3484-d5b2-422d-a22d-11404bc8481f",
+      "slug": "quick-transmigration-the-delicate-little-beauty-keeps-getting-caught",
+      "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught"
+    },
+    "mistmint_haven:TVITPA": {
+      "host_key": "mistmint_haven",
+      "host_name": "Mistmint Haven",
+      "short_code": "TVITPA",
+      "title": "Quick Transmigration: The Villain Is Too Pampered and Alluring",
+      "coins": 17385,
+      "tickets": 0,
+      "is_membership": false,
+      "novel_id": "24f3efce-5b52-4dfe-a90e-14bcfb3f56c6",
+      "slug": "quick-transmigration-the-villain-is-too-pampered-and-alluring",
+      "novel_url": "https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring"
+    },
+    "mistmint_haven:WSMSC": {
+      "host_key": "mistmint_haven",
+      "host_name": "Mistmint Haven",
+      "short_code": "WSMSC",
+      "title": "Whose Simping Male Supporting Character Is Being Held and Kissed by the Male Lead?",
+      "coins": 9402,
+      "tickets": 0,
+      "is_membership": false,
+      "novel_id": "4ee66cf7-3d4f-4cd1-b958-8a2dac6e167b",
+      "slug": "whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead",
+      "novel_url": "https://www.mistminthaven.com/novels/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead"
+    }
+  }
+}
