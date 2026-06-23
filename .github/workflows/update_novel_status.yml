@@ -59,4 +59,4 @@ jobs:
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         run: |
-          python update_novel_status.py "$TITLE" "$HOST"
+          python tools/update_novel_status.py "$TITLE" "$HOST"
