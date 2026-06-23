@@ -8,13 +8,19 @@ Mistmint Haven revenue adapter.
 This file only:
 - fetches Mistmint novel revenue data
 - matches Mistmint API novels to local TOML mappings
-- keeps only novels where is_paid = true in the novel TOML
 - normalizes rows for revenue/report.py
 
 It does NOT:
 - calculate monthly deltas
 - save state
 - send Discord messages
+
+Important:
+- This adapter returns all mapped Mistmint novels.
+- report.py decides which rows show in Discord.
+- Paid status comes from novel TOML:
+    has_paid = true
+  It also accepts is_paid = true as a fallback alias.
 """
 from __future__ import annotations
 
@@ -95,6 +101,14 @@ def as_bool(value: Any) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+def paid_flag(local: Mapping[str, Any]) -> bool:
+    """
+    Your novel TOMLs use has_paid = true.
+    is_paid = true is accepted too, just in case old/new files differ.
+    """
+    return as_bool(local.get("has_paid", local.get("is_paid", False)))
+
+
 def fallback_short_code(slug: str, title: str) -> str:
     base = slug or title or "UNKNOWN"
     base = re.sub(r"[^A-Za-z0-9]+", "_", base).strip("_").upper()
@@ -138,8 +152,11 @@ def load_local_novel_indexes() -> Dict[str, Dict[str, Dict[str, Any]]]:
     """
     Load local Mistmint novel TOMLs and index them by id, slug, and title.
 
-    report.py only receives novels whose local TOML has:
-      is_paid = true
+    Novel TOMLs are expected at:
+      mappings/novels/*.toml
+
+    Paid/report status is read from:
+      has_paid = true
     """
     by_id: Dict[str, Dict[str, Any]] = {}
     by_slug: Dict[str, Dict[str, Any]] = {}
@@ -314,6 +331,8 @@ def normalize_row(
     if not novel_url and api_slug:
         novel_url = f"https://www.mistminthaven.com/novels/{api_slug}"
 
+    is_paid = paid_flag(local)
+
     return {
         "host_key": HOST_KEY,
         "host_name": str(host_cfg.get("name") or HOST_NAME).strip(),
@@ -326,7 +345,8 @@ def normalize_row(
         "novel_url": novel_url,
         "coins": as_int(api_novel.get("coins"), 0),
         "tickets": as_int(api_novel.get("membershipTicketCount"), 0),
-        "is_paid": as_bool(local.get("is_paid", False)),
+        "has_paid": is_paid,
+        "is_paid": is_paid,
         "is_membership": as_bool(local.get("is_membership", False)),
         "coin_emoji": str(host_cfg.get("coin_emoji") or "").strip(),
         "ticket_emoji": str(host_cfg.get("ticket_emoji") or "").strip(),
@@ -341,8 +361,8 @@ def collect_revenue_rows() -> List[Dict[str, Any]]:
     """
     Main function used by revenue/report.py.
 
-    Only returns novels whose local novel TOML has:
-      is_paid = true
+    Returns all mapped Mistmint novels, including has_paid = false.
+    report.py uses has_paid/is_paid to decide what to show in Discord.
     """
     host_cfg = load_host_config()
     indexes = load_local_novel_indexes()
@@ -353,11 +373,9 @@ def collect_revenue_rows() -> List[Dict[str, Any]]:
         local = match_local_mapping(api_novel, indexes)
         if not local:
             continue
-        if not as_bool(local.get("is_paid", False)):
-            continue
         rows.append(normalize_row(api_novel, local, host_cfg))
 
-    rows.sort(key=lambda r: r["short_code"])
+    rows.sort(key=lambda r: (not r.get("is_paid", False), r["short_code"]))
     return rows
 
 
