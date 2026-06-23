@@ -8,11 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# Optional: pull logo/host pretty names from your mapping
-try:
-    from novel_mappings import HOSTING_SITE_DATA
-except Exception:
-    HOSTING_SITE_DATA = {}
+from novel_mappings import HOSTING_SITE_DATA
 
 DISCORD_TOKEN   = os.environ["DISCORD_BOT_TOKEN"]
 CHANNEL_ID      = int(os.environ["DISCORD_MOD_CHANNEL_ID"])
