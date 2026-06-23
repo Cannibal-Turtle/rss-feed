@@ -7,8 +7,10 @@ Monthly revenue report runner.
 
 What this file does:
 - imports revenue host adapters
-- collects current lifetime totals for paid novels only
-- compares them with revenue/state.json
+- collects current lifetime totals
+- shows only novels with has_paid/is_paid = true in Discord
+- preserves old paid novels in state if they later move to all-free
+- compares current totals with revenue/state.json
 - builds one Discord embed announcement
 - sends it to DISCORD_MOD_CHANNEL_ID using DISCORD_BOT_TOKEN
 - saves current totals + monthly/date log back to revenue/state.json
@@ -22,7 +24,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Set, Tuple
 
 import requests
 
@@ -128,8 +130,22 @@ def as_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def as_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
 def clean_short_code(value: Any) -> str:
     return str(value or "").strip().upper()
+
+
+def is_paid_row(row: Mapping[str, Any]) -> bool:
+    # Your novel TOMLs use has_paid = true.
+    # is_paid = true is supported as a fallback alias.
+    return as_bool(row.get("has_paid", row.get("is_paid", False)))
 
 
 # ---------------------------------------------------------------------------
@@ -212,37 +228,71 @@ def saved_total_tickets(item: Mapping[str, Any]) -> int:
     return as_int(item.get("tickets"), 0)
 
 
+def host_bucket_for_state(next_state: Dict[str, Any], host_name: str) -> Dict[str, Any]:
+    hosts = next_state.setdefault("hosts", {})
+    bucket = hosts.setdefault(
+        host_name,
+        {
+            "total_coins": 0,
+            "monthly_coins": 0,
+            "total_tickets": 0,
+            "monthly_tickets": 0,
+            "novels": {},
+        },
+    )
+    return bucket
+
+
+def copy_old_state_novels(
+    next_state: Dict[str, Any],
+    previous_state_data: Mapping[str, Any],
+    touched: Set[Tuple[str, str]],
+) -> None:
+    """
+    Preserve old novels that are no longer returned by the current fetch.
+    This protects old monthly history if a novel is removed from mappings/API.
+    """
+    old_hosts = previous_state_data.get("hosts", {})
+    if not isinstance(old_hosts, Mapping):
+        return
+
+    for host_name, old_host in old_hosts.items():
+        if not isinstance(old_host, Mapping):
+            continue
+
+        old_novels = old_host.get("novels", {})
+        if not isinstance(old_novels, Mapping):
+            continue
+
+        bucket = host_bucket_for_state(next_state, str(host_name))
+
+        for short_code, old_item in old_novels.items():
+            code = clean_short_code(short_code)
+            if (str(host_name), code) in touched:
+                continue
+            if not isinstance(old_item, Mapping):
+                continue
+
+            preserved = dict(old_item)
+            preserved["is_paid"] = False
+            preserved["status"] = preserved.get("status") or "inactive"
+
+            bucket["novels"][code] = preserved
+            bucket["total_coins"] = as_int(bucket.get("total_coins"), 0) + saved_total_coins(preserved)
+            bucket["total_tickets"] = as_int(bucket.get("total_tickets"), 0) + saved_total_tickets(preserved)
+
+
 def build_next_state(rows: Iterable[Mapping[str, Any]], previous_state_data: Mapping[str, Any]) -> Dict[str, Any]:
     """
-    Builds the minimal state shape the user wanted:
+    Builds the minimal state shape the user wanted.
 
-    {
-      "last_updated": "...",
-      "hosts": {
-        "Mistmint Haven": {
-          "total_coins": 56792,
-          "monthly_coins": 0,
-          "total_tickets": 0,
-          "monthly_tickets": 0,
-          "novels": {
-            "AMLWC": {
-              "title": "...",
-              "is_membership": false,
-              "total_coins": 0,
-              "total_tickets": 0,
-              "monthly_revenue": {
-                "2026-06-23": {
-                  "label": "June 2026",
-                  "coins": 0,
-                  "tickets": 0,
-                  "baseline": true
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+    Rules:
+    - Fresh never-paid novels are skipped.
+    - Paid novels are tracked and shown in Discord.
+    - A previously tracked novel that later becomes all-free is preserved in
+      state as inactive, but not shown in Discord.
+    - Monthly revenue still uses:
+        current lifetime total - previous saved lifetime total
     """
     period_key = current_period_key()
     period_label = current_period_label()
@@ -251,6 +301,7 @@ def build_next_state(rows: Iterable[Mapping[str, Any]], previous_state_data: Map
         "last_updated": iso_now(),
         "hosts": {},
     }
+    touched: Set[Tuple[str, str]] = set()
 
     for row in rows:
         state_key = str(row.get("state_key") or "").strip()
@@ -259,11 +310,19 @@ def build_next_state(rows: Iterable[Mapping[str, Any]], previous_state_data: Map
 
         _, short_code = split_state_key(state_key)
         host_name = str(row.get("host_name") or "Unknown Host").strip()
+        currently_paid = is_paid_row(row)
+
+        prev = previous_item(previous_state_data, row)
+
+        # Never-paid current all-free novels should not enter state.
+        # Previously paid/currently inactive novels should stay preserved.
+        if not currently_paid and prev is None:
+            continue
+
+        touched.add((host_name, short_code))
 
         current_coins = as_int(row.get("coins"), 0)
         current_tickets = as_int(row.get("tickets"), 0)
-
-        prev = previous_item(previous_state_data, row)
 
         if prev is None:
             period_delta_coins = 0
@@ -280,50 +339,54 @@ def build_next_state(rows: Iterable[Mapping[str, Any]], previous_state_data: Map
                 else {}
             )
 
-        previous_period_entry = old_history.get(period_key, {})
-        if isinstance(previous_period_entry, Mapping):
-            accumulated_coins = as_int(previous_period_entry.get("coins"), 0) + period_delta_coins
-            accumulated_tickets = as_int(previous_period_entry.get("tickets"), 0) + period_delta_tickets
-            baseline_flag = bool(previous_period_entry.get("baseline", False)) or is_baseline
-        else:
-            accumulated_coins = period_delta_coins
-            accumulated_tickets = period_delta_tickets
-            baseline_flag = is_baseline
+        should_write_period = currently_paid or is_baseline or period_delta_coins != 0 or period_delta_tickets != 0
 
-        period_entry: Dict[str, Any] = {
-            "label": period_label,
-            "coins": accumulated_coins,
-            "tickets": accumulated_tickets,
-        }
-        if baseline_flag:
-            period_entry["baseline"] = True
+        if should_write_period:
+            previous_period_entry = old_history.get(period_key, {})
+            if isinstance(previous_period_entry, Mapping):
+                accumulated_coins = as_int(previous_period_entry.get("coins"), 0) + period_delta_coins
+                accumulated_tickets = as_int(previous_period_entry.get("tickets"), 0) + period_delta_tickets
+                baseline_flag = bool(previous_period_entry.get("baseline", False)) or is_baseline
+            else:
+                accumulated_coins = period_delta_coins
+                accumulated_tickets = period_delta_tickets
+                baseline_flag = is_baseline
 
-        old_history[period_key] = period_entry
+            period_entry: Dict[str, Any] = {
+                "label": period_label,
+                "coins": accumulated_coins,
+                "tickets": accumulated_tickets,
+            }
+            if baseline_flag:
+                period_entry["baseline"] = True
 
-        host_bucket = next_state["hosts"].setdefault(
-            host_name,
-            {
-                "total_coins": 0,
-                "monthly_coins": 0,
-                "total_tickets": 0,
-                "monthly_tickets": 0,
-                "novels": {},
-            },
-        )
+            old_history[period_key] = period_entry
+
+        host_bucket = host_bucket_for_state(next_state, host_name)
 
         host_bucket["total_coins"] = as_int(host_bucket.get("total_coins"), 0) + current_coins
-        host_bucket["monthly_coins"] = as_int(host_bucket.get("monthly_coins"), 0) + accumulated_coins
         host_bucket["total_tickets"] = as_int(host_bucket.get("total_tickets"), 0) + current_tickets
-        host_bucket["monthly_tickets"] = as_int(host_bucket.get("monthly_tickets"), 0) + accumulated_tickets
 
-        host_bucket["novels"][short_code] = {
+        # monthly_coins/monthly_tickets are this period's new deltas.
+        if should_write_period:
+            host_bucket["monthly_coins"] = as_int(host_bucket.get("monthly_coins"), 0) + period_delta_coins
+            host_bucket["monthly_tickets"] = as_int(host_bucket.get("monthly_tickets"), 0) + period_delta_tickets
+
+        novel_state: Dict[str, Any] = {
             "title": row.get("title", ""),
-            "is_membership": bool(row.get("is_membership", False)),  # fresh from TOML every run
+            "is_paid": currently_paid,
+            "is_membership": bool(row.get("is_membership", False)),
             "total_coins": current_coins,
             "total_tickets": current_tickets,
             "monthly_revenue": old_history,
         }
 
+        if not currently_paid:
+            novel_state["status"] = "inactive"
+
+        host_bucket["novels"][short_code] = novel_state
+
+    copy_old_state_novels(next_state, previous_state_data, touched)
     return next_state
 
 
@@ -597,7 +660,7 @@ def send_error_to_discord(message: str) -> None:
 def collect_all_rows() -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     rows.extend(collect_mistmint_rows())
-    rows.sort(key=lambda r: (str(r.get("host_name") or ""), str(r.get("short_code") or "")))
+    rows.sort(key=lambda r: (str(r.get("host_name") or ""), not is_paid_row(r), str(r.get("short_code") or "")))
     return rows
 
 
@@ -613,36 +676,45 @@ def main(argv: Optional[List[str]] = None) -> int:
     state_path = Path(args.state)
 
     try:
-        rows = collect_all_rows()
-        if not rows:
-            raise RuntimeError("No paid revenue rows collected. Check is_paid = true in novel TOMLs.")
+        all_rows = collect_all_rows()
+        paid_rows = [row for row in all_rows if is_paid_row(row)]
+
+        if not all_rows:
+            raise RuntimeError("No Mistmint revenue rows collected. Check mappings/novels and the Mistmint API response.")
+
+        if not paid_rows:
+            print("[warn] No paid revenue rows collected. Nothing will be sent to Discord.", file=sys.stderr)
 
         state = load_state(state_path)
         role_map = load_role_map()
-        embeds = build_embeds(rows, state, role_map)
 
-        payload_preview = {
-            "content": f"{GLOBAL_MENTION}\n",
-            "embeds": embeds,
-        }
+        if paid_rows:
+            embeds = build_embeds(paid_rows, state, role_map)
+            payload_preview = {
+                "content": f"{GLOBAL_MENTION}\n",
+                "embeds": embeds,
+            }
 
-        if args.print_only:
-            print(json.dumps(payload_preview, ensure_ascii=False, indent=2))
+            if args.print_only:
+                print(json.dumps(payload_preview, ensure_ascii=False, indent=2))
+            else:
+                token = os.getenv("DISCORD_BOT_TOKEN", "").strip()
+                channel_id = args.channel or os.getenv("DISCORD_MOD_CHANNEL_ID", "").strip()
+                message_id = args.message or os.getenv("DISCORD_REVENUE_MESSAGE_ID", "").strip()
+
+                mid = send_discord_embeds(
+                    embeds,
+                    token=token,
+                    channel_id=channel_id,
+                    message_id=message_id,
+                )
+                print(f"[ok] Discord revenue report {'edited' if message_id else 'sent'}: id={mid}")
         else:
-            token = os.getenv("DISCORD_BOT_TOKEN", "").strip()
-            channel_id = args.channel or os.getenv("DISCORD_MOD_CHANNEL_ID", "").strip()
-            message_id = args.message or os.getenv("DISCORD_REVENUE_MESSAGE_ID", "").strip()
-
-            mid = send_discord_embeds(
-                embeds,
-                token=token,
-                channel_id=channel_id,
-                message_id=message_id,
-            )
-            print(f"[ok] Discord revenue report {'edited' if message_id else 'sent'}: id={mid}")
+            if args.print_only:
+                print(json.dumps({"content": "", "embeds": []}, ensure_ascii=False, indent=2))
 
         if not args.no_save:
-            next_state = build_next_state(rows, state)
+            next_state = build_next_state(all_rows, state)
             save_state(next_state, state_path)
             print(f"[ok] State saved: {state_path}")
         else:
