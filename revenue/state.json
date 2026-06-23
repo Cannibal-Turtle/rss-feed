@@ -1,1 +1,129 @@
-{}
+{
+  "last_updated": "2026-06-23T12:44:55.707988Z",
+  "hosts": {
+    "mistmint_haven": {
+      "host_name": "Mistmint Haven",
+      "host_emoji": "<:mascot_mistmint:1517514042930106559>",
+      "total_coins": 56792,
+      "total_tickets": 0,
+      "novels": {
+        "AMLWC": {
+          "title": "After the Male Leads Went Crazy, They All Turned into Male Ghosts",
+          "is_membership": false,
+          "coins": 0,
+          "tickets": 0,
+          "monthly_revenue": {
+            "2026-06": {
+              "label": "June 2026",
+              "coins": 0,
+              "tickets": 0,
+              "baseline": true
+            }
+          }
+        },
+        "ATVHE": {
+          "title": "After Transmigrating into the Villain, I Got a HE with the Female Lead's Older Brother",
+          "is_membership": false,
+          "coins": 2060,
+          "tickets": 0,
+          "monthly_revenue": {
+            "2026-06": {
+              "label": "June 2026",
+              "coins": 0,
+              "tickets": 0,
+              "baseline": true
+            }
+          }
+        },
+        "EC": {
+          "title": "Entering the Cage",
+          "is_membership": false,
+          "coins": 1240,
+          "tickets": 0,
+          "monthly_revenue": {
+            "2026-06": {
+              "label": "June 2026",
+              "coins": 0,
+              "tickets": 0,
+              "baseline": true
+            }
+          }
+        },
+        "HIAFLG": {
+          "title": "Help! I Accidentally Flirted with the Lord God, What Do I Do?!",
+          "is_membership": false,
+          "coins": 3260,
+          "tickets": 0,
+          "monthly_revenue": {
+            "2026-06": {
+              "label": "June 2026",
+              "coins": 0,
+              "tickets": 0,
+              "baseline": true
+            }
+          }
+        },
+        "TDLBKGC": {
+          "title": "[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught",
+          "is_membership": false,
+          "coins": 23445,
+          "tickets": 0,
+          "monthly_revenue": {
+            "2026-06": {
+              "label": "June 2026",
+              "coins": 0,
+              "tickets": 0,
+              "baseline": true
+            }
+          }
+        },
+        "TVITPA": {
+          "title": "Quick Transmigration: The Villain Is Too Pampered and Alluring",
+          "is_membership": false,
+          "coins": 17385,
+          "tickets": 0,
+          "monthly_revenue": {
+            "2026-06": {
+              "label": "June 2026",
+              "coins": 0,
+              "tickets": 0,
+              "baseline": true
+            }
+          }
+        },
+        "WSMSC": {
+          "title": "Whose Simping Male Supporting Character Is Being Held and Kissed by the Male Lead?",
+          "is_membership": false,
+          "coins": 9402,
+          "tickets": 0,
+          "monthly_revenue": {
+            "2026-06": {
+              "label": "June 2026",
+              "coins": 0,
+              "tickets": 0,
+              "baseline": true
+            }
+          }
+        }
+      },
+      "monthly_totals": {
+        "2026-06": {
+          "label": "June 2026",
+          "coins": 0,
+          "tickets": 0
+        }
+      }
+    }
+  },
+  "grand_totals": {
+    "total_coins": 56792,
+    "total_tickets": 0,
+    "monthly_totals": {
+      "2026-06": {
+        "label": "June 2026",
+        "coins": 0,
+        "tickets": 0
+      }
+    }
+  }
+}
