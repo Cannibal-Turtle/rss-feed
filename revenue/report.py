@@ -47,6 +47,8 @@ STATE_PATH = ROOT / "revenue" / "state.json"
 EMBED_COLOR = 0xC9D3FF
 DISCORD_API_BASE = "https://discord.com/api/v10"
 
+GLOBAL_MENTION  = "||<@&1329392448798982214>||"
+
 TITLE_BOX = (
     "╔══.·:·.☽✧    ✦    ✧☾.·:·.══╗\n"
     "            monthly revenue\n"
@@ -408,10 +410,9 @@ def send_discord_embeds(
         raise RuntimeError("Missing DISCORD_MOD_CHANNEL_ID.")
 
     payload = {
-        "content": "",
+        "content": f"{GLOBAL_MENTION}\n" if GLOBAL_MENTION else "",
         "embeds": list(embeds)[:10],
-        # Role mentions in embeds are for display here; this prevents accidental content pings.
-        "allowed_mentions": {"parse": []},
+        "allowed_mentions": {"parse": ["roles"]}
     }
 
     headers = discord_headers(token)
