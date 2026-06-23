@@ -29,7 +29,6 @@ except ModuleNotFoundError:  # Python 3.10/local fallback
 HOST_KEY = "mistmint_haven"
 HOST_NAME = "Mistmint Haven"
 
-
 # file path: rss-feed/revenue/hosts/mistmint_haven.py
 ROOT = Path(__file__).resolve().parents[2]
 HOST_TOML = ROOT / "mappings" / "hosts" / "mistmint_haven.toml"
@@ -189,6 +188,7 @@ def fetch_json(url: str, host_cfg: Optional[Mapping[str, Any]] = None) -> Any:
     if not headers.get("Cookie") and not headers.get("Authorization"):
         raise RuntimeError("Missing Mistmint auth. Set GitHub secret MISTMINT_COOKIE.")
 
+    print(f"[info] Fetching Mistmint revenue URL: {url}")
     r = requests.get(url, headers=headers, timeout=30)
     text = r.text
     try:
@@ -230,14 +230,6 @@ def revenue_novels_url(host_cfg: Mapping[str, Any]) -> str:
     return set_query_param(url, skipPage=0, limit=100)
 
 
-def revenue_stats_url(host_cfg: Mapping[str, Any]) -> str:
-    return (
-        os.getenv("MISTMINT_REVENUE_STATS_URL", "").strip()
-        or str(host_cfg.get("revenue_stats_url") or "").strip()
-        or DEFAULT_STATS_URL
-    )
-
-
 def fetch_my_novels(host_cfg: Optional[Mapping[str, Any]] = None) -> List[Dict[str, Any]]:
     """Fetch all novels from the my-novels revenue/list endpoint."""
     cfg = host_cfg or load_host_config()
@@ -262,12 +254,11 @@ def fetch_my_novels(host_cfg: Optional[Mapping[str, Any]] = None) -> List[Dict[s
     return novels
 
 
-def fetch_dashboard_stats(host_cfg: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
-    """Optional total dashboard stats from novel-stats. report.py can use this later."""
-    cfg = host_cfg or load_host_config()
-    payload = fetch_json(revenue_stats_url(cfg), cfg)
-    data = payload.get("data", payload) if isinstance(payload, dict) else {}
-    return data if isinstance(data, dict) else {}
+def require_host_value(host_cfg: Mapping[str, Any], key: str) -> str:
+    value = str(host_cfg.get(key) or "").strip()
+    if not value:
+        raise RuntimeError(f"Missing `{key}` in {HOST_TOML.relative_to(ROOT)}.")
+    return value
 
 
 def normalize_row(api_novel: Mapping[str, Any], local: Optional[Mapping[str, Any]], host_cfg: Mapping[str, Any]) -> Dict[str, Any]:
@@ -301,8 +292,8 @@ def normalize_row(api_novel: Mapping[str, Any], local: Optional[Mapping[str, Any
         "coins": as_int(api_novel.get("coins"), 0),
         "tickets": as_int(api_novel.get("membershipTicketCount"), 0),
         "is_membership": is_membership,
-        "coin_emoji": str(host_cfg.get("coin_emoji") or "").strip(),
-        "ticket_emoji": str(host_cfg.get("ticket_emoji") or "").strip(),
+        "coin_emoji": require_host_value(host_cfg, "coin_emoji"),
+        "ticket_emoji": require_host_value(host_cfg, "ticket_emoji"),
         "latest_chapter": str(api_novel.get("latestChapter") or "").strip(),
         "total_chapters": as_int(api_novel.get("totalChapters"), 0),
         "views": as_int(api_novel.get("views"), 0),
@@ -344,14 +335,9 @@ def get_revenue_rows() -> List[Dict[str, Any]]:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    argv = argv or sys.argv[1:]
     try:
         rows = collect_revenue_rows()
         print(json.dumps(rows, ensure_ascii=False, indent=2))
-
-        if "--stats" in argv:
-            print("\n=== dashboard stats ===")
-            print(json.dumps(fetch_dashboard_stats(), ensure_ascii=False, indent=2))
 
         unmapped = [r for r in rows if not r.get("is_mapped")]
         for r in unmapped:
