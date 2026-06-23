@@ -70,11 +70,6 @@ TITLE_BOX = (
     "╚══.·:·.☽✧    ✦    ✧☾.·:·.══╝"
 )
 
-DEFAULT_STATE_PATH = os.environ.get(
-    "NU_STATE_PATH",
-    str(ROOT / "novelupdates" / "nu_readers.json")
-)
-
 # Timestamp in embeds will use UTC so Discord localizes it per user; TZ env not needed.
 DEFAULT_TZ = "UTC"
 
@@ -139,23 +134,6 @@ def _novel_key(novel_title: str, nd: Dict[str, Any], series_url: str) -> str:
         return sk.upper()
     # 2) default to mapping title (normalized)
     return re.sub(r"\W+", "_", str(novel_title)).strip("_").upper()
-
-
-def _normalize_role_mention(raw: str) -> str:
-    raw = (raw or "").strip()
-    if not raw:
-        return ""
-
-    if raw.isdigit():
-        return f"<@&{raw}>"
-
-    m = _ROLE_RE.match(raw)
-    return f"<@&{m.group(1)}>" if m else raw
-  
-
-def _role_from_short_code(short_code: str) -> str:
-    role_id = get_novel_role_id(short_code)
-    return _normalize_role_mention(role_id)
   
 
 def _fetch_reading_lists_count(series_url: str, timeout: int = 30) -> Optional[int]:
