@@ -121,11 +121,6 @@ HOSTING_SITE_DATA = _load_hosting_site_data()
 
 # ---------------- Utility Functions ----------------
 
-def get_host_translator(host):
-    """Returns the translator name for the given hosting site."""
-    return HOSTING_SITE_DATA.get(host, {}).get("translator", "")
-
-
 def get_translator(host, novel_title=""):
     """
     Returns per-novel translator if set.
