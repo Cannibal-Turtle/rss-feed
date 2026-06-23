@@ -1,5 +1,6 @@
 name = "Mistmint Haven"
 feed_url = "https://www.mistminthaven.com/feed/"
+novel_api = "https://api.mistminthaven.com/api/my-novels"
 comments_feed_url = "https://api.mistminthaven.com/api/comments/trans/all-comments"
 translator = "CannibalTurtle"
 host_logo = "https://www.mistminthaven.com/images/mascot_mistmint.png"
