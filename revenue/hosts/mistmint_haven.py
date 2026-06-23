@@ -29,10 +29,6 @@ except ModuleNotFoundError:  # Python 3.10/local fallback
 HOST_KEY = "mistmint_haven"
 HOST_NAME = "Mistmint Haven"
 
-DEFAULT_NOVELS_URL = "https://api.mistminthaven.com/api/novels/trans/my-novels?skipPage=0&limit=100"
-DEFAULT_STATS_URL = "https://api.mistminthaven.com/api/novels/trans/novel-stats"
-DEFAULT_COIN_EMOJI = "<:mistmint_currency:1433046707121422487>"
-DEFAULT_TICKET_EMOJI = "<:mistmint_ticket:1517453566632001597>"
 
 # file path: rss-feed/revenue/hosts/mistmint_haven.py
 ROOT = Path(__file__).resolve().parents[2]
@@ -219,11 +215,19 @@ def set_query_param(url: str, **params: Any) -> str:
 
 
 def revenue_novels_url(host_cfg: Mapping[str, Any]) -> str:
-    return (
+    url = (
         os.getenv("MISTMINT_REVENUE_NOVELS_URL", "").strip()
         or str(host_cfg.get("revenue_novels_url") or "").strip()
-        or DEFAULT_NOVELS_URL
+        or str(host_cfg.get("novel_api") or "").strip()
     )
+
+    if not url:
+        raise RuntimeError(
+            "Missing Mistmint revenue URL. Set `novel_api` in "
+            "mappings/hosts/mistmint_haven.toml."
+        )
+
+    return set_query_param(url, skipPage=0, limit=100)
 
 
 def revenue_stats_url(host_cfg: Mapping[str, Any]) -> str:
@@ -297,8 +301,8 @@ def normalize_row(api_novel: Mapping[str, Any], local: Optional[Mapping[str, Any
         "coins": as_int(api_novel.get("coins"), 0),
         "tickets": as_int(api_novel.get("membershipTicketCount"), 0),
         "is_membership": is_membership,
-        "coin_emoji": str(host_cfg.get("coin_emoji") or DEFAULT_COIN_EMOJI).strip(),
-        "ticket_emoji": str(host_cfg.get("ticket_emoji") or DEFAULT_TICKET_EMOJI).strip(),
+        "coin_emoji": str(host_cfg.get("coin_emoji") or "").strip(),
+        "ticket_emoji": str(host_cfg.get("ticket_emoji") or "").strip(),
         "latest_chapter": str(api_novel.get("latestChapter") or "").strip(),
         "total_chapters": as_int(api_novel.get("totalChapters"), 0),
         "views": as_int(api_novel.get("views"), 0),
