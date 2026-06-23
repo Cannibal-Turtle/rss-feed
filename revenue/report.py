@@ -7,11 +7,11 @@ Monthly revenue report runner.
 
 What this file does:
 - imports revenue host adapters
-- collects current lifetime totals
+- collects current lifetime totals for paid novels only
 - compares them with revenue/state.json
 - builds one Discord embed announcement
 - sends it to DISCORD_MOD_CHANNEL_ID using DISCORD_BOT_TOKEN
-- saves the new lifetime totals + monthly log back to revenue/state.json
+- saves current totals + monthly/date log back to revenue/state.json
 """
 from __future__ import annotations
 
@@ -79,11 +79,12 @@ def malaysia_now() -> dt.datetime:
     return dt.datetime.now(dt.timezone(dt.timedelta(hours=8)))
 
 
-def current_month_key() -> str:
-    return malaysia_now().strftime("%Y-%m")
+def current_period_key() -> str:
+    # User-facing state log key. Workflow runs by Malaysia time.
+    return malaysia_now().strftime("%Y-%m-%d")
 
 
-def current_month_label() -> str:
+def current_period_label() -> str:
     return malaysia_now().strftime("%B %Y")
 
 
@@ -162,7 +163,9 @@ def save_state(state: Mapping[str, Any], path: Path = STATE_PATH) -> None:
     tmp.replace(path)
 
 
-def previous_item(state: Mapping[str, Any], state_key: str) -> Optional[Mapping[str, Any]]:
+def previous_item(state: Mapping[str, Any], row: Mapping[str, Any]) -> Optional[Mapping[str, Any]]:
+    state_key = str(row.get("state_key") or "").strip()
+
     # Backward compatibility with old state shape:
     # {"items": {"mistmint_haven:AMLWC": {...}}}
     old_items = state.get("items", {})
@@ -171,88 +174,105 @@ def previous_item(state: Mapping[str, Any], state_key: str) -> Optional[Mapping[
         if isinstance(old_item, Mapping):
             return old_item
 
-    # New state shape:
-    # {"hosts": {"mistmint_haven": {"novels": {"AMLWC": {...}}}}}
     host_key, short_code = split_state_key(state_key)
+    host_name = str(row.get("host_name") or host_key).strip()
+
     hosts = state.get("hosts", {})
     if not isinstance(hosts, Mapping):
         return None
 
-    host_bucket = hosts.get(host_key, {})
-    if not isinstance(host_bucket, Mapping):
-        return None
+    # Preferred state uses display host name:
+    # {"hosts": {"Mistmint Haven": {"novels": {"AMLWC": {...}}}}}
+    # Also supports the older generated state key "mistmint_haven".
+    for possible_host_key in (host_name, host_key):
+        host_bucket = hosts.get(possible_host_key, {})
+        if not isinstance(host_bucket, Mapping):
+            continue
 
-    novels = host_bucket.get("novels", {})
-    if not isinstance(novels, Mapping):
-        return None
+        novels = host_bucket.get("novels", {})
+        if not isinstance(novels, Mapping):
+            continue
 
-    item = novels.get(short_code)
-    return item if isinstance(item, Mapping) else None
+        item = novels.get(short_code)
+        if isinstance(item, Mapping):
+            return item
+
+    return None
+
+
+def saved_total_coins(item: Mapping[str, Any]) -> int:
+    if "total_coins" in item:
+        return as_int(item.get("total_coins"), 0)
+    return as_int(item.get("coins"), 0)
+
+
+def saved_total_tickets(item: Mapping[str, Any]) -> int:
+    if "total_tickets" in item:
+        return as_int(item.get("total_tickets"), 0)
+    return as_int(item.get("tickets"), 0)
 
 
 def build_next_state(rows: Iterable[Mapping[str, Any]], previous_state_data: Mapping[str, Any]) -> Dict[str, Any]:
     """
-    Builds the new minimal state.
+    Builds the minimal state shape the user wanted:
 
-    It stores:
-    - current lifetime totals per novel
-    - current lifetime totals per host
-    - current lifetime grand totals
-    - permanent month-by-month revenue history
-
-    Monthly revenue is calculated the same way as the embed:
-      current lifetime total - previous saved lifetime total
-
-    If you run the workflow more than once in the same month, this accumulates
-    that month's JSON log instead of overwriting it.
+    {
+      "last_updated": "...",
+      "hosts": {
+        "Mistmint Haven": {
+          "total_coins": 56792,
+          "monthly_coins": 0,
+          "total_tickets": 0,
+          "monthly_tickets": 0,
+          "novels": {
+            "AMLWC": {
+              "title": "...",
+              "is_membership": false,
+              "total_coins": 0,
+              "total_tickets": 0,
+              "monthly_revenue": {
+                "2026-06-23": {
+                  "label": "June 2026",
+                  "coins": 0,
+                  "tickets": 0,
+                  "baseline": true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
     """
-    month_key = current_month_key()
-    month_label = current_month_label()
+    period_key = current_period_key()
+    period_label = current_period_label()
 
     next_state: Dict[str, Any] = {
         "last_updated": iso_now(),
         "hosts": {},
-        "grand_totals": {
-            "total_coins": 0,
-            "total_tickets": 0,
-            "monthly_totals": {},
-        },
     }
-
-    # Preserve old grand monthly totals first.
-    old_grand = previous_state_data.get("grand_totals", {})
-    if isinstance(old_grand, Mapping):
-        old_grand_months = old_grand.get("monthly_totals", {})
-        if isinstance(old_grand_months, Mapping):
-            next_state["grand_totals"]["monthly_totals"] = dict(old_grand_months)
-
-    old_hosts = previous_state_data.get("hosts", {})
-
-    run_host_month_deltas: Dict[str, Dict[str, int]] = {}
-    run_grand_month_delta = {"coins": 0, "tickets": 0}
 
     for row in rows:
         state_key = str(row.get("state_key") or "").strip()
         if not state_key:
             continue
 
-        host_key, short_code = split_state_key(state_key)
-        host_name = str(row.get("host_name") or host_key).strip()
-        host_emoji = str(row.get("host_emoji") or "").strip()
+        _, short_code = split_state_key(state_key)
+        host_name = str(row.get("host_name") or "Unknown Host").strip()
 
         current_coins = as_int(row.get("coins"), 0)
         current_tickets = as_int(row.get("tickets"), 0)
 
-        prev = previous_item(previous_state_data, state_key)
+        prev = previous_item(previous_state_data, row)
 
         if prev is None:
-            month_delta_coins = 0
-            month_delta_tickets = 0
+            period_delta_coins = 0
+            period_delta_tickets = 0
             is_baseline = True
             old_history: Dict[str, Any] = {}
         else:
-            month_delta_coins = current_coins - as_int(prev.get("coins"), 0)
-            month_delta_tickets = current_tickets - as_int(prev.get("tickets"), 0)
+            period_delta_coins = current_coins - saved_total_coins(prev)
+            period_delta_tickets = current_tickets - saved_total_tickets(prev)
             is_baseline = False
             old_history = (
                 dict(prev.get("monthly_revenue", {}))
@@ -260,104 +280,49 @@ def build_next_state(rows: Iterable[Mapping[str, Any]], previous_state_data: Map
                 else {}
             )
 
-        previous_month_entry = old_history.get(month_key, {})
-        if isinstance(previous_month_entry, Mapping):
-            accumulated_month_coins = as_int(previous_month_entry.get("coins"), 0) + month_delta_coins
-            accumulated_month_tickets = as_int(previous_month_entry.get("tickets"), 0) + month_delta_tickets
-            baseline_flag = bool(previous_month_entry.get("baseline", False)) or is_baseline
+        previous_period_entry = old_history.get(period_key, {})
+        if isinstance(previous_period_entry, Mapping):
+            accumulated_coins = as_int(previous_period_entry.get("coins"), 0) + period_delta_coins
+            accumulated_tickets = as_int(previous_period_entry.get("tickets"), 0) + period_delta_tickets
+            baseline_flag = bool(previous_period_entry.get("baseline", False)) or is_baseline
         else:
-            accumulated_month_coins = month_delta_coins
-            accumulated_month_tickets = month_delta_tickets
+            accumulated_coins = period_delta_coins
+            accumulated_tickets = period_delta_tickets
             baseline_flag = is_baseline
 
-        month_entry: Dict[str, Any] = {
-            "label": month_label,
-            "coins": accumulated_month_coins,
-            "tickets": accumulated_month_tickets,
+        period_entry: Dict[str, Any] = {
+            "label": period_label,
+            "coins": accumulated_coins,
+            "tickets": accumulated_tickets,
         }
         if baseline_flag:
-            month_entry["baseline"] = True
+            period_entry["baseline"] = True
 
-        old_history[month_key] = month_entry
+        old_history[period_key] = period_entry
 
         host_bucket = next_state["hosts"].setdefault(
-            host_key,
+            host_name,
             {
-                "host_name": host_name,
-                "host_emoji": host_emoji,
                 "total_coins": 0,
+                "monthly_coins": 0,
                 "total_tickets": 0,
+                "monthly_tickets": 0,
                 "novels": {},
-                "monthly_totals": {},
             },
         )
 
-        # Preserve old host monthly totals.
-        if isinstance(old_hosts, Mapping):
-            old_host = old_hosts.get(host_key, {})
-            if isinstance(old_host, Mapping):
-                old_monthly_totals = old_host.get("monthly_totals", {})
-                if isinstance(old_monthly_totals, Mapping) and not host_bucket["monthly_totals"]:
-                    host_bucket["monthly_totals"] = dict(old_monthly_totals)
-
-        host_bucket["host_name"] = host_name
-        host_bucket["host_emoji"] = host_emoji
-
         host_bucket["total_coins"] = as_int(host_bucket.get("total_coins"), 0) + current_coins
+        host_bucket["monthly_coins"] = as_int(host_bucket.get("monthly_coins"), 0) + accumulated_coins
         host_bucket["total_tickets"] = as_int(host_bucket.get("total_tickets"), 0) + current_tickets
+        host_bucket["monthly_tickets"] = as_int(host_bucket.get("monthly_tickets"), 0) + accumulated_tickets
 
         host_bucket["novels"][short_code] = {
             "title": row.get("title", ""),
             "is_membership": bool(row.get("is_membership", False)),  # fresh from TOML every run
-            "coins": current_coins,
-            "tickets": current_tickets,
+            "total_coins": current_coins,
+            "total_tickets": current_tickets,
             "monthly_revenue": old_history,
         }
-
-        host_delta = run_host_month_deltas.setdefault(host_key, {"coins": 0, "tickets": 0})
-        host_delta["coins"] += month_delta_coins
-        host_delta["tickets"] += month_delta_tickets
-
-        run_grand_month_delta["coins"] += month_delta_coins
-        run_grand_month_delta["tickets"] += month_delta_tickets
-
-        next_state["grand_totals"]["total_coins"] += current_coins
-        next_state["grand_totals"]["total_tickets"] += current_tickets
-
-    # Update host monthly totals for this month.
-    for host_key, delta in run_host_month_deltas.items():
-        host_bucket = next_state["hosts"].get(host_key)
-        if not isinstance(host_bucket, Mapping):
-            continue
-
-        old_month_entry = host_bucket["monthly_totals"].get(month_key, {})
-        if isinstance(old_month_entry, Mapping):
-            total_month_coins = as_int(old_month_entry.get("coins"), 0) + delta["coins"]
-            total_month_tickets = as_int(old_month_entry.get("tickets"), 0) + delta["tickets"]
-        else:
-            total_month_coins = delta["coins"]
-            total_month_tickets = delta["tickets"]
-
-        host_bucket["monthly_totals"][month_key] = {
-            "label": month_label,
-            "coins": total_month_coins,
-            "tickets": total_month_tickets,
-        }
-
-    # Update grand monthly totals for this month.
-    old_grand_month_entry = next_state["grand_totals"]["monthly_totals"].get(month_key, {})
-    if isinstance(old_grand_month_entry, Mapping):
-        grand_month_coins = as_int(old_grand_month_entry.get("coins"), 0) + run_grand_month_delta["coins"]
-        grand_month_tickets = as_int(old_grand_month_entry.get("tickets"), 0) + run_grand_month_delta["tickets"]
-    else:
-        grand_month_coins = run_grand_month_delta["coins"]
-        grand_month_tickets = run_grand_month_delta["tickets"]
-
-    next_state["grand_totals"]["monthly_totals"][month_key] = {
-        "label": month_label,
-        "coins": grand_month_coins,
-        "tickets": grand_month_tickets,
-    }
 
     return next_state
 
@@ -420,8 +385,8 @@ def row_deltas(row: Mapping[str, Any], prev: Optional[Mapping[str, Any]]) -> Tup
     if prev is None:
         return None, None
 
-    coins_delta = as_int(row.get("coins"), 0) - as_int(prev.get("coins"), 0)
-    tickets_delta = as_int(row.get("tickets"), 0) - as_int(prev.get("tickets"), 0)
+    coins_delta = as_int(row.get("coins"), 0) - saved_total_coins(prev)
+    tickets_delta = as_int(row.get("tickets"), 0) - saved_total_tickets(prev)
     return coins_delta, tickets_delta
 
 
@@ -464,8 +429,7 @@ def monthly_totals(rows: Iterable[Mapping[str, Any]], state: Mapping[str, Any]) 
         if not ticket_emoji:
             ticket_emoji = str(row.get("ticket_emoji") or "").strip()
 
-        key = str(row.get("state_key") or "")
-        prev = previous_item(state, key)
+        prev = previous_item(state, row)
         coins_delta, tickets_delta = row_deltas(row, prev)
 
         if coins_delta is not None:
@@ -513,7 +477,7 @@ def chunk_description(parts: List[str], summary: str, *, first_run: bool, max_ch
     if current.strip():
         chunks.append(current.strip())
 
-    return chunks or ["_No revenue rows found._"]
+    return chunks or ["_No paid revenue rows found._"]
 
 
 def build_embeds(
@@ -530,8 +494,7 @@ def build_embeds(
 
     parts: List[str] = []
     for row in rows:
-        key = str(row.get("state_key") or "")
-        prev = previous_item(state, key)
+        prev = previous_item(state, row)
         parts.append(format_row(row, prev, role_map))
 
     summary = format_monthly_totals(rows, state)
@@ -652,7 +615,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         rows = collect_all_rows()
         if not rows:
-            raise RuntimeError("No revenue rows collected.")
+            raise RuntimeError("No paid revenue rows collected. Check is_paid = true in novel TOMLs.")
 
         state = load_state(state_path)
         role_map = load_role_map()
@@ -684,10 +647,6 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"[ok] State saved: {state_path}")
         else:
             print("[info] --no-save used; state not updated")
-
-        unmapped = [r for r in rows if not r.get("is_mapped", True)]
-        for row in unmapped:
-            print(f"[warn] unmapped novel: {row.get('host_name')} / {row.get('title')}", file=sys.stderr)
 
         return 0
 
