@@ -11,10 +11,7 @@ What this file does:
 - compares them with revenue/state.json
 - builds one Discord embed announcement
 - sends it to DISCORD_MOD_CHANNEL_ID using DISCORD_BOT_TOKEN
-- saves the new lifetime totals back to revenue/state.json
-
-Current host adapter:
-- revenue/hosts/mistmint_haven.py
+- saves the new lifetime totals + monthly log back to revenue/state.json
 """
 from __future__ import annotations
 
@@ -30,8 +27,8 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 import requests
 
 try:
-    import tomllib  # Python 3.11+
-except ModuleNotFoundError:  # Python 3.10 fallback
+    import tomllib
+except ModuleNotFoundError:
     import tomli as tomllib  # type: ignore
 
 
@@ -47,7 +44,7 @@ STATE_PATH = ROOT / "revenue" / "state.json"
 EMBED_COLOR = 0xC9D3FF
 DISCORD_API_BASE = "https://discord.com/api/v10"
 
-GLOBAL_MENTION  = "||<@&1329392448798982214>||"
+GLOBAL_MENTION = "||<@&1329392448798982214>||"
 
 TITLE_BOX = (
     "╔══.·:·.☽✧    ✦    ✧☾.·:·.══╗\n"
@@ -60,7 +57,6 @@ DEFAULT_NOVEL_DISCORD_MAP_URL = (
     "main/config/novel_discord_map.toml"
 )
 
-# Uses the default public role map unless you override it with a GitHub secret/env.
 NOVEL_DISCORD_MAP_URL = (
     os.environ.get("NOVEL_DISCORD_MAP_URL", "").strip()
     or DEFAULT_NOVEL_DISCORD_MAP_URL
@@ -77,6 +73,25 @@ def utc_now() -> dt.datetime:
 
 def iso_now() -> str:
     return utc_now().isoformat().replace("+00:00", "Z")
+
+
+def malaysia_now() -> dt.datetime:
+    return dt.datetime.now(dt.timezone(dt.timedelta(hours=8)))
+
+
+def current_month_key() -> str:
+    return malaysia_now().strftime("%Y-%m")
+
+
+def current_month_label() -> str:
+    return malaysia_now().strftime("%B %Y")
+
+
+def split_state_key(state_key: str) -> Tuple[str, str]:
+    if ":" not in state_key:
+        return state_key.strip(), ""
+    host_key, short_code = state_key.split(":", 1)
+    return host_key.strip(), short_code.strip().upper()
 
 
 def plural(n: int, word: str) -> str:
@@ -122,12 +137,12 @@ def clean_short_code(value: Any) -> str:
 
 def load_state(path: Path = STATE_PATH) -> Dict[str, Any]:
     if not path.exists():
-        return {"items": {}}
+        return {}
 
     try:
         with path.open("r", encoding="utf-8") as f:
             data = json.load(f)
-        return data if isinstance(data, dict) else {"items": {}}
+        return data if isinstance(data, dict) else {}
     except Exception as exc:
         bad_path = path.with_suffix(path.suffix + ".bad")
         try:
@@ -135,7 +150,7 @@ def load_state(path: Path = STATE_PATH) -> Dict[str, Any]:
             print(f"[warn] invalid state moved to {bad_path}: {exc}")
         except Exception:
             print(f"[warn] invalid state could not be moved: {exc}")
-        return {"items": {}}
+        return {}
 
 
 def save_state(state: Mapping[str, Any], path: Path = STATE_PATH) -> None:
@@ -148,40 +163,203 @@ def save_state(state: Mapping[str, Any], path: Path = STATE_PATH) -> None:
 
 
 def previous_item(state: Mapping[str, Any], state_key: str) -> Optional[Mapping[str, Any]]:
-    items = state.get("items", {})
-    if not isinstance(items, Mapping):
+    # Backward compatibility with old state shape:
+    # {"items": {"mistmint_haven:AMLWC": {...}}}
+    old_items = state.get("items", {})
+    if isinstance(old_items, Mapping):
+        old_item = old_items.get(state_key)
+        if isinstance(old_item, Mapping):
+            return old_item
+
+    # New state shape:
+    # {"hosts": {"mistmint_haven": {"novels": {"AMLWC": {...}}}}}
+    host_key, short_code = split_state_key(state_key)
+    hosts = state.get("hosts", {})
+    if not isinstance(hosts, Mapping):
         return None
-    item = items.get(state_key)
+
+    host_bucket = hosts.get(host_key, {})
+    if not isinstance(host_bucket, Mapping):
+        return None
+
+    novels = host_bucket.get("novels", {})
+    if not isinstance(novels, Mapping):
+        return None
+
+    item = novels.get(short_code)
     return item if isinstance(item, Mapping) else None
 
 
-def build_next_state(rows: Iterable[Mapping[str, Any]]) -> Dict[str, Any]:
-    items: Dict[str, Dict[str, Any]] = {}
+def build_next_state(rows: Iterable[Mapping[str, Any]], previous_state_data: Mapping[str, Any]) -> Dict[str, Any]:
+    """
+    Builds the new minimal state.
+
+    It stores:
+    - current lifetime totals per novel
+    - current lifetime totals per host
+    - current lifetime grand totals
+    - permanent month-by-month revenue history
+
+    Monthly revenue is calculated the same way as the embed:
+      current lifetime total - previous saved lifetime total
+
+    If you run the workflow more than once in the same month, this accumulates
+    that month's JSON log instead of overwriting it.
+    """
+    month_key = current_month_key()
+    month_label = current_month_label()
+
+    next_state: Dict[str, Any] = {
+        "last_updated": iso_now(),
+        "hosts": {},
+        "grand_totals": {
+            "total_coins": 0,
+            "total_tickets": 0,
+            "monthly_totals": {},
+        },
+    }
+
+    # Preserve old grand monthly totals first.
+    old_grand = previous_state_data.get("grand_totals", {})
+    if isinstance(old_grand, Mapping):
+        old_grand_months = old_grand.get("monthly_totals", {})
+        if isinstance(old_grand_months, Mapping):
+            next_state["grand_totals"]["monthly_totals"] = dict(old_grand_months)
+
+    old_hosts = previous_state_data.get("hosts", {})
+
+    run_host_month_deltas: Dict[str, Dict[str, int]] = {}
+    run_grand_month_delta = {"coins": 0, "tickets": 0}
 
     for row in rows:
         state_key = str(row.get("state_key") or "").strip()
         if not state_key:
             continue
 
-        # Always save tickets even when is_membership = false.
-        # That way, if a novel becomes membership later, it already has a baseline.
-        items[state_key] = {
-            "host_key": row.get("host_key", ""),
-            "host_name": row.get("host_name", ""),
-            "short_code": row.get("short_code", ""),
+        host_key, short_code = split_state_key(state_key)
+        host_name = str(row.get("host_name") or host_key).strip()
+        host_emoji = str(row.get("host_emoji") or "").strip()
+
+        current_coins = as_int(row.get("coins"), 0)
+        current_tickets = as_int(row.get("tickets"), 0)
+
+        prev = previous_item(previous_state_data, state_key)
+
+        if prev is None:
+            month_delta_coins = 0
+            month_delta_tickets = 0
+            is_baseline = True
+            old_history: Dict[str, Any] = {}
+        else:
+            month_delta_coins = current_coins - as_int(prev.get("coins"), 0)
+            month_delta_tickets = current_tickets - as_int(prev.get("tickets"), 0)
+            is_baseline = False
+            old_history = (
+                dict(prev.get("monthly_revenue", {}))
+                if isinstance(prev.get("monthly_revenue"), Mapping)
+                else {}
+            )
+
+        previous_month_entry = old_history.get(month_key, {})
+        if isinstance(previous_month_entry, Mapping):
+            accumulated_month_coins = as_int(previous_month_entry.get("coins"), 0) + month_delta_coins
+            accumulated_month_tickets = as_int(previous_month_entry.get("tickets"), 0) + month_delta_tickets
+            baseline_flag = bool(previous_month_entry.get("baseline", False)) or is_baseline
+        else:
+            accumulated_month_coins = month_delta_coins
+            accumulated_month_tickets = month_delta_tickets
+            baseline_flag = is_baseline
+
+        month_entry: Dict[str, Any] = {
+            "label": month_label,
+            "coins": accumulated_month_coins,
+            "tickets": accumulated_month_tickets,
+        }
+        if baseline_flag:
+            month_entry["baseline"] = True
+
+        old_history[month_key] = month_entry
+
+        host_bucket = next_state["hosts"].setdefault(
+            host_key,
+            {
+                "host_name": host_name,
+                "host_emoji": host_emoji,
+                "total_coins": 0,
+                "total_tickets": 0,
+                "novels": {},
+                "monthly_totals": {},
+            },
+        )
+
+        # Preserve old host monthly totals.
+        if isinstance(old_hosts, Mapping):
+            old_host = old_hosts.get(host_key, {})
+            if isinstance(old_host, Mapping):
+                old_monthly_totals = old_host.get("monthly_totals", {})
+                if isinstance(old_monthly_totals, Mapping) and not host_bucket["monthly_totals"]:
+                    host_bucket["monthly_totals"] = dict(old_monthly_totals)
+
+        host_bucket["host_name"] = host_name
+        host_bucket["host_emoji"] = host_emoji
+
+        host_bucket["total_coins"] = as_int(host_bucket.get("total_coins"), 0) + current_coins
+        host_bucket["total_tickets"] = as_int(host_bucket.get("total_tickets"), 0) + current_tickets
+
+        host_bucket["novels"][short_code] = {
             "title": row.get("title", ""),
-            "coins": as_int(row.get("coins"), 0),
-            "tickets": as_int(row.get("tickets"), 0),
-            "is_membership": bool(row.get("is_membership", False)),
-            "novel_id": row.get("novel_id", ""),
-            "slug": row.get("slug", ""),
-            "novel_url": row.get("novel_url", ""),
+            "is_membership": bool(row.get("is_membership", False)),  # fresh from TOML every run
+            "coins": current_coins,
+            "tickets": current_tickets,
+            "monthly_revenue": old_history,
         }
 
-    return {
-        "last_updated": iso_now(),
-        "items": items,
+        host_delta = run_host_month_deltas.setdefault(host_key, {"coins": 0, "tickets": 0})
+        host_delta["coins"] += month_delta_coins
+        host_delta["tickets"] += month_delta_tickets
+
+        run_grand_month_delta["coins"] += month_delta_coins
+        run_grand_month_delta["tickets"] += month_delta_tickets
+
+        next_state["grand_totals"]["total_coins"] += current_coins
+        next_state["grand_totals"]["total_tickets"] += current_tickets
+
+    # Update host monthly totals for this month.
+    for host_key, delta in run_host_month_deltas.items():
+        host_bucket = next_state["hosts"].get(host_key)
+        if not isinstance(host_bucket, Mapping):
+            continue
+
+        old_month_entry = host_bucket["monthly_totals"].get(month_key, {})
+        if isinstance(old_month_entry, Mapping):
+            total_month_coins = as_int(old_month_entry.get("coins"), 0) + delta["coins"]
+            total_month_tickets = as_int(old_month_entry.get("tickets"), 0) + delta["tickets"]
+        else:
+            total_month_coins = delta["coins"]
+            total_month_tickets = delta["tickets"]
+
+        host_bucket["monthly_totals"][month_key] = {
+            "label": month_label,
+            "coins": total_month_coins,
+            "tickets": total_month_tickets,
+        }
+
+    # Update grand monthly totals for this month.
+    old_grand_month_entry = next_state["grand_totals"]["monthly_totals"].get(month_key, {})
+    if isinstance(old_grand_month_entry, Mapping):
+        grand_month_coins = as_int(old_grand_month_entry.get("coins"), 0) + run_grand_month_delta["coins"]
+        grand_month_tickets = as_int(old_grand_month_entry.get("tickets"), 0) + run_grand_month_delta["tickets"]
+    else:
+        grand_month_coins = run_grand_month_delta["coins"]
+        grand_month_tickets = run_grand_month_delta["tickets"]
+
+    next_state["grand_totals"]["monthly_totals"][month_key] = {
+        "label": month_label,
+        "coins": grand_month_coins,
+        "tickets": grand_month_tickets,
     }
+
+    return next_state
 
 
 # ---------------------------------------------------------------------------
@@ -196,13 +374,6 @@ def normalize_role_id(value: Any) -> str:
 def load_role_map(url: str = NOVEL_DISCORD_MAP_URL) -> Dict[str, str]:
     """
     Loads novel role IDs from discord-webhook/config/novel_discord_map.toml.
-
-    Supports TOML like:
-      [AMLWC]
-      role_id = "123..."
-
-    Also supports simple string values:
-      AMLWC = "123..."
     """
     if not url:
         return {}
@@ -260,19 +431,21 @@ def format_row(row: Mapping[str, Any], prev: Optional[Mapping[str, Any]], role_m
     tickets_total = as_int(row.get("tickets"), 0)
     is_membership = bool(row.get("is_membership", False))
 
+    host_emoji = str(row.get("host_emoji") or "").strip()
+    host_divider = f"꒰ა{host_emoji}໒꒱" if host_emoji else "꒰ა໒꒱"
+
     coin_emoji = str(row.get("coin_emoji") or "").strip()
     ticket_emoji = str(row.get("ticket_emoji") or "").strip()
 
     coins_delta, tickets_delta = row_deltas(row, prev)
 
-    header = f"{label} ༺<:mascot_mistmint:1517514042930106559>༻ ***{fmt_total(coins_total, 'coin')}***"
+    header = f"{label} {host_divider} ***{fmt_total(coins_total, 'coin')}***"
     if is_membership:
         header += f" · ***{fmt_total(tickets_total, 'ticket')}***"
 
     lines = [header]
     lines.append(f"> {coin_emoji} ̟ !! ***{fmt_delta(coins_delta, 'coin')}***")
 
-    # Requested condition: only display ticket stats when novel TOML has is_membership = true.
     if is_membership:
         lines.append(f"> {ticket_emoji} ̟ !! ***{fmt_delta(tickets_delta, 'ticket')}***")
 
@@ -280,12 +453,6 @@ def format_row(row: Mapping[str, Any], prev: Optional[Mapping[str, Any]], role_m
 
 
 def monthly_totals(rows: Iterable[Mapping[str, Any]], state: Mapping[str, Any]) -> Tuple[int, int, str, str]:
-    """
-    Sum this run's deltas across all rows.
-
-    First run has no previous baseline, so totals are 0. This avoids pretending
-    lifetime totals were earned in the current month.
-    """
     total_coins = 0
     total_tickets = 0
     coin_emoji = ""
@@ -321,12 +488,6 @@ def format_monthly_totals(rows: List[Mapping[str, Any]], state: Mapping[str, Any
 
 
 def chunk_description(parts: List[str], summary: str, *, first_run: bool, max_chars: int = 3900) -> List[str]:
-    """
-    Build embed description chunks.
-
-    Uses single newlines between novel blocks to avoid the huge vertical gaps.
-    Keeps one blank line before the bottom total summary.
-    """
     chunks: List[str] = []
     current = ""
 
@@ -355,9 +516,17 @@ def chunk_description(parts: List[str], summary: str, *, first_run: bool, max_ch
     return chunks or ["_No revenue rows found._"]
 
 
-def build_embeds(rows: List[Mapping[str, Any]], state: Mapping[str, Any], role_map: Mapping[str, str]) -> List[Dict[str, Any]]:
+def build_embeds(
+    rows: List[Mapping[str, Any]],
+    state: Mapping[str, Any],
+    role_map: Mapping[str, str],
+) -> List[Dict[str, Any]]:
     old_items = state.get("items", {})
-    first_run = not isinstance(old_items, Mapping) or not bool(old_items)
+    old_hosts = state.get("hosts", {})
+    first_run = (
+        not (isinstance(old_items, Mapping) and bool(old_items))
+        and not (isinstance(old_hosts, Mapping) and bool(old_hosts))
+    )
 
     parts: List[str] = []
     for row in rows:
@@ -410,9 +579,9 @@ def send_discord_embeds(
         raise RuntimeError("Missing DISCORD_MOD_CHANNEL_ID.")
 
     payload = {
-        "content": f"{GLOBAL_MENTION}\n" if GLOBAL_MENTION else "",
+        "content": f"{GLOBAL_MENTION}\n",
         "embeds": list(embeds)[:10],
-        "allowed_mentions": {"parse": ["roles"]}
+        "allowed_mentions": {"parse": ["roles"]},
     }
 
     headers = discord_headers(token)
@@ -444,6 +613,7 @@ def send_error_to_discord(message: str) -> None:
         "content": f"⚠️ Mistmint revenue report failed:\n```text\n{safe}\n```",
         "allowed_mentions": {"parse": []},
     }
+
     try:
         r = requests.post(
             f"{DISCORD_API_BASE}/channels/{channel_id}/messages",
@@ -462,8 +632,6 @@ def send_error_to_discord(message: str) -> None:
 # ---------------------------------------------------------------------------
 
 def collect_all_rows() -> List[Dict[str, Any]]:
-    # Future hosts can be added here, e.g.:
-    # from revenue.hosts.other_site import collect_revenue_rows as collect_other_rows
     rows: List[Dict[str, Any]] = []
     rows.extend(collect_mistmint_rows())
     rows.sort(key=lambda r: (str(r.get("host_name") or ""), str(r.get("short_code") or "")))
@@ -490,7 +658,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         role_map = load_role_map()
         embeds = build_embeds(rows, state, role_map)
 
-        payload_preview = {"content": "", "embeds": embeds}
+        payload_preview = {
+            "content": f"{GLOBAL_MENTION}\n",
+            "embeds": embeds,
+        }
 
         if args.print_only:
             print(json.dumps(payload_preview, ensure_ascii=False, indent=2))
@@ -499,11 +670,16 @@ def main(argv: Optional[List[str]] = None) -> int:
             channel_id = args.channel or os.getenv("DISCORD_MOD_CHANNEL_ID", "").strip()
             message_id = args.message or os.getenv("DISCORD_REVENUE_MESSAGE_ID", "").strip()
 
-            mid = send_discord_embeds(embeds, token=token, channel_id=channel_id, message_id=message_id)
+            mid = send_discord_embeds(
+                embeds,
+                token=token,
+                channel_id=channel_id,
+                message_id=message_id,
+            )
             print(f"[ok] Discord revenue report {'edited' if message_id else 'sent'}: id={mid}")
 
         if not args.no_save:
-            next_state = build_next_state(rows)
+            next_state = build_next_state(rows, state)
             save_state(next_state, state_path)
             print(f"[ok] State saved: {state_path}")
         else:
