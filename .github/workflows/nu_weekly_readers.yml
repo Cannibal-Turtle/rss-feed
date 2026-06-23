@@ -27,14 +27,13 @@ jobs:
         with:
           python-version: '3.x'
           cache: 'pip'
-          cache-dependency-path: requirements/nu_weekly.txt
 
       - name: Install deps
         env:
           PIP_DISABLE_PIP_VERSION_CHECK: 1
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements/nu_weekly.txt
+          pip install requests cloudscraper tomli
 
       - name: Run NU Weekly Readers
         timeout-minutes: 5
