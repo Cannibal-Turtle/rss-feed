@@ -1,42 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-nu_weekly_readers.py
-
-Fetches Novel Updates "Reading Lists" counts for any novels that declare
-`novelupdates_url` in your local `novel_mappings.py`, computes deltas
-vs. the last saved run, and (optionally) posts/edits a Discord message with
-an embed-only weekly report.
-
-How it works
-------------
-- For each novel in HOSTING_SITE_DATA with a `novelupdates_url`,
-  derive the NU series page URL (strip trailing "/feed/") and request it.
-- Parse the HTML for the snippet:  `On <b class="rlist">N</b> Reading Lists`.
-- Compare to the previously saved count in a JSON state file
-  (default: `nu_readers_state.json` at repo root).
-- Build a single-embed report with your requested formatting and either
-  print it (dry-run) or send to Discord using a bot token.
-
-Environment variables (optional)
---------------------------------
-- NU_STATE_PATH:        Path to the JSON state file (default: state_rss.json)
-- DISCORD_BOT_TOKEN:    If set, the script will send/edit a message via Bot HTTP API
-- (Optional) You can override the target thread with `--channel <id>` at runtime; otherwise it posts to 1435350071909548162.
-- DISCORD_MESSAGE_ID:   If set, PATCH (edit) this message instead of creating a new one
-- ALLOW_ROLE_PINGS:     If "true" (default), allow role mentions in embed to ping
-
-Notes
------
-- The embed includes an ISO8601 `timestamp` set to UTC; Discord will localize it for viewers.
-
-GitHub Actions notes
---------------------
-- Add a step to `pip install requests` (no other deps needed).
-- If you want state persisted, commit `nu_readers_state.json` after running.
-- Schedule weekly and run this script; the delta will be week-over-week.
-
-"""
 from __future__ import annotations
 
 import argparse
@@ -46,45 +7,62 @@ import re
 import sys
 import time
 import datetime as dt
-from typing import Dict, List, Tuple, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 from urllib.parse import urlparse
 
 import requests
 
-# Import your mapping from the repo
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib  # type: ignore
+
+
+# File path expected: rss-feed/novelupdates/nu_weekly_readers.py
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 try:
     from novel_mappings import HOSTING_SITE_DATA, get_novelupdates_url
 except Exception as e:
     print("[fatal] Could not import novel_mappings.HOSTING_SITE_DATA:", e, file=sys.stderr)
     raise
 
-# ---------------------------- constants --------------------------------
-from config_loader import (
-    embed_color_hex,
-    require_file_value,
-    require_role_value,
-    get_novel_role_id,
-    role_id_to_mention,
-)
 
 AUTHOR_NAME = "Novel Updates"
 AUTHOR_ICON = "https://www.novelupdates.com/appicon.png"
 
-EMBED_COLOR_HEX = (
-    os.environ.get("EMBED_COLOR_HEX")
-    or embed_color_hex("nu_weekly", "2D3F51")
-).lstrip("#")
+DISCORD_API_BASE = "https://discord.com/api/v10"
 
-ADMIN_MENTION = role_id_to_mention(require_role_value("admin"))
+# Same ping as revenue/report.py
+GLOBAL_MENTION = "||<@&1329392448798982214>||"
 
-GLOBAL_MENTION = (
-    os.environ.get("NU_GLOBAL_MENTION", "").strip()
-    or f"||{ADMIN_MENTION}||"
+# Same target channel/thread as revenue
+CHANNEL_DEFAULT = os.environ.get("DISCORD_MOD_CHANNEL_ID", "").strip()
+
+EMBED_COLOR_HEX = os.environ.get("EMBED_COLOR_HEX", "2D3F51").lstrip("#")
+
+DEFAULT_STATE_PATH = os.environ.get(
+    "NU_STATE_PATH",
+    str(ROOT / "novelupdates" / "nu_readers.json"),
 )
 
+DEFAULT_NOVEL_DISCORD_MAP_URL = (
+    "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/"
+    "main/config/novel_discord_map.toml"
+)
 
-# Default thread/channel to post into if no env/CLI provided.
-CHANNEL_DEFAULT = os.environ.get("DISCORD_MOD_CHANNEL_ID", "").strip()
+NOVEL_DISCORD_MAP_URL = (
+    os.environ.get("NOVEL_DISCORD_MAP_URL", "").strip()
+    or DEFAULT_NOVEL_DISCORD_MAP_URL
+)
+
+_RLIST_RE = re.compile(
+    r"On\s*<b[^>]*class=[\"']rlist[\"'][^>]*>\s*([\d,]+)\s*</b>\s*Reading Lists",
+    re.I,
+)
 
 TITLE_BOX = (
     "╔══.·:·.☽✧    ✦    ✧☾.·:·.══╗\n"
@@ -94,7 +72,7 @@ TITLE_BOX = (
 
 DEFAULT_STATE_PATH = os.environ.get(
     "NU_STATE_PATH",
-    require_file_value("nu_readers_path")
+    str(ROOT / "novelupdates" / "nu_readers.json")
 )
 
 # Timestamp in embeds will use UTC so Discord localizes it per user; TZ env not needed.
@@ -106,6 +84,46 @@ def _now_tz(tz_name: str) -> dt.datetime:
     # Kept for compatibility, but we always post UTC timestamps in the embed.
     return dt.datetime.now(dt.timezone.utc)
 
+def clean_short_code(value: Any) -> str:
+    return str(value or "").strip().upper()
+
+
+def normalize_role_id(value: Any) -> str:
+    match = re.search(r"\d{5,}", str(value or ""))
+    return match.group(0) if match else ""
+
+
+def load_role_map(url: str = NOVEL_DISCORD_MAP_URL) -> Dict[str, str]:
+    if not url:
+        return {}
+
+    try:
+        r = requests.get(url, timeout=20)
+        r.raise_for_status()
+        data = tomllib.loads(r.text)
+    except Exception as exc:
+        print(f"[warn] could not load novel Discord map: {exc}", file=sys.stderr)
+        return {}
+
+    out: Dict[str, str] = {}
+    if not isinstance(data, Mapping):
+        return out
+
+    for raw_code, raw_value in data.items():
+        code = clean_short_code(raw_code)
+        if not code:
+            continue
+
+        role_id = ""
+        if isinstance(raw_value, Mapping):
+            role_id = normalize_role_id(raw_value.get("role_id") or raw_value.get("id"))
+        else:
+            role_id = normalize_role_id(raw_value)
+
+        if role_id:
+            out[code] = f"<@&{role_id}>"
+
+    return out
 
 def _slug_from_series_url(series_url: str) -> str:
     p = urlparse(series_url)
@@ -114,7 +132,7 @@ def _slug_from_series_url(series_url: str) -> str:
     return slug
 
 
-def _novel_key(novel_title: str, nd: Dict[str, any], series_url: str) -> str:
+def _novel_key(novel_title: str, nd: Dict[str, Any], series_url: str) -> str:
     # 1) explicit override wins
     sk = (nd.get("state_key") or "").strip()
     if sk:
@@ -124,10 +142,15 @@ def _novel_key(novel_title: str, nd: Dict[str, any], series_url: str) -> str:
 
 
 def _normalize_role_mention(raw: str) -> str:
+    raw = (raw or "").strip()
     if not raw:
         return ""
+
+    if raw.isdigit():
+        return f"<@&{raw}>"
+
     m = _ROLE_RE.match(raw)
-    return f"<@&{m.group(1)}>" if m else raw.strip()
+    return f"<@&{m.group(1)}>" if m else raw
   
 
 def _role_from_short_code(short_code: str) -> str:
@@ -289,8 +312,9 @@ def _send_or_edit_discord_embed(
     }
   
     payload = {
-        "content": f"{GLOBAL_MENTION}\n",
+        "content": f"{GLOBAL_MENTION}\n" if GLOBAL_MENTION else "",
         "embeds": [embed],
+        "allowed_mentions": {"parse": ["roles"]},
     }
 
     sess = requests.Session()
@@ -318,17 +342,24 @@ def collect_targets() -> List[Tuple[str, str, str, str]]:
     Return list of (key, novel_title, role_mention, series_url)
     for all novels that have `novelupdates_url`.
     """
+    role_map = load_role_map()
+
     out: List[Tuple[str, str, str, str]] = []
+
     for host, cfg in (HOSTING_SITE_DATA or {}).items():
-        novels = (cfg.get("novels") or {})
+        novels = cfg.get("novels") or {}
+
         for novel_title, nd in novels.items():
             series_url = get_novelupdates_url(nd)
             if not series_url:
                 continue
+
             key = _novel_key(novel_title, nd, series_url)
-            short_code = (nd.get("short_code") or "").strip().upper()
-            role = _role_from_short_code(short_code)
+            short_code = clean_short_code(nd.get("short_code"))
+            role = role_map.get(short_code) or f"@{short_code or 'UNKNOWN'}"
+
             out.append((key, novel_title, role, series_url))
+
     return out
 
 
@@ -420,7 +451,6 @@ def main(argv: Optional[List[str]] = None) -> int:
     channel_id = args.channel or CHANNEL_DEFAULT
     message_id = (
         args.message
-        or os.environ.get("DISCORD_MESSAGE_ID", "").strip()
         or os.environ.get("DISCORD_NU_MESSAGE_ID", "").strip()
     )
     # Default to pinging roles unless explicitly disabled
