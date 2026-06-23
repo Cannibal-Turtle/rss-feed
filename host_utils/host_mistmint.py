@@ -1708,8 +1708,6 @@ MISTMINT_UTILS = {
     # passthroughs to novel_mappings
     "get_novel_details":
         lambda host, title: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}),
-    "get_host_translator":
-        lambda host: HOSTING_SITE_DATA.get(host, {}).get("translator", ""),
     "get_host_logo":
         lambda host: HOSTING_SITE_DATA.get(host, {}).get("host_logo", ""),
     "get_featured_image":
