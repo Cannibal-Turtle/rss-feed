@@ -27,12 +27,14 @@ on:
       discord_color:
         description: "Discord color optional, e.g. #c90016. Leave blank to write an empty string."
         required: false
+        type: string
       special_tag:
         description: "Special tag optional: quick transmigration or infinite flow. Removes normal transmigration from tags."
         required: false
         default: ""
         type: choice
         options:
+          - ""
           - "quick transmigration"
           - "infinite flow"
       has_arcs:

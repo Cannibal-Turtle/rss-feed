@@ -18,6 +18,7 @@ rss-feed/
 │  ├─ update_free_feed.yml
 │  ├─ update_paid_feed.yml
 │  ├─ update_comments.yml
+│  ├─ create_novel_toml.yml
 │  ├─ update_novel_status.yml
 │  ├─ publish_single_novel.yml
 │  ├─ publish_membership_update.yml
@@ -72,6 +73,7 @@ rss-feed/
 │  └─ token_alert_state.json
 ├─ tools/
 │  ├─ audit_dead_host_utils.py
+│  ├─ create_novel_toml.py
 │  ├─ publish_membership_update.py
 │  ├─ publish_single_novel.py
 │  └─ update_novel_status.py
@@ -191,6 +193,7 @@ free_chapters_source = "feed"
 paid_chapters_source = "api"
 chapter_mode = "auto"
 comments_api_url = "https://api.example.com/..."
+novels_api_url = "https://api.example.com/api/my-novels"
 
 # Comment source modes:
 # "trans"  = use tokened author dashboard endpoint; best metadata/reply tracking, token required
@@ -240,31 +243,27 @@ Example:
 
 ```toml
 host = "Mistmint Haven"
-
-title = "After the Male Leads Went Crazy, They All Turned Into Male Ghosts"
+title = "After the Male Leads Went Crazy, They All Turned into Male Ghosts"
 short_code = "AMLWC"
 
-novel_url = "https://mistminthaven.com/novel/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts/"
-novelupdates_url = "https://www.novelupdates.com/series/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts/"
-featured_image = "https://mistminthaven.com/wp-content/uploads/example-cover.jpg"
-
-has_free = true
-has_paid = true
-has_comments = true
-
-is_nsfw = false
-is_membership = false
+novelupdates_url = "https://www.novelupdates.com/series/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts"
+novel_url = "https://www.mistminthaven.com/novels/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts"
+featured_image = "https://web-novel-mistmint.s3.ap-southeast-1.amazonaws.com/novels/example-cover.jpg"
+novel_id = "4221504f-49cd-4c8b-9c98-89e8b67705df"
 
 chapter_count = "93 Chapters"
 last_chapter = "Chapter 93"
-start_date = ""
+start_date = "20/6/2026"
+has_free = true
+has_paid = true
+is_nsfw = false
+is_membership = false
 
-# Used only by arc checker novels.
-# Leave empty if this novel does not use arc tracking.
-history_file = ""
-
-# Optional novel-specific embed color for Discord repos.
 discord_color = "#c90016"
+
+tags = ["chinese", "supernatural", "comedy", "bl"]
+special_tag = "quick transmigration"
+history_file = "arc_history/amlwc_history.json"
 
 custom_description = """
 Optional multiline description here.
@@ -286,9 +285,9 @@ TOML supports triple-quoted multiline strings, so summaries are easier to paste 
 | `short_code` | Stable short code used across bots and workflows |
 | `novel_url` | Main novel page |
 | `featured_image` | Cover image URL |
+| `novel_id` | Host/API novel ID when available; important for Mistmint API/comment tools |
 | `has_free` | Whether this novel appears in the free feed |
 | `has_paid` | Whether this novel appears in the paid feed |
-| `has_comments` | Whether this novel appears in the comments feed |
 | `is_nsfw` | Whether this novel should be categorized as NSFW |
 | `is_membership` | Whether this novel is currently membership-only/available for membership |
 
@@ -300,6 +299,9 @@ TOML supports triple-quoted multiline strings, so summaries are easier to paste 
 | `chapter_count` | Display text for completion/status cards |
 | `last_chapter` | Completion checker target |
 | `start_date` | Used to calculate “After X of updates...” in completion messages |
+| `has_comments` | Comments feed flag; defaults to true unless explicitly set to false |
+| `tags` | Discord-supported genre tags, such as `chinese`, `modern`, `romance`, `bl` |
+| `special_tag` | Optional world-hopping tag, currently `quick transmigration` or `infinite flow` |
 | `history_file` | Arc checker history file |
 | `discord_color` | Novel-specific embed color for Discord repos |
 | `theme_color` | Optional alternate novel color field |
@@ -313,6 +315,8 @@ Use empty strings instead of deleting optional fields when you want scripts to s
 
 ```toml
 start_date = ""
+discord_color = ""
+special_tag = ""
 history_file = ""
 ```
 
@@ -321,6 +325,8 @@ Meaning:
 | Field | Empty Behavior |
 | --- | --- |
 | `start_date = ""` | Completion announcement omits the duration phrase |
+| `discord_color = ""` | Discord repos use their normal/default color logic |
+| `special_tag = ""` | No separate world-hopping tag is used |
 | `history_file = ""` | Arc checker skips arc tracking for the novel |
 
 ---
@@ -621,6 +627,8 @@ Mistmint API/private data may need:
 | `DISCORD_BOT_TOKEN` | Required for direct Discord tools/reports |
 | `GH_PAT` | Used when dispatching workflows or editing external repo files where needed |
 
+`tools/create_novel_toml.py` uses the host config's `token_secret` first. For Mistmint, that normally means `MISTMINT_COOKIE`. It can also use `MISTMINT_TOKEN` if you provide bearer-token auth instead.
+
 ---
 
 ## Token-Expiry Alerts
@@ -801,6 +809,93 @@ Revenue rows are controlled by template blocks such as:
 
 ---
 
+
+## Create Novel TOML Tool
+
+Script:
+
+```text
+tools/create_novel_toml.py
+```
+
+Workflow:
+
+```text
+.github/workflows/create_novel_toml.yml
+```
+
+Purpose:
+
+- fetch an existing dashboard novel from a configured host API
+- create `mappings/novels/<short_code>.toml`
+- fill host-provided fields automatically, including title, slug URL, novel ID, description, start date, NSFW flag, and Mistmint cover image
+- guess the Novel Updates URL from the title
+- keep only Discord-supported tags from `discord-webhook/config/tag_roles.json`
+- optionally create `arc_history/<short_code>_history.json`
+
+For Mistmint Haven, the host file must include:
+
+```toml
+novels_api_url = "https://api.mistminthaven.com/api/my-novels"
+token_secret = "MISTMINT_COOKIE"
+```
+
+Workflow inputs:
+
+| Input | Required? | Purpose |
+| --- | --- | --- |
+| `host` | Yes | Hosting site, e.g. `Mistmint Haven` |
+| `title` | Yes | Novel title exactly/as shown in the host dashboard |
+| `short_code` | Yes | New short code, e.g. `AMLWC` |
+| `chapter_count` | No | Optional display text, e.g. `93 Chapters`; blank writes `""` |
+| `last_chapter` | No | Optional target text, e.g. `Chapter 93`; blank writes `""` |
+| `discord_color` | No | Optional hex color, e.g. `#c90016`; blank writes `""` |
+| `special_tag` | No | Optional world-hopping tag: `quick transmigration` or `infinite flow` |
+| `has_arcs` | Yes | If true, creates `arc_history/<short_code>_history.json` and sets `history_file` |
+| `dry_run` | Yes | If true, previews the TOML in the Actions log without committing |
+| `overwrite` | Yes | If true, allows replacing an existing `mappings/novels/<short_code>.toml` |
+
+Recommended first run:
+
+```text
+dry_run = true
+overwrite = false
+```
+
+Then rerun with:
+
+```text
+dry_run = false
+```
+
+once the generated TOML looks right.
+
+### Tags and `special_tag`
+
+Normal `tags` should only contain tags that exist in the Discord repo's `config/tag_roles.json`.
+
+`special_tag` is for world-hopping labels that you may want to handle separately from normal genre tags:
+
+```toml
+tags = ["chinese", "modern", "romance", "bl"]
+special_tag = "quick transmigration"
+```
+
+If `special_tag` is set to `quick transmigration` or `infinite flow`, the tool removes plain `transmigration` from `tags` automatically. This keeps a quick-transmigration novel from ending up with both:
+
+```toml
+tags = ["transmigration"]
+special_tag = "quick transmigration"
+```
+
+Leave it blank when the novel is not quick transmigration or infinite flow:
+
+```toml
+special_tag = ""
+```
+
+---
+
 ## Automatic Novel Status Updater
 
 Script:
@@ -933,7 +1028,22 @@ public_global_mention = "||@everyone||"
 
 ---
 
-## Required Workflow Inputs
+## Workflow Inputs
+
+### `create_novel_toml.yml`
+
+| Input | Purpose |
+| --- | --- |
+| `host` | Hosting site, e.g. `Mistmint Haven` |
+| `title` | Novel title exactly/as shown in host dashboard |
+| `short_code` | Novel short code, e.g. `AMLWC` |
+| `chapter_count` | Optional chapter count text |
+| `last_chapter` | Optional last-chapter text |
+| `discord_color` | Optional novel embed color |
+| `special_tag` | Optional world-hopping tag |
+| `has_arcs` | Whether to create an arc history file |
+| `dry_run` | Preview without committing |
+| `overwrite` | Allow replacing an existing mapping file |
 
 ### `publish_single_novel.yml`
 
@@ -965,6 +1075,7 @@ public_global_mention = "||@everyone||"
 | `update_free_feed.yml` | Regenerates free RSS feed, scheduled daily |
 | `update_paid_feed.yml` | Regenerates paid RSS feed, scheduled hourly |
 | `update_comments.yml` | Regenerates comments RSS feed, scheduled hourly |
+| `create_novel_toml.yml` | Creates a new novel TOML from a configured host API |
 | `update_novel_status.yml` | Edits existing Discord novel status cards |
 | `publish_single_novel.yml` | Manually posts a novel/status card |
 | `publish_membership_update.yml` | Manually posts membership announcement |
@@ -976,35 +1087,84 @@ public_global_mention = "||@everyone||"
 
 ## Adding a New Novel on an Existing Host
 
+Preferred method for a configured API host:
+
+1. Run:
+
+   ```text
+   create_novel_toml.yml
+   ```
+
+2. Start with:
+
+   ```text
+   dry_run = true
+   overwrite = false
+   ```
+
+3. Check the generated TOML in the Actions log.
+
+4. Rerun with:
+
+   ```text
+   dry_run = false
+   ```
+
+5. Confirm the new file exists in:
+
+   ```text
+   mappings/novels/<short_code>.toml
+   ```
+
+Manual fallback:
+
 1. Create a novel TOML file in:
 
    ```text
    mappings/novels/
    ```
 
-2. Add required fields:
+2. Add the core fields:
 
    ```toml
    host = "Mistmint Haven"
    title = "Novel Title"
    short_code = "CODE"
-   novel_url = "https://..."
+
+   novelupdates_url = "https://www.novelupdates.com/series/novel-title"
+   novel_url = "https://www.mistminthaven.com/novels/novel-title"
    featured_image = "https://..."
+   novel_id = ""
+
+   chapter_count = ""
+   last_chapter = ""
+   start_date = ""
    has_free = true
    has_paid = true
-   has_comments = true
    is_nsfw = false
    is_membership = false
+
+   discord_color = ""
+
+   tags = ["chinese"]
+   special_tag = ""
+   history_file = ""
+
+   custom_description = """
+   Description here.
+   """
    ```
 
-3. Add optional status/checker fields as needed:
+3. If the novel has arcs, set:
 
    ```toml
-   chapter_count = "93 Chapters"
-   last_chapter = "Chapter 93"
-   start_date = ""
-   history_file = ""
-   discord_color = "#c90016"
+   history_file = "arc_history/code_history.json"
+   ```
+
+   and create the matching JSON file with:
+
+   ```json
+   {}
    ```
 
 4. Add Discord role/emoji/role URL data in the Discord repo:
@@ -1065,15 +1225,16 @@ public_global_mention = "||@everyone||"
 
 When adding a new novel:
 
-1. Create a novel TOML file in `mappings/novels/`.
+1. Run `create_novel_toml.yml`, or manually create a novel TOML file in `mappings/novels/`.
 2. Add a unique `short_code`.
-3. Add Discord role/emoji/role URL data in the Discord repo.
-4. Run `publish_single_novel.yml`.
-5. Confirm `novel_status_targets.json` was updated.
-6. If the novel enters membership, run `publish_membership_update.yml` with:
+3. Check `tags`, `special_tag`, `chapter_count`, `last_chapter`, and `discord_color` before publishing.
+4. Add Discord role/emoji/role URL data in the Discord repo.
+5. Run `publish_single_novel.yml`.
+6. Confirm `novel_status_targets.json` was updated.
+7. If the novel enters membership, run `publish_membership_update.yml` with:
    - `short_code`
    - `banner_url`
-7. Confirm the novel TOML now has:
+8. Confirm the novel TOML now has:
 
    ```toml
    is_membership = true
@@ -1160,6 +1321,7 @@ Use:
 - Paid/free feed sorting should not depend on mapping insertion order.
 - `history_file = ""` safely means no arc tracking.
 - `start_date = ""` safely means no duration phrase in completion messages.
+- `special_tag = ""` safely means no separate world-hopping tag.
 - `update_novel_status.py` edits existing Discord messages instead of reposting.
 - `novel_status_targets.json` stores message targets by short code.
 - Discord role IDs, custom emojis, and role URLs belong in Discord bot repos, not in `rss-feed` mappings.
