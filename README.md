@@ -262,7 +262,7 @@ is_membership = false
 discord_color = "#c90016"
 
 tags = ["chinese", "quick transmigration", "bl", "comedy", "supernatural"]
-site_genres = ["Horror", "Supernatural", "Transmigration", "Yaoi", "Comedy", "Fantasy", "Romance"]
+site_genres = ["Horror", "Supernatural", "Transmigration"]
 history_file = "arc_history/amlwc_history.json"
 
 custom_description = """
