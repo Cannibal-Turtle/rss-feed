@@ -1,0 +1,66 @@
+mode = "components_v2"
+flags = 32768
+
+[[components]]
+type = 17
+accent_color = "#C9D3FF"
+spoiler = false
+
+[[components.components]]
+type = 10
+content = "{global_mention}"
+
+[[components.components]]
+type = 10
+content = "## <:mistmint_ticket:1517453566632001597> Membership Exclusive <:approvedpurple:1517512468446842990>"
+
+[[components.components]]
+type = 14
+spacing = 1
+divider = false
+
+[[components.components]]
+type = 12
+
+[[components.components.items]]
+description = "Membership banner"
+spoiler = false
+
+[components.components.items.media]
+url = "{banner_url}"
+
+[[components.components]]
+type = 14
+spacing = 1
+divider = false
+
+[[components.components]]
+type = 10
+content = "<a:blackcatbracket_1:1517457481532440576>**{novel_title}**<a:blackcatbracket_2:1517457479380766751> is now available for ***{host} Membership!***\n\n"
+
+[[components.components]]
+type = 10
+content = "Members can now choose this novel as their monthly pick and use tickets to unlock its premium chapters.\n\nHappy reading <a:purple_book:1517433229018136617>"
+
+[[components.components]]
+type = 14
+spacing = 1
+divider = true
+
+[[components.components]]
+type = 9
+
+[[components.components.components]]
+type = 10
+content = "*Become a member?*"
+
+[components.components.accessory]
+type = 2
+style = 5
+label = "SUBSCRIBE"
+url = "{novel_url}"
+
+[components.components.accessory.emoji]
+id = "1517425652838432840"
+name = "purple_crown"
+animated = true

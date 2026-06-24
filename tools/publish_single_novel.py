@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 
@@ -13,7 +16,6 @@ from datetime import datetime, timezone
 from dateutil import parser as dateparser
 
 import discord
-from discord import Embed
 
 try:
     import tomllib
@@ -22,6 +24,7 @@ except ModuleNotFoundError:
 
 from novel_mappings import HOSTING_SITE_DATA, get_novelupdates_url
 from host_utils import get_host_utils
+from message_renderer import render_message, to_discord_py_kwargs
 
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 STATE_FILE = "novel_status_targets.json"
@@ -254,6 +257,91 @@ def compute_status(chapters, last_chapter_text):
 
     return completed, next_free_dt, last_free_dt
 
+def build_status_text(*, completed, next_free_dt, last_free_dt):
+    status_lines = []
+
+    status_lines.append("*Completed*" if completed else "*Ongoing*")
+
+    if next_free_dt:
+        unix_ts = int(next_free_dt.timestamp())
+        status_lines.append(f"Next free chapter live **<t:{unix_ts}:R>**")
+
+    elif last_free_dt:
+        unix_ts = int(last_free_dt.timestamp())
+        abs_time = last_free_dt.strftime("%A, %d %B %Y")
+        status_lines.append(
+            f"Last free chapter live **<t:{unix_ts}:R>** ({abs_time})"
+        )
+
+    else:
+        status_lines.append("_No free chapter timing available_")
+
+    return "\n".join(status_lines)
+
+def build_links_text(*, novel, host, forum_post_url):
+    links = []
+
+    # Host link
+    host_url = novel.get("novel_url")
+    if host_url:
+        links.append(f"[{host}]({host_url})")
+
+    # NovelUpdates link
+    nu = get_novelupdates_url(novel)
+    if nu:
+        links.append(f"[NU]({nu})")
+
+    # Forum post
+    if forum_post_url:
+        links.append(f"[Forum Post]({forum_post_url})")
+
+    return " • ".join(links)
+
+def build_message_payload_for_channel(
+    *,
+    title,
+    novel,
+    host,
+    completed,
+    next_free_dt,
+    last_free_dt,
+    target_channel_id,
+    forum_post_url,
+    novel_role_mention,
+):
+    """
+    Builds the same novel-card message as before, but with the visible text/layout
+    moved to message_templates/publish_single_novel.toml.
+    """
+    status_text = build_status_text(
+        completed=completed,
+        next_free_dt=next_free_dt,
+        last_free_dt=last_free_dt,
+    )
+
+    links_text = build_links_text(
+        novel=novel,
+        host=host,
+        forum_post_url=forum_post_url,
+    )
+
+    # Only show Role field in your archive channel.
+    # This keeps formatting based on WHERE the message is posted.
+    show_role = target_channel_id == ARCHIVE_CHANNEL_ID and bool(novel_role_mention)
+
+    ctx = {
+        "title": title,
+        "host": host,
+        "discord_color": novel.get("discord_color", "#ffffff"),
+        "featured_image": novel.get("featured_image") or "",
+        "novel_role_mention": novel_role_mention,
+        "show_role": show_role,
+        "status_text": status_text,
+        "links_text": links_text,
+    }
+
+    return render_message("publish_single_novel", ctx)
+
 # ---------------- main ----------------
 
 if len(sys.argv) < 2:
@@ -315,87 +403,6 @@ async def build_forum_post_url(forum_post_id):
         print(f"Warning: could not resolve forum post link for {forum_post_id}: {e}")
         return None
 
-def build_embed_for_channel(
-    *,
-    title,
-    novel,
-    host,
-    completed,
-    next_free_dt,
-    last_free_dt,
-    target_channel_id,
-    forum_post_url,
-    novel_role_mention,
-):
-    status_lines = []
-
-    status_lines.append("*Completed*" if completed else "*Ongoing*")
-
-    if next_free_dt:
-        unix_ts = int(next_free_dt.timestamp())
-        status_lines.append(f"Next free chapter live **<t:{unix_ts}:R>**")
-
-    elif last_free_dt:
-        unix_ts = int(last_free_dt.timestamp())
-        abs_time = last_free_dt.strftime("%A, %d %B %Y")
-        status_lines.append(
-            f"Last free chapter live **<t:{unix_ts}:R>** ({abs_time})"
-        )
-
-    else:
-        status_lines.append("_No free chapter timing available_")
-
-    # get color from mappings
-    color_hex = novel.get("discord_color", "#ffffff")
-
-    embed = Embed(
-        title=f"<a:4751fluffybunnii:1368138331652755537><:pastelsparkles:1365569995794288680> **{title}**",
-        color=int(color_hex.lstrip("#"), 16),
-    )
-
-    # Only show Role field in your archive channel.
-    # This keeps formatting based on WHERE the message is posted.
-    if target_channel_id == ARCHIVE_CHANNEL_ID and novel_role_mention:
-        embed.add_field(
-            name=f"<:pastelflower:1365570061443530804> Role <:pastelflower:1365570061443530804>",
-            value=novel_role_mention,
-            inline=True,
-        )
-
-    embed.add_field(
-        name=f"<:pastelflower:1365570061443530804> Status <:pastelflower:1365570061443530804>",
-        value="\n".join(status_lines),
-        inline=False,
-    )
-
-    links = []
-
-    # Host link
-    host_url = novel.get("novel_url")
-    if host_url:
-        links.append(f"[{host}]({host_url})")
-
-    # NovelUpdates link
-    nu = get_novelupdates_url(novel)
-    if nu:
-        links.append(f"[NU]({nu})")
-
-    # Forum post
-    if forum_post_url:
-        links.append(f"[Forum Post]({forum_post_url})")
-
-    if links:
-        embed.add_field(
-            name=f"<:pastelflower:1365570061443530804> Links <:pastelflower:1365570061443530804>",
-            value=" • ".join(links),
-            inline=False,
-        )
-
-    embed.set_thumbnail(url=novel.get("featured_image"))
-
-    return embed
-
-
 @bot.event
 async def on_ready():
     state = load_state()
@@ -421,7 +428,6 @@ async def on_ready():
                 continue
 
             api = fetch_api(api_url, hostdata["token_secret"])
-            
             chapters = flatten_chapters(api)
 
             completed, next_free_dt, last_free_dt = compute_status(
@@ -465,7 +471,7 @@ async def on_ready():
                 try:
                     channel = await resolve_channel(target_channel_id)
             
-                    embed = build_embed_for_channel(
+                    payload = build_message_payload_for_channel(
                         title=title,
                         novel=novel,
                         host=host,
@@ -476,8 +482,8 @@ async def on_ready():
                         forum_post_url=forum_post_url,
                         novel_role_mention=novel_role_mention,
                     )
-            
-                    msg = await channel.send(embed=embed)
+
+                    msg = await channel.send(**to_discord_py_kwargs(payload))
 
                     entry = {
                         "channel_id": str(channel.id),

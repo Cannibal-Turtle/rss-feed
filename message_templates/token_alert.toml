@@ -1,0 +1,64 @@
+[expiring]
+mode = "classic"
+content = '''{global_mention}
+## ˚꒦꒷<a:2891_RedAlert:1435281549074628618>꒷ ⋘ 𝑻𝒐𝒌𝒆𝒏 𝑬𝒙𝒑𝒊𝒓𝒊𝒏𝒈... ⋙'''
+allowed_mentions = { parse = ["roles"] }
+
+[[expiring.embeds]]
+description = '''**{host}** token is expiring soon
+│ Token expires {expires_full}.
+│ Time left: **{expires_relative}**.
+│ Rotate the secret to prevent feed/API breakage.
+│
+│ Repo: `{repo_slug}`'''
+color = "FFA500"
+
+[expiring.embeds.author]
+name = "{host}"
+icon_url = "{host_logo}"
+icon_url_when = "host_logo"
+
+[expiring.embeds.footer]
+text = "rss-feed • token watcher"
+
+[[expiring.components]]
+type = 1
+
+[[expiring.components.components]]
+type = 2
+style = 5
+label = "Update secret"
+url = "{secret_url}"
+
+
+[invalid]
+mode = "classic"
+content = '''{global_mention}
+## ˚꒦꒷<a:2891_RedAlert:1435281549074628618>꒷ ⋘ 𝑻𝒐𝒌𝒆𝒏 𝑩𝒓𝒐𝒌𝒆𝒏... ⋙'''
+allowed_mentions = { parse = ["roles"] }
+
+[[invalid.embeds]]
+description = '''**{host}** token is **INVALID / EXPIRED**
+│ API is failing RIGHT NOW.
+│ Error: `{error_msg}`
+│
+│ Immediate action required.
+│ Repo: `{repo_slug}`'''
+color = "F1202B"
+
+[invalid.embeds.author]
+name = "{host}"
+icon_url = "{host_logo}"
+icon_url_when = "host_logo"
+
+[invalid.embeds.footer]
+text = "rss-feed • token watcher"
+
+[[invalid.components]]
+type = 1
+
+[[invalid.components.components]]
+type = 2
+style = 5
+label = "Update secret"
+url = "{secret_url}"

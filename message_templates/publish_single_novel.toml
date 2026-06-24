@@ -1,0 +1,27 @@
+mode = "classic"
+allowed_mentions = { parse = [] }
+
+[[embeds]]
+title = "<a:4751fluffybunnii:1368138331652755537><:pastelsparkles:1365569995794288680> **{title}**"
+color = "{discord_color}"
+
+[[embeds.fields]]
+when = "show_role"
+name = "<:pastelflower:1365570061443530804> Role <:pastelflower:1365570061443530804>"
+value = "{novel_role_mention}"
+inline = true
+
+[[embeds.fields]]
+name = "<:pastelflower:1365570061443530804> Status <:pastelflower:1365570061443530804>"
+value = "{status_text}"
+inline = false
+
+[[embeds.fields]]
+when = "links_text"
+name = "<:pastelflower:1365570061443530804> Links <:pastelflower:1365570061443530804>"
+value = "{links_text}"
+inline = false
+
+[embeds.thumbnail]
+url = "{featured_image}"
+url_when = "featured_image"

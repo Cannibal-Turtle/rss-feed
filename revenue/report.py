@@ -43,6 +43,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from revenue.hosts.mistmint_haven import collect_revenue_rows as collect_mistmint_rows  # noqa: E402
+from message_renderer import render_message, to_discord_api_payload  # noqa: E402
 
 
 STATE_PATH = ROOT / "revenue" / "state.json"
@@ -625,6 +626,11 @@ def row_deltas(row: Mapping[str, Any], prev: Optional[Mapping[str, Any]]) -> Tup
     return coins_delta, tickets_delta
 
 
+def render_template_text(variant: str, ctx: Optional[Mapping[str, Any]] = None) -> str:
+    rendered = render_message("revenue_report", dict(ctx or {}), variant=variant)
+    return str(rendered.get("text", "")).strip("\n")
+
+
 def format_row(row: Mapping[str, Any], prev: Optional[Mapping[str, Any]], role_map: Mapping[str, str]) -> str:
     label = display_label(row, role_map)
     coins_total = as_int(row.get("coins"), 0)
@@ -639,18 +645,19 @@ def format_row(row: Mapping[str, Any], prev: Optional[Mapping[str, Any]], role_m
 
     coins_delta, tickets_delta = row_deltas(row, prev)
 
-    header = f"{label} {host_divider} ***{fmt_total(coins_total, 'coin')}***"
-    if is_membership:
-        header += f" · ***{fmt_total(tickets_total, 'ticket')}***"
+    ctx = {
+        "label": label,
+        "host_divider": host_divider,
+        "coins_total_text": fmt_total(coins_total, "coin"),
+        "tickets_total_text": fmt_total(tickets_total, "ticket"),
+        "coin_emoji": coin_emoji,
+        "ticket_emoji": ticket_emoji,
+        "coins_delta_text": fmt_delta(coins_delta, "coin"),
+        "tickets_delta_text": fmt_delta(tickets_delta, "ticket"),
+    }
 
-    lines = [header]
-    lines.append(f"> {coin_emoji} ̟ !! ***{fmt_delta(coins_delta, 'coin')}***")
-
-    if is_membership:
-        lines.append(f"> {ticket_emoji} ̟ !! ***{fmt_delta(tickets_delta, 'ticket')}***")
-
-    return "\n".join(lines)
-
+    variant = "row_membership" if is_membership else "row_basic"
+    return render_template_text(variant, ctx)
 
 def monthly_totals(rows: Iterable[Mapping[str, Any]], state: Mapping[str, Any]) -> Tuple[int, int]:
     total_coins = 0
@@ -672,9 +679,9 @@ def monthly_totals(rows: Iterable[Mapping[str, Any]], state: Mapping[str, Any]) 
 def format_monthly_totals(rows: List[Mapping[str, Any]], state: Mapping[str, Any]) -> str:
     total_coins, _total_tickets = monthly_totals(rows, state)
 
-    return (
-        "**Total earned coins this month:**\n"
-        f"### {OVERALL_TOTAL_MARKER} ***{fmt_month_total(total_coins, 'coin')}***"
+    return render_template_text(
+        "monthly_total",
+        {"monthly_coins_text": fmt_month_total(total_coins, "coin")},
     )
 
 
@@ -689,9 +696,9 @@ def chunk_description(
     chunks: List[str] = []
 
     if first_run:
-        current = "_First run: baseline saved. Monthly deltas start next run._"
+        current = render_template_text("first_run")
     else:
-        current = f"## {month_label.upper()}"
+        current = render_template_text("month_header", {"month_label_upper": month_label.upper()})
 
     for part in parts:
         add = part if not current.strip() else "\n" + part
@@ -712,7 +719,7 @@ def chunk_description(
     if current.strip():
         chunks.append(current.strip())
 
-    return chunks or ["_No revenue rows found._"]
+    return chunks or [render_template_text("empty_report")]
 
 
 def is_first_run_state(state: Mapping[str, Any]) -> bool:
@@ -756,19 +763,26 @@ def build_embeds(
 
     embeds: List[Dict[str, Any]] = []
     for i, description in enumerate(descriptions):
-        embed: Dict[str, Any] = {
-            "description": description,
-            "color": EMBED_COLOR,
-            "footer": {"text": "Data retrieved"},
-            "timestamp": timestamp,
-        }
+        title = (
+            render_template_text("title_main")
+            if i == 0
+            else render_template_text("title_continued")
+        )
 
-        if i == 0:
-            embed["title"] = TITLE_BOX
-        else:
-            embed["title"] = "monthly revenue — continued"
-
-        embeds.append(embed)
+        payload = render_message(
+            "revenue_report",
+            {
+                "title": title,
+                "description": description,
+                "embed_color": EMBED_COLOR,
+                "timestamp": timestamp,
+            },
+            variant="embed",
+        )
+        embed_items = payload.get("embeds") or []
+        if not embed_items:
+            raise RuntimeError("Revenue embed template rendered no embeds.")
+        embeds.append(dict(embed_items[0]))
 
     return embeds
 
@@ -796,11 +810,13 @@ def send_discord_embeds(
     if not channel_id:
         raise RuntimeError("Missing DISCORD_MOD_CHANNEL_ID.")
 
-    payload = {
-        "content": f"{GLOBAL_MENTION}\n" if GLOBAL_MENTION else "",
-        "embeds": list(embeds)[:10],
-        "allowed_mentions": {"parse": ["roles"]},
-    }
+    payload = render_message(
+        "revenue_report",
+        {"global_mention": GLOBAL_MENTION},
+        variant="message",
+    )
+    payload["embeds"] = list(embeds)[:10]
+    payload = to_discord_api_payload(payload)
 
     headers = discord_headers(token)
 
@@ -828,10 +844,13 @@ def send_error_to_discord(message: str) -> None:
         return
 
     safe = message[:1800]
-    payload = {
-        "content": f"⚠️ Mistmint revenue report failed:\n```text\n{safe}\n```",
-        "allowed_mentions": {"parse": []},
-    }
+    payload = to_discord_api_payload(
+        render_message(
+            "revenue_report",
+            {"safe_message": safe},
+            variant="error",
+        )
+    )
 
     try:
         r = requests.post(
@@ -882,10 +901,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         role_map = load_role_map()
         embeds = build_embeds(rows, state, role_map)
 
-        payload_preview = {
-            "content": f"{GLOBAL_MENTION}\n" if GLOBAL_MENTION else "",
-            "embeds": embeds,
-        }
+        payload_preview = render_message(
+            "revenue_report",
+            {"global_mention": GLOBAL_MENTION},
+            variant="message",
+        )
+        payload_preview["embeds"] = embeds
+        payload_preview = to_discord_api_payload(payload_preview)
 
         if args.print_only:
             print(json.dumps(payload_preview, ensure_ascii=False, indent=2))

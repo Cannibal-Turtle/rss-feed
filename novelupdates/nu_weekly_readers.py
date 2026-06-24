@@ -30,6 +30,12 @@ except Exception as e:
     print("[fatal] Could not import novel_mappings.HOSTING_SITE_DATA:", e, file=sys.stderr)
     raise
 
+try:
+    from message_renderer import render_message, to_discord_api_payload
+except Exception as e:
+    print("[fatal] Could not import message_renderer:", e, file=sys.stderr)
+    raise
+
 
 AUTHOR_NAME = "Novel Updates"
 AUTHOR_ICON = "https://www.novelupdates.com/appicon.png"
@@ -79,6 +85,7 @@ def _now_tz(tz_name: str) -> dt.datetime:
     # Kept for compatibility, but we always post UTC timestamps in the embed.
     return dt.datetime.now(dt.timezone.utc)
 
+
 def clean_short_code(value: Any) -> str:
     return str(value or "").strip().upper()
 
@@ -120,6 +127,7 @@ def load_role_map(url: str = NOVEL_DISCORD_MAP_URL) -> Dict[str, str]:
 
     return out
 
+
 def _slug_from_series_url(series_url: str) -> str:
     p = urlparse(series_url)
     parts = [s for s in p.path.split("/") if s]
@@ -134,7 +142,7 @@ def _novel_key(novel_title: str, nd: Dict[str, Any], series_url: str) -> str:
         return sk.upper()
     # 2) default to mapping title (normalized)
     return re.sub(r"\W+", "_", str(novel_title)).strip("_").upper()
-  
+
 
 def _fetch_reading_lists_count(series_url: str, timeout: int = 30) -> Optional[int]:
     headers = {
@@ -218,7 +226,7 @@ def _release_lock(fd: Optional[int], lock_path: str) -> None:
 
 # --------------------------- state handling -----------------------------
 
-def _load_state(path: str) -> Dict[str, any]:
+def _load_state(path: str) -> Dict[str, Any]:
    if not os.path.exists(path):
        return {}
    try:
@@ -234,14 +242,14 @@ def _load_state(path: str) -> Dict[str, any]:
        return {}
 
 
-def _save_state(path: str, data: Dict[str, any]) -> None:
+def _save_state(path: str, data: Dict[str, Any]) -> None:
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     os.replace(tmp, path)
 
 
-# --------------------------- embed building -----------------------------
+# --------------------------- message building -----------------------------
 
 def _format_delta(delta: Optional[int]) -> str:
     if delta is None:
@@ -256,44 +264,58 @@ def _build_description(lines: List[Tuple[str, int, Optional[int]]]) -> str:
     parts: List[str] = []
     for role, count, delta in lines:
         role_txt = role or "(no-role)"
-        parts.append(f"{role_txt} ༺♡༻ {_format_delta(delta)}\n> <:kawaiiaccents:1435916448890617948> ̟ !! ***{count} total readers***")
+        row = render_message(
+            "nu_weekly_readers",
+            {
+                "role_mention": role_txt,
+                "delta_text": _format_delta(delta),
+                "count": count,
+            },
+            variant="row",
+        ).get("content", "")
+        if row:
+            parts.append(row)
     return "\n".join(parts)
 
 
-def _build_embed(description: str) -> Dict[str, any]:
+def _embed_color_int() -> int:
+    return int(EMBED_COLOR_HEX, 16)
+
+
+def _build_payload(description: str) -> Dict[str, Any]:
     now_utc = dt.datetime.utcnow().replace(tzinfo=dt.timezone.utc)
-    footer_text = "Data retrieved"
-    embed = {
-        "author": {"name": AUTHOR_NAME, "icon_url": AUTHOR_ICON},
-        "title": TITLE_BOX,
-        "description": description,
-        "footer": {"text": footer_text},
-        "timestamp": now_utc.isoformat().replace("+00:00", "Z"),  # Discord localizes
-        "color": int(EMBED_COLOR_HEX, 16),
-    }
-    return embed
+    return to_discord_api_payload(
+        render_message(
+            "nu_weekly_readers",
+            {
+                "global_mention": GLOBAL_MENTION,
+                "description": description,
+                "timestamp": now_utc.isoformat().replace("+00:00", "Z"),
+                "embed_color": _embed_color_int(),
+            },
+            variant="message",
+        )
+    )
 
 
 # -------------------------- Discord posting ----------------------------
 
-def _send_or_edit_discord_embed(
-    embed: Dict[str, any],
+def _send_or_edit_discord_payload(
+    payload: Dict[str, Any],
     token: str,
     channel_id: str,
     message_id: Optional[str] = None,
     allow_pings: bool = False,
 ) -> None:
-    url_base = "https://discord.com/api/v10"
+    url_base = DISCORD_API_BASE
     headers = {
         "Authorization": f"Bot {token}",
         "Content-Type": "application/json",
     }
-  
-    payload = {
-        "content": f"{GLOBAL_MENTION}\n" if GLOBAL_MENTION else "",
-        "embeds": [embed],
-        "allowed_mentions": {"parse": ["roles"]},
-    }
+
+    if not allow_pings:
+        payload = dict(payload)
+        payload["allowed_mentions"] = {"parse": []}
 
     sess = requests.Session()
     try:
@@ -363,10 +385,10 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     state = _load_state(state_path)
     nu = state.get("nu_readers", {}) if isinstance(state, dict) else {}
-    prev_counts: Dict[str, Dict[str, any]] = nu.get("counts", {})
+    prev_counts: Dict[str, Dict[str, Any]] = nu.get("counts", {})
 
     results: List[Tuple[str, int, Optional[int]]] = []  # (role_mention, current, delta)
-    new_counts: Dict[str, Dict[str, any]] = dict(prev_counts)  # copy
+    new_counts: Dict[str, Dict[str, Any]] = dict(prev_counts)  # copy
     had_success = False
 
     for key, title, role, url in targets:
@@ -407,14 +429,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     description = _build_description(results)
     if not description.strip():
         description = "_No data this week (no NU counts retrieved)._"
-    embed = _build_embed(description)
+    payload = _build_payload(description)
 
     # Persist state (with lock)
     if not had_success:
         print("[warn] No successful NU fetches; skipping state save")
         _release_lock(lock_fd, state_path + ".lock")
         return 0
-    
+
     nu["last_updated"] = dt.datetime.utcnow().isoformat() + "Z"
     nu["counts"] = new_counts
     state["nu_readers"] = nu
@@ -436,10 +458,10 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if args.print_only or not token or not channel_id:
         print("\n=== EMBED PREVIEW (dry-run) ===")
-        print(json.dumps({"content": "", "embeds": [embed]}, ensure_ascii=False, indent=2))
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
 
-    _send_or_edit_discord_embed(embed, token, channel_id, message_id or None, allow_pings=allow_pings)
+    _send_or_edit_discord_payload(payload, token, channel_id, message_id or None, allow_pings=allow_pings)
     return 0
 
 if __name__ == "__main__":

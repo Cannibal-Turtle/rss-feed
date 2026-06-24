@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from novel_mappings import HOSTING_SITE_DATA
+from message_renderer import render_message, to_discord_api_payload
 
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 
@@ -203,91 +204,22 @@ def build_membership_payload(*, host, novel_title, novel, banner_url, channel_id
         guild_id=guild_id,
     )
 
-    return {
-        "flags": 32768,
-        "allowed_mentions": allowed_mentions,
-        "components": [
-            {
-                "type": 17,
-                "accent_color": ACCENT_COLOR,
-                "components": [
-                    {
-                        "type": 10,
-                        "content": global_mention,
-                    },
-                    {
-                        "type": 10,
-                        "content": "## <:mistmint_ticket:1517453566632001597> Membership Exclusive <:approvedpurple:1517512468446842990>",
-                    },
-                    {
-                        "type": 14,
-                        "spacing": 1,
-                        "divider": False,
-                    },
-                    {
-                        "type": 12,
-                        "items": [
-                            {
-                                "media": {
-                                    "url": banner_url,
-                                },
-                                "description": "Membership banner",
-                                "spoiler": False,
-                            }
-                        ],
-                    },
-                    {
-                        "type": 14,
-                        "spacing": 1,
-                        "divider": False,
-                    },
-                    {
-                        "type": 10,
-                        "content": (
-                            f"<a:blackcatbracket_1:1517457481532440576>"
-                            f"**{novel_title}**"
-                            f"<a:blackcatbracket_2:1517457479380766751> "
-                            f"is now available for ***{host} Membership!***\n\n"
-                        ),
-                    },
-                    {
-                        "type": 10,
-                        "content": (
-                            "Members can now choose this novel as their monthly pick and use tickets "
-                            "to unlock its premium chapters.\n\n"
-                            "Happy reading <a:purple_book:1517433229018136617>"
-                        ),
-                    },
-                    {
-                        "type": 14,
-                        "spacing": 1,
-                        "divider": True,
-                    },
-                    {
-                        "type": 9,
-                        "components": [
-                            {
-                                "type": 10,
-                                "content": "*Become a member?*",
-                            }
-                        ],
-                        "accessory": {
-                            "type": 2,
-                            "style": 5,
-                            "label": "SUBSCRIBE",
-                            "emoji": {
-                                "id": "1517425652838432840",
-                                "name": "purple_crown",
-                                "animated": True,
-                            },
-                            "url": novel_url,
-                        },
-                    },
-                ],
-                "spoiler": False,
-            },
-        ],
+    ctx = {
+        "host": host,
+        "novel_title": novel_title,
+        "novel_url": novel_url,
+        "banner_url": banner_url,
+        "global_mention": global_mention,
     }
+
+    payload = to_discord_api_payload(render_message("membership_update", ctx))
+
+    # Keep this in Python because it changes by target channel/server.
+    # Private/news server: novel role + membership role.
+    # Public forum/thread: spoilered @everyone.
+    payload["allowed_mentions"] = allowed_mentions
+
+    return payload
 
 
 def post_message(channel_id: int, payload: dict):

@@ -1,20 +1,28 @@
 #!/usr/bin/env python3
-import os, json, time, datetime, requests
+# -*- coding: utf-8 -*-
+from __future__ import annotations
 
-from pathlib import Path
+import json
+import os
 import sys
+import time
+from pathlib import Path
+
+import requests
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from message_renderer import render_message, to_discord_api_payload
 from novel_mappings import HOSTING_SITE_DATA
 
-DISCORD_TOKEN   = os.environ["DISCORD_BOT_TOKEN"]
-CHANNEL_ID      = int(os.environ["DISCORD_MOD_CHANNEL_ID"])
-EVENT_PATH      = os.environ["GITHUB_EVENT_PATH"]
-REPO_SLUG       = os.environ.get("GITHUB_REPOSITORY", "")
-GLOBAL_MENTION  = "||<@&1329392448798982214>||"
+DISCORD_TOKEN = os.environ["DISCORD_BOT_TOKEN"]
+CHANNEL_ID = int(os.environ["DISCORD_MOD_CHANNEL_ID"])
+EVENT_PATH = os.environ["GITHUB_EVENT_PATH"]
+REPO_SLUG = os.environ.get("GITHUB_REPOSITORY", "")
+GLOBAL_MENTION = "||<@&1329392448798982214>||"
+
 
 def _human_delta(secs: int) -> str:
     secs = max(0, int(secs))
@@ -22,24 +30,28 @@ def _human_delta(secs: int) -> str:
     h, r = divmod(r, 3600)
     m, _ = divmod(r, 60)
     parts = []
-    if d: parts.append(f"{d}d")
-    if h: parts.append(f"{h}h")
-    if m and not d: parts.append(f"{m}m")   # keep it short
+    if d:
+        parts.append(f"{d}d")
+    if h:
+        parts.append(f"{h}h")
+    if m and not d:
+        parts.append(f"{m}m")  # keep it short
     return " ".join(parts) or "0m"
 
-def main():
+
+def main() -> None:
     with open(EVENT_PATH, "r", encoding="utf-8") as f:
         event = json.load(f)
 
-    payload = event.get("client_payload", {}) or {}
+    client_payload = event.get("client_payload", {}) or {}
     event_type = event.get("action", "")
-    
-    host = payload.get("host", "Unknown host")
-    error_msg = payload.get("error", "")
-    token_secret_name = payload.get("token_secret_name", "SECRET")
-    
-    exp = int(payload.get("exp", 0) or 0)
-    secs_left = int(payload.get("secs_left", max(0, exp - int(time.time())))) if exp else 0
+
+    host = client_payload.get("host", "Unknown host")
+    error_msg = client_payload.get("error", "")
+    token_secret_name = client_payload.get("token_secret_name", "SECRET")
+
+    exp = int(client_payload.get("exp", 0) or 0)
+    secs_left = int(client_payload.get("secs_left", max(0, exp - int(time.time())))) if exp else 0
 
     # Nice timestamps for Discord
     # <t:unix:R> relative, <t:unix:F> full
@@ -54,76 +66,36 @@ def main():
     # Direct link to secret editor
     secret_url = f"https://github.com/{REPO_SLUG}/settings/secrets/actions/{token_secret_name}"
 
-    # Fancy header outside embed (as you wanted)
-    if event_type == "token-invalid":
-        header = "## ˚꒦꒷<a:2891_RedAlert:1435281549074628618>꒷ ⋘ 𝑻𝒐𝒌𝒆𝒏 𝑩𝒓𝒐𝒌𝒆𝒏... ⋙"
-    else:
-        header = "## ˚꒦꒷<a:2891_RedAlert:1435281549074628618>꒷ ⋘ 𝑻𝒐𝒌𝒆𝒏 𝑬𝒙𝒑𝒊𝒓𝒊𝒏𝒈... ⋙"
-    content = header
-    if GLOBAL_MENTION:
-        content = f"{GLOBAL_MENTION}\n{header}"
-
-    # Embed body (dynamic)
-    if event_type == "token-invalid":
-        description = (
-            f"**{host}** token is **INVALID / EXPIRED**\n"
-            f"│ API is failing RIGHT NOW.\n"
-            f"│ Error: `{error_msg}`\n"
-            f"│\n"
-            f"│ Immediate action required.\n"
-            f"│ Repo: `{REPO_SLUG}`"
-        )
-        color = int("F1202B", 16)  # red
-    
-    else:
-        description = (
-            f"**{host}** token is expiring soon\n"
-            f"│ Token expires {t_full}.\n"
-            f"│ Time left: **{t_rel}**.\n"
-            f"│ Rotate the secret to prevent feed/API breakage.\n"
-            f"│\n"
-            f"│ Repo: `{REPO_SLUG}`"
-        )
-        color = int("FFA500", 16)  # orange
-    
-    embed = {
-        "description": description,
-        "color": color,
-        "footer": {"text": "rss-feed • token watcher"},
+    ctx = {
+        "global_mention": GLOBAL_MENTION,
+        "host": host,
+        "host_logo": host_logo,
+        "error_msg": error_msg,
+        "repo_slug": REPO_SLUG,
+        "secret_url": secret_url,
+        "expires_relative": t_rel,
+        "expires_full": t_full,
+        "secs_left": secs_left,
+        "time_left_text": _human_delta(secs_left),
     }
-    # Put logo + host in the author line (title stays outside the embed)
-    if host_logo:
-        embed["author"] = {"name": host, "icon_url": host_logo}
-    else:
-        embed["author"] = {"name": host}
 
-    # Link button
-    components = [{
-        "type": 1,  # action row
-        "components": [{
-            "type": 2,            # button
-            "style": 5,           # link
-            "label": "Update secret",
-            "url": secret_url
-        }]
-    }]
+    variant = "invalid" if event_type == "token-invalid" else "expiring"
+    discord_payload = to_discord_api_payload(
+        render_message("token_alert", ctx, variant=variant)
+    )
 
     url = f"https://discord.com/api/v10/channels/{CHANNEL_ID}/messages"
     headers = {
         "Authorization": f"Bot {DISCORD_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "content": content,
-        "embeds": [embed],
-        "components": components,
-        "allowed_mentions": {"parse": ["roles"]}  # allow role mentions if you supply one
+        "Content-Type": "application/json",
     }
 
-    r = requests.post(url, headers=headers, json=payload, timeout=20)
+    r = requests.post(url, headers=headers, json=discord_payload, timeout=20)
     if r.status_code >= 300:
         raise SystemExit(f"Discord send failed: {r.status_code} {r.text}")
+
     print("✅ Sent token alert to Discord.")
+
 
 if __name__ == "__main__":
     main()

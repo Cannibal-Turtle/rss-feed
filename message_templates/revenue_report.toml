@@ -1,0 +1,50 @@
+[row_basic]
+text = '''{label} {host_divider} *{coins_total_text}*
+> {coin_emoji} ̟ !! ***{coins_delta_text}***'''
+
+[row_membership]
+text = '''{label} {host_divider} *{coins_total_text}* · *{tickets_total_text}*
+> {coin_emoji} ̟ !! ***{coins_delta_text}***
+> {ticket_emoji} ̟ !! ***{tickets_delta_text}***'''
+
+[first_run]
+text = "_First run: baseline saved. Monthly deltas start next run._"
+
+[month_header]
+text = "## {month_label_upper}"
+
+[monthly_total]
+text = '''**Total earned coins this month:**
+### <:kawaiiaccents:1435916448890617948> ̟ !! ***{monthly_coins_text}***'''
+
+[empty_report]
+text = "_No revenue rows found._"
+
+[title_main]
+text = '''╔══.·:·.☽✧    ✦    ✧☾.·:·.══╗
+            monthly revenue
+╚══.·:·.☽✧    ✦    ✧☾.·:·.══╝'''
+
+[title_continued]
+text = "monthly revenue — continued"
+
+[message]
+mode = "classic"
+content = "{global_mention}\n"
+allowed_mentions = { parse = ["roles"] }
+
+[error]
+mode = "classic"
+content = '''⚠️ Mistmint revenue report failed:
+```text
+{safe_message}
+```'''
+allowed_mentions = { parse = [] }
+
+[embed]
+[[embed.embeds]]
+title = "{title}"
+description = "{description}"
+color = "{embed_color}"
+timestamp = "{timestamp}"
+footer = { text = "Data retrieved" }
