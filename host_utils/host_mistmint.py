@@ -231,13 +231,13 @@ def _load_mistmint_state() -> dict:
 def _mistmint_slug_from_url(novel_url: str) -> str:
     return (novel_url or "").rstrip("/").split("/")[-1]
 
-def resolve_chapter_api_url(hostdata, novel_title, novel):
+def resolve_chapters_api_url(hostdata, novel_title, novel):
     """
     Resolve Mistmint chapter API URL.
 
     Order:
-    1. novel-level chapter_api_url override
-    2. host-level chapter_api_url template
+    1. novel-level chapters_api_url override
+    2. host-level chapters_api_url template
     3. fallback built from novel_url slug
 
     Supports:
@@ -248,8 +248,8 @@ def resolve_chapter_api_url(hostdata, novel_title, novel):
     slug = _mistmint_slug_from_url(novel_url)
 
     raw_url = (
-        novel.get("chapter_api_url")
-        or hostdata.get("chapter_api_url")
+        novel.get("chapters_api_url")
+        or hostdata.get("chapters_api_url")
         or ""
     ).strip()
 
@@ -1089,7 +1089,7 @@ def normalize_mistmint_chapter_label(label: str) -> str:
 
 # --- Mistmint comments loader (JSON recent-comments endpoint) ---------------
 
-def load_comments_mistmint(comments_feed_url: str):
+def load_comments_mistmint(comments_api_url: str):
     """
     Returns list[dict] with keys:
       novel_title, chapter, author, description, reply_to, posted_at
@@ -1115,7 +1115,7 @@ def load_comments_mistmint(comments_feed_url: str):
         return ("you must be logged in" in t) or ('"code":401' in t)
 
     def get_with(headers: dict, label: str):
-        r = requests.get(comments_feed_url, headers=headers, timeout=20)
+        r = requests.get(comments_api_url, headers=headers, timeout=20)
         # tiny snapshot about the HTTP attempt
         diag_snapshot(f"comments-fetch-{label}", {
             "status": r.status_code,
@@ -1134,7 +1134,7 @@ def load_comments_mistmint(comments_feed_url: str):
     raw_used = ""
 
     # ── FETCH PHASE ────────────────────────────────────────────────────────────
-    with diag_step("comments-fetch", url=comments_feed_url, has_token=bool(token), has_cookie=bool(cookie)):
+    with diag_step("comments-fetch", url=comments_api_url, has_token=bool(token), has_cookie=bool(cookie)):
         if token:
             h1 = dict(base_headers)
             h1["Authorization"] = f"Bearer {token}"
@@ -1444,7 +1444,7 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
     novel_slug = _mistmint_slug_from_url(novel_url)
     short_code = (details_for_api.get("short_code") or "").strip()
 
-    api_url = resolve_chapter_api_url(hostdata, novel_title, details_for_api)
+    api_url = resolve_chapters_api_url(hostdata, novel_title, details_for_api)
     if not api_url:
         diag_fail("mistmint-paid-api-url-missing", novel_url=novel_url, host=host)
         return [], ""
@@ -1548,7 +1548,7 @@ async def novel_has_paid_update_mistmint_async(session, novel_url: str) -> bool:
     details_for_api = dict(details or {})
     details_for_api.setdefault("novel_url", novel_url)
 
-    url = resolve_chapter_api_url(hostdata, novel_title, details_for_api)
+    url = resolve_chapters_api_url(hostdata, novel_title, details_for_api)
 
     if not url:
         diag_fail("mistmint-paid-check-api-url-missing", novel_url=novel_url)
@@ -1625,10 +1625,10 @@ def load_feed_mistmint_via_api(host: str):
     hostdata = HOSTING_SITE_DATA.get(host, {})
 
     for novel_title, details in block.items():
-        api_url = resolve_chapter_api_url(hostdata, novel_title, details)
+        api_url = resolve_chapters_api_url(hostdata, novel_title, details)
 
         if not api_url:
-            print(f"[mistmint] no chapter_api_url for {novel_title}")
+            print(f"[mistmint] no chapters_api_url for {novel_title}")
             diag_fail("free-feed-api-url-missing", novel=novel_title)
             continue
 
@@ -1782,7 +1782,7 @@ MISTMINT_UTILS = {
     "split_title": split_title_mistmint,
     "extract_volume": extract_volume_mistmint,
     "load_feed": load_feed_mistmint_via_api if _use_api_feed() else None,
-    "resolve_chapter_api_url": resolve_chapter_api_url,
+    "resolve_chapters_api_url": resolve_chapters_api_url,
 
     # Paid feed (synthetic)
     "split_paid_title": split_paid_chapter_mistmint,
@@ -1807,8 +1807,8 @@ MISTMINT_UTILS = {
         lambda host, title: HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}).get("featured_image", ""),
     "get_novel_short_code":
         lambda host, title: (HOSTING_SITE_DATA.get(host, {}).get("novels", {}).get(title, {}).get("short_code", "") or "").strip().upper(),
-    "get_comments_feed_url":
-        lambda host: HOSTING_SITE_DATA.get(host, {}).get("comments_feed_url", ""),
+    "get_comments_api_url":
+        lambda host: HOSTING_SITE_DATA.get(host, {}).get("comments_api_url", ""),
     "get_nsfw_novels":
         lambda: [],
 }

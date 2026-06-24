@@ -149,8 +149,12 @@ def get_feed_url(host, novel_title=""):
     return get_mapping_value(host, novel_title, "feed_url", "")
 
 
-def get_chapter_api_url(host, novel_title=""):
-    return get_mapping_value(host, novel_title, "chapter_api_url", "")
+def get_chapters_api_url(host, novel_title=""):
+    return get_mapping_value(host, novel_title, "chapters_api_url", "")
+
+
+def get_comments_api_url(host, novel_title=""):
+    return get_mapping_value(host, novel_title, "comments_api_url", "")
 
 
 def get_comments_feed_url(host, novel_title=""):

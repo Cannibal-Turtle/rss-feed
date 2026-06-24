@@ -200,16 +200,16 @@ async def on_ready():
                 continue
 
             utils = get_host_utils(host_name)
-            resolve_api_url = utils.get("resolve_chapter_api_url")
+            resolve_api_url = utils.get("resolve_chapters_api_url")
 
             if not resolve_api_url:
-                print(f"❌ Host {host_name} does not support resolve_chapter_api_url.")
+                print(f"❌ Host {host_name} does not support resolve_chapters_api_url.")
                 continue
 
             api_url = resolve_api_url(data, novel_title, novel)
 
             if not api_url:
-                print(f"❌ No chapter_api_url found for {host_name} / {novel_title}")
+                print(f"❌ No chapters_api_url found for {host_name} / {novel_title}")
                 continue
 
             api = fetch_api(api_url, data["token_secret"])

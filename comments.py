@@ -15,8 +15,14 @@ from bs4 import BeautifulSoup
 import hashlib
 import requests
 
-from novel_mappings import HOSTING_SITE_DATA, get_novel_short_code, get_translator
 from host_utils import get_host_utils
+from novel_mappings import (
+    HOSTING_SITE_DATA,
+    get_novel_short_code,
+    get_translator,
+    get_comments_api_url,
+    get_comments_feed_url,
+)
 
 # --- token expiry → repository_dispatch (no Discord creds here) ---
 
@@ -221,203 +227,239 @@ def main():
     all_rss_items = []
     # Loop over all hosts in your mappings.
     for host, data in HOSTING_SITE_DATA.items():
-        # Retrieve comments feed URL from mappings.
-        comments_feed_url = data.get("comments_feed_url")
-        if not comments_feed_url:
-            print(f"No comments feed URL defined for host: {host}")
-            continue
-        print(f"Fetching comments for host: {host} from {comments_feed_url}")
-
         utils = get_host_utils(host)
-        
-        def _parse_iso_utc_local(s: str):
-            try:
-                return datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
-            except Exception:
-                return datetime.datetime.now(datetime.timezone.utc)
-        
-        # If host provides a custom comments loader (e.g., Mistmint JSON), use it.
+
+        # If host has a custom comments loader, it is probably using an API.
+        # Otherwise, fallback parser expects an RSS/feed URL.
         loader = utils.get("load_comments")
-        if loader:
-            try:
-                norm_items = loader(comments_feed_url)
-        
-                # ---- NEW: treat empty as a notice, not a failure ----
-                if not norm_items:
-                    print(f"[WARNING] {host} returned 0 items (unexpected)")
-                # -----------------------------------------------------
-        
-                print(f"[loader] {host}: {len(norm_items)} items from loader (url={comments_feed_url})")
-                for obj in norm_items:
-                    novel_title   = obj.get("novel_title", "").strip()
-                    if not novel_title:
-                        continue
-                    novel_details = utils.get("get_novel_details", lambda h, nt: {})(host, novel_title)
-                    if not novel_details:
-                        print("Skipping item (novel not found in mapping):", novel_title)
-                        continue
-        
-                    chapter_label = obj.get("chapter", "")
-                    author_name   = obj.get("author", "")
-                    body          = obj.get("description", "").strip()
-                    comment_image_url = obj.get("comment_image_url", "").strip()
-                    posted_at     = obj.get("posted_at", "")
-                    reply_to      = obj.get("reply_to", "")
-        
-                    guid_val = (
-                        str(obj.get("guid") or "") or
-                        next((str(obj.get(k)) for k in ("commentId", "comment_id", "id", "_id") if obj.get(k)), "") or
-                        _guid_from([novel_title, author_name, posted_at, body[:80]])
-                    )
-                    label = (chapter_label or "").strip()
-                    where = "homepage" if (not label or label.lower() == "homepage") else label
-                    print(f"[loader] using guid={guid_val} for {novel_title} ({where})")
-        
-                    item = MyCommentRSSItem(
-                        novel_title=novel_title,
-                        title=novel_title,
-                        link=obj.get("url") or chapter_label,
-                        chapter=chapter_label,
-                        author=author_name,
-                        description=body,
-                        comment_image_url=comment_image_url,
-                        reply_chain=reply_to,
-                        guid=PyRSS2Gen.Guid(guid_val, isPermaLink=False),
-                        pubDate=_parse_iso_utc_local(posted_at).astimezone(datetime.timezone.utc) if posted_at
-                                else datetime.datetime.now(datetime.timezone.utc),
-                        host=host
-                    )
-                    all_rss_items.append(item)
-        
-                continue  # next host
 
-            except Exception as e:
-                msg = str(e)
-                print(f"[ERROR] {host} loader failed: {msg}")
-            
-                # 🚨 send alert if auth issue, but only once per current cookie/token value
-                if "AUTH_ERROR" in msg:
-                    try:
-                        repo = os.getenv("GITHUB_REPOSITORY", "")
-                        github_token = os.getenv("PAT_GITHUB") or os.getenv("GITHUB_TOKEN")
+        # Discover comment URLs at novel level first, then host level fallback.
+        # Deduping prevents host-wide APIs like Mistmint from being fetched once per novel.
+        comment_sources = []
+        seen_comment_urls = set()
 
-                        token_secret = data.get("token_secret", "SECRET")
-                        site_token = os.getenv(token_secret, "").strip()
+        def add_comment_source(novel_title=""):
+            comments_api_url = get_comments_api_url(host, novel_title)
+            comments_feed_url = get_comments_feed_url(host, novel_title)
 
-                        # Make a safe fingerprint of the cookie/token.
-                        # This lets us alert once per bad cookie without storing the real cookie.
-                        if site_token:
-                            token_fingerprint = hashlib.sha1(site_token.encode("utf-8")).hexdigest()[:12]
-                        else:
-                            token_fingerprint = "missing"
-
-                        state = _load_alert_state()
-                        key = f"{host}:{token_secret}:auth_error:{token_fingerprint}"
-
-                        if state.get(key):
-                            print(f"[alert] token-invalid already sent for this {host} cookie; skipping")
-                        elif repo and github_token:
-                            url = f"https://api.github.com/repos/{repo}/dispatches"
-                            headers = {
-                                "Accept": "application/vnd.github+json",
-                                "Authorization": f"Bearer {github_token}",
-                                "X-GitHub-Api-Version": "2022-11-28",
-                            }
-
-                            exp = _jwt_expiry_unix(site_token) if site_token else None
-
-                            payload = {
-                                "event_type": "token-invalid",
-                                "client_payload": {
-                                    "host": host,
-                                    "token_secret_name": token_secret,
-                                    "error": msg,
-                                    "exp": exp or 0,
-                                    "secs_left": (exp - int(time.time())) if exp else 0,
-                                },
-                            }
-
-                            r = requests.post(url, headers=headers, json=payload, timeout=15)
-                            r.raise_for_status()
-
-                            state[key] = int(time.time())
-                            _save_alert_state(state)
-
-                            print(f"[alert] dispatched token-invalid once → {host}")
-
-                    except Exception as dispatch_err:
-                        print(f"[warn] failed to dispatch alert: {dispatch_err}")
-            
-                continue
-            
-        parsed_feed = feedparser.parse(comments_feed_url)
-            
-        # Get the host-specific function to split comment titles.
-        split_comment_title = utils.get("split_comment_title", lambda title: re.sub(r'^Comment on (.+?) by .+$', r'\1', title).strip())
-                    
-        for entry in parsed_feed.entries:
-            # Use host-specific logic to extract the novel title from the comment title.
-            novel_title = split_comment_title(entry.title)
-            if not novel_title:
-                print(f"Skipping entry, unable to extract novel title from: {entry.title}")
-                continue
-
-            # Retrieve novel details using host-specific function.
-            novel_details = utils.get("get_novel_details", lambda h, nt: {})(host, novel_title)
-            if not novel_details:
-                print("Skipping item (novel not found in mapping):", novel_title)
-                continue
-
-            pp = getattr(entry, "published_parsed", None)
-            pub_date = (
-                datetime.datetime(*pp[:6], tzinfo=datetime.timezone.utc)
-                if pp else datetime.datetime.now(datetime.timezone.utc)
-            )
-            
-            # 1) let host_utils decide which HTML to split (description vs content)
-            pick_html = utils.get("pick_comment_html")
-            if callable(pick_html):
-                raw_html = pick_html(entry)
+            if loader:
+                comments_url = comments_api_url or comments_feed_url
+                comments_source_name = "comments_api_url" if comments_api_url else "comments_feed_url"
             else:
-                # generic fallback
-                raw_html = None
-                content = entry.get("content")
-                if isinstance(content, list) and content:
-                    raw_html = content[0].get("value")
-                if raw_html is None:
-                    raw_html = html.unescape(entry.get("description", "") or "")
+                comments_url = comments_feed_url or comments_api_url
+                comments_source_name = "comments_feed_url" if comments_feed_url else "comments_api_url"
+
+            if not comments_url:
+                return
+
+            if comments_url in seen_comment_urls:
+                return
+
+            seen_comment_urls.add(comments_url)
+            comment_sources.append((comments_url, comments_source_name))
+
+        novels = data.get("novels", {}) or {}
+
+        if novels:
+            for novel_title in novels:
+                add_comment_source(novel_title)
+        else:
+            add_comment_source("")
+
+        if not comment_sources:
+            print(f"No comments_api_url/comments_feed_url defined for host: {host}")
+            continue
+
+        for comments_url, comments_source_name in comment_sources:
+            print(f"Fetching comments for host: {host} from {comments_url} ({comments_source_name})")
+        
+            def _parse_iso_utc_local(s: str):
+                try:
+                    return datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+                except Exception:
+                    return datetime.datetime.now(datetime.timezone.utc)
             
-            # 2) Split off “In reply to …” → put only the name line in <reply_chain>
-            split_reply_chain = get_host_utils(host).get("split_reply_chain", lambda s: ("", s))
-            reply_chain, post_html = split_reply_chain(raw_html)
+            # If host provides a custom comments loader (e.g., Mistmint JSON), use it.
+            if loader:
+                try:
+                    norm_items = loader(comments_url)
             
-            # 3) Strip tags and fix stray spaces before punctuation in the body
-            soup = BeautifulSoup(post_html, "html.parser")
-            description_text = soup.get_text(separator=" ").strip()
-            description_text = re.sub(r"\s+([.,!?;:])", r"\1", description_text)
-    
-            m = re.search(r"#comment-(\d+)", entry.get("link", "") or "")
-            cid = m.group(1) if m else None
-            guid_val = (getattr(entry, "id", "") or cid or _guid_from([
-                novel_title,
-                entry.get("author", ""),
-                entry.get("published", "") or str(getattr(entry, "published_parsed", "")),
-                description_text[:80],
-            ]))
-    
-            # 4) pass both into your RSS item
-            item = MyCommentRSSItem(
-                novel_title=novel_title,
-                title=novel_title,
-                link=entry.link,
-                author=entry.get("author", ""),
-                description=description_text,
-                reply_chain=reply_chain,
-                guid=PyRSS2Gen.Guid(guid_val, isPermaLink=False),
-                pubDate=pub_date,
-                host=host
-            )
-            all_rss_items.append(item)
+                    # ---- NEW: treat empty as a notice, not a failure ----
+                    if not norm_items:
+                        print(f"[WARNING] {host} returned 0 items (unexpected)")
+                    # -----------------------------------------------------
+            
+                    print(f"[loader] {host}: {len(norm_items)} items from loader (url={comments_url})")
+                    for obj in norm_items:
+                        novel_title   = obj.get("novel_title", "").strip()
+                        if not novel_title:
+                            continue
+                        novel_details = utils.get("get_novel_details", lambda h, nt: {})(host, novel_title)
+                        if not novel_details:
+                            print("Skipping item (novel not found in mapping):", novel_title)
+                            continue
+            
+                        chapter_label = obj.get("chapter", "")
+                        author_name   = obj.get("author", "")
+                        body          = obj.get("description", "").strip()
+                        comment_image_url = obj.get("comment_image_url", "").strip()
+                        posted_at     = obj.get("posted_at", "")
+                        reply_to      = obj.get("reply_to", "")
+            
+                        guid_val = (
+                            str(obj.get("guid") or "") or
+                            next((str(obj.get(k)) for k in ("commentId", "comment_id", "id", "_id") if obj.get(k)), "") or
+                            _guid_from([novel_title, author_name, posted_at, body[:80]])
+                        )
+                        label = (chapter_label or "").strip()
+                        where = "homepage" if (not label or label.lower() == "homepage") else label
+                        print(f"[loader] using guid={guid_val} for {novel_title} ({where})")
+            
+                        item = MyCommentRSSItem(
+                            novel_title=novel_title,
+                            title=novel_title,
+                            link=obj.get("url") or chapter_label,
+                            chapter=chapter_label,
+                            author=author_name,
+                            description=body,
+                            comment_image_url=comment_image_url,
+                            reply_chain=reply_to,
+                            guid=PyRSS2Gen.Guid(guid_val, isPermaLink=False),
+                            pubDate=_parse_iso_utc_local(posted_at).astimezone(datetime.timezone.utc) if posted_at
+                                    else datetime.datetime.now(datetime.timezone.utc),
+                            host=host
+                        )
+                        all_rss_items.append(item)
+            
+                    continue  # next comment URL
+
+                except Exception as e:
+                    msg = str(e)
+                    print(f"[ERROR] {host} loader failed: {msg}")
+                
+                    # 🚨 send alert if auth issue, but only once per current cookie/token value
+                    if "AUTH_ERROR" in msg:
+                        try:
+                            repo = os.getenv("GITHUB_REPOSITORY", "")
+                            github_token = os.getenv("PAT_GITHUB") or os.getenv("GITHUB_TOKEN")
+
+                            token_secret = data.get("token_secret", "SECRET")
+                            site_token = os.getenv(token_secret, "").strip()
+
+                            # Make a safe fingerprint of the cookie/token.
+                            # This lets us alert once per bad cookie without storing the real cookie.
+                            if site_token:
+                                token_fingerprint = hashlib.sha1(site_token.encode("utf-8")).hexdigest()[:12]
+                            else:
+                                token_fingerprint = "missing"
+
+                            state = _load_alert_state()
+                            key = f"{host}:{token_secret}:auth_error:{token_fingerprint}"
+
+                            if state.get(key):
+                                print(f"[alert] token-invalid already sent for this {host} cookie; skipping")
+                            elif repo and github_token:
+                                url = f"https://api.github.com/repos/{repo}/dispatches"
+                                headers = {
+                                    "Accept": "application/vnd.github+json",
+                                    "Authorization": f"Bearer {github_token}",
+                                    "X-GitHub-Api-Version": "2022-11-28",
+                                }
+
+                                exp = _jwt_expiry_unix(site_token) if site_token else None
+
+                                payload = {
+                                    "event_type": "token-invalid",
+                                    "client_payload": {
+                                        "host": host,
+                                        "token_secret_name": token_secret,
+                                        "error": msg,
+                                        "exp": exp or 0,
+                                        "secs_left": (exp - int(time.time())) if exp else 0,
+                                    },
+                                }
+
+                                r = requests.post(url, headers=headers, json=payload, timeout=15)
+                                r.raise_for_status()
+
+                                state[key] = int(time.time())
+                                _save_alert_state(state)
+
+                                print(f"[alert] dispatched token-invalid once → {host}")
+
+                        except Exception as dispatch_err:
+                            print(f"[warn] failed to dispatch alert: {dispatch_err}")
+                
+                    continue
+            
+            parsed_feed = feedparser.parse(comments_url)
+                
+            # Get the host-specific function to split comment titles.
+            split_comment_title = utils.get("split_comment_title", lambda title: re.sub(r'^Comment on (.+?) by .+$', r'\1', title).strip())
+                        
+            for entry in parsed_feed.entries:
+                # Use host-specific logic to extract the novel title from the comment title.
+                novel_title = split_comment_title(entry.title)
+                if not novel_title:
+                    print(f"Skipping entry, unable to extract novel title from: {entry.title}")
+                    continue
+
+                # Retrieve novel details using host-specific function.
+                novel_details = utils.get("get_novel_details", lambda h, nt: {})(host, novel_title)
+                if not novel_details:
+                    print("Skipping item (novel not found in mapping):", novel_title)
+                    continue
+
+                pp = getattr(entry, "published_parsed", None)
+                pub_date = (
+                    datetime.datetime(*pp[:6], tzinfo=datetime.timezone.utc)
+                    if pp else datetime.datetime.now(datetime.timezone.utc)
+                )
+                
+                # 1) let host_utils decide which HTML to split (description vs content)
+                pick_html = utils.get("pick_comment_html")
+                if callable(pick_html):
+                    raw_html = pick_html(entry)
+                else:
+                    # generic fallback
+                    raw_html = None
+                    content = entry.get("content")
+                    if isinstance(content, list) and content:
+                        raw_html = content[0].get("value")
+                    if raw_html is None:
+                        raw_html = html.unescape(entry.get("description", "") or "")
+                
+                # 2) Split off “In reply to …” → put only the name line in <reply_chain>
+                split_reply_chain = get_host_utils(host).get("split_reply_chain", lambda s: ("", s))
+                reply_chain, post_html = split_reply_chain(raw_html)
+                
+                # 3) Strip tags and fix stray spaces before punctuation in the body
+                soup = BeautifulSoup(post_html, "html.parser")
+                description_text = soup.get_text(separator=" ").strip()
+                description_text = re.sub(r"\s+([.,!?;:])", r"\1", description_text)
+        
+                m = re.search(r"#comment-(\d+)", entry.get("link", "") or "")
+                cid = m.group(1) if m else None
+                guid_val = (getattr(entry, "id", "") or cid or _guid_from([
+                    novel_title,
+                    entry.get("author", ""),
+                    entry.get("published", "") or str(getattr(entry, "published_parsed", "")),
+                    description_text[:80],
+                ]))
+        
+                # 4) pass both into your RSS item
+                item = MyCommentRSSItem(
+                    novel_title=novel_title,
+                    title=novel_title,
+                    link=entry.link,
+                    author=entry.get("author", ""),
+                    description=description_text,
+                    reply_chain=reply_chain,
+                    guid=PyRSS2Gen.Guid(guid_val, isPermaLink=False),
+                    pubDate=pub_date,
+                    host=host
+                )
+                all_rss_items.append(item)
     
     # Sort aggregated items by publication date descending.
     all_rss_items.sort(key=lambda i: i.pubDate, reverse=True)
