@@ -1,6 +1,6 @@
 # host_utils/__init__.py
 from .host_dragonholic import DRAGONHOLIC_UTILS
-from .host_mistmint import MISTMINT_UTILS
+from .mistmint_haven import MISTMINT_UTILS
 from .host_titv import TALES_IN_THE_VALLEY_UTILS
 
 # Compatibility: keep a default UA/headers for callers that import these

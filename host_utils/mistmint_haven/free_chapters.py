@@ -1,0 +1,80 @@
+# host_utils/mistmint_haven/free_chapters.py
+from .common import *
+from .client import _http_get_json, resolve_chapters_api_url
+
+def load_feed_mistmint_via_api(host: str):
+    """
+    Mimics feedparser.parse() but uses Mistmint API instead.
+    Returns an object with `.entries` just like feedparser.
+    """
+
+    entries = []
+
+    block = HOSTING_SITE_DATA.get(host, {}).get("novels", {})
+    hostdata = HOSTING_SITE_DATA.get(host, {})
+
+    for novel_title, details in block.items():
+        novel_slug = _mistmint_slug_from_url(details.get("novel_url", ""))
+        api_url = resolve_chapters_api_url(hostdata, novel_title, details)
+
+        if not api_url:
+            print(f"[mistmint] no chapters_api_url for {novel_title}")
+            diag_fail("free-feed-api-url-missing", novel=novel_title)
+            continue
+
+        payload = _http_get_json(api_url)
+
+        if not payload:
+            print(f"[mistmint] free feed fetch failed for {novel_title}")
+            diag_fail("free-feed-fetch-fail", novel=novel_title, api_url=api_url)
+            continue
+    
+        for vol in payload.get("data", []):
+            vol_title = (vol.get("volumeTitle") or "").strip()
+
+            for ch in vol.get("chapters", []):
+                if not ch.get("isFree"):
+                    continue
+                if ch.get("isHidden"):
+                    continue
+
+                chapter_num = str(ch.get("chapterNumber") or "").strip()
+                chaptername  = (ch.get("title") or "").strip()
+                slug_tail   = (ch.get("slug") or "").strip()
+
+                link = f"{BASE_APP}/novels/{novel_slug}/{slug_tail}"
+
+                free_at = ch.get("freeAt")
+                
+                if not free_at:
+                    # fallback just in case (rare)
+                    free_at = ch.get("createdAt")
+                
+                try:
+                    dt = datetime.datetime.fromisoformat(free_at.replace("Z", "+00:00"))
+                except Exception:
+                    dt = datetime.datetime.now(datetime.timezone.utc)
+
+                # 🔥 CRITICAL: recreate ORIGINAL TITLE FORMAT
+                if vol_title:
+                    full_title = f"{novel_title} — {vol_title}, Chapter {chapter_num}"
+                else:
+                    full_title = f"{novel_title} — Chapter {chapter_num}"
+
+                if chaptername:
+                    full_title += f" — {chaptername}"
+
+                entry = types.SimpleNamespace(
+                    title=full_title,
+                    link=link,
+                    id=ch.get("id") or link,
+                    published_parsed=dt.timetuple(),
+                    description=details.get("custom_description", "")
+                )
+
+                entries.append(entry)
+
+    # return object like feedparser
+    return types.SimpleNamespace(entries=entries)
+
+__all__ = ["load_feed_mistmint_via_api"]
