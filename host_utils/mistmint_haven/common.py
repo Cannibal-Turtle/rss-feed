@@ -164,8 +164,10 @@ UUID_RE = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
 
 
 def _mistmint_mode() -> str:
-    # If manual override is on or we have no cookie, use STATE; else API.
-    return "STATE" if _manual_mode_on() or not _resolve_mistmint_cookie() else "API"
+    # Manual forces state mode. Otherwise, try API first.
+    # Cookie is optional: if one exists, API requests will send it;
+    # if not, API requests should still be attempted.
+    return "STATE" if _manual_mode_on() else "API"
 
 def _log_mistmint_mode(phase: str, novel_url: str = ""):
     try:

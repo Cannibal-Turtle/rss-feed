@@ -229,8 +229,8 @@ async def novel_has_paid_update_mistmint_async(session, novel_url: str) -> bool:
         
     cookie = _resolve_mistmint_cookie()
 
-    # Fallback to state if no cookie or manual mode
-    if _manual_mode_on() or not cookie:
+    # Fallback to state only when manual mode is forced.
+    if _manual_mode_on():
         block = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("novels", {})
         short_code = None
         for _title, det in block.items():
