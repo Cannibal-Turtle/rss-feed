@@ -13,7 +13,15 @@ thread_id_map_url = "https://raw.githubusercontent.com/Cannibal-Turtle/mistmint-
 
 free_chapters_source = "feed"
 paid_chapters_source = "api"
+# Chapter source modes:
+# "feed" = use a host-provided feed/RSS-style source when available
+# "api"  = use the host API/chapter data source when available
+
 chapter_mode = "auto"
+# Chapter mode:
+# "auto"   = use real API/chapter data when available; safest/default
+# "manual" = use mistmint_state.json/manual chapter fallback when API/cookie data is unavailable
+
 comments_source = "auto"
 # Comment source modes:
 # "trans"  = use tokened author dashboard endpoint; best metadata/reply tracking, token required
