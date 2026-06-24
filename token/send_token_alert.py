@@ -14,14 +14,20 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from message_renderer import render_message, to_discord_api_payload
+from message_renderer import load_template_settings, render_message, to_discord_api_payload
 from novel_mappings import HOSTING_SITE_DATA
 
 DISCORD_TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 CHANNEL_ID = int(os.environ["DISCORD_MOD_CHANNEL_ID"])
 EVENT_PATH = os.environ["GITHUB_EVENT_PATH"]
 REPO_SLUG = os.environ.get("GITHUB_REPOSITORY", "")
-GLOBAL_MENTION = "||<@&1329392448798982214>||"
+
+_TEMPLATE_SETTINGS = load_template_settings("token_alert")
+GLOBAL_MENTION = (
+    os.environ.get("TOKEN_ALERT_GLOBAL_MENTION", "").strip()
+    or os.environ.get("GLOBAL_MENTION", "").strip()
+    or str(_TEMPLATE_SETTINGS.get("global_mention", "")).strip()
+)
 
 
 def _human_delta(secs: int) -> str:

@@ -31,49 +31,52 @@ except Exception as e:
     raise
 
 try:
-    from message_renderer import render_message, to_discord_api_payload
+    from message_renderer import load_template_settings, render_message, to_discord_api_payload
 except Exception as e:
     print("[fatal] Could not import message_renderer:", e, file=sys.stderr)
     raise
 
 
-AUTHOR_NAME = "Novel Updates"
-AUTHOR_ICON = "https://www.novelupdates.com/appicon.png"
-
 DISCORD_API_BASE = "https://discord.com/api/v10"
 
-# Same ping as revenue/report.py
-GLOBAL_MENTION = "||<@&1329392448798982214>||"
+_TEMPLATE_SETTINGS = load_template_settings("nu_weekly_readers")
 
-# Same target channel/thread as revenue
+
+def _setting_str(key: str, default: str = "", *, env: str = "") -> str:
+    env_value = os.environ.get(env, "").strip() if env else ""
+    if env_value:
+        return env_value
+    value = _TEMPLATE_SETTINGS.get(key, default)
+    return str(value if value is not None else default).strip()
+
+
+def _setting_bool(key: str, default: bool = False, *, env: str = "") -> bool:
+    raw = os.environ.get(env, "").strip() if env else ""
+    if raw == "":
+        raw = _TEMPLATE_SETTINGS.get(key, default)
+    if isinstance(raw, bool):
+        return raw
+    return str(raw).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+GLOBAL_MENTION = _setting_str("global_mention", env="GLOBAL_MENTION")
+
+# Same target channel/thread as revenue. Kept as env because it is a secret/workflow target.
 CHANNEL_DEFAULT = os.environ.get("DISCORD_MOD_CHANNEL_ID", "").strip()
 
-EMBED_COLOR_HEX = os.environ.get("EMBED_COLOR_HEX", "2D3F51").lstrip("#")
+EMBED_COLOR_HEX = _setting_str("embed_color", "2D3F51", env="EMBED_COLOR_HEX").lstrip("#")
+NOVEL_DISCORD_MAP_URL = _setting_str("novel_discord_map_url", env="NOVEL_DISCORD_MAP_URL")
+NO_DATA_TEXT = _setting_str("no_data_text", "_No data this week (no NU counts retrieved)._")
+DEFAULT_ALLOW_ROLE_PINGS = _setting_bool("allow_role_pings", True, env="ALLOW_ROLE_PINGS")
 
 DEFAULT_STATE_PATH = os.environ.get(
     "NU_STATE_PATH",
     str(ROOT / "novelupdates" / "nu_readers.json"),
 )
 
-DEFAULT_NOVEL_DISCORD_MAP_URL = (
-    "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/"
-    "main/config/novel_discord_map.toml"
-)
-
-NOVEL_DISCORD_MAP_URL = (
-    os.environ.get("NOVEL_DISCORD_MAP_URL", "").strip()
-    or DEFAULT_NOVEL_DISCORD_MAP_URL
-)
-
 _RLIST_RE = re.compile(
     r"On\s*<b[^>]*class=[\"']rlist[\"'][^>]*>\s*([\d,]+)\s*</b>\s*Reading Lists",
     re.I,
-)
-
-TITLE_BOX = (
-    "╔══.·:·.☽✧    ✦    ✧☾.·:·.══╗\n"
-    "          **weekly NU report**\n"
-    "╚══.·:·.☽✧    ✦    ✧☾.·:·.══╝"
 )
 
 # Timestamp in embeds will use UTC so Discord localizes it per user; TZ env not needed.
@@ -95,7 +98,8 @@ def normalize_role_id(value: Any) -> str:
     return match.group(0) if match else ""
 
 
-def load_role_map(url: str = NOVEL_DISCORD_MAP_URL) -> Dict[str, str]:
+def load_role_map(url: Optional[str] = None) -> Dict[str, str]:
+    url = NOVEL_DISCORD_MAP_URL if url is None else str(url).strip()
     if not url:
         return {}
 
@@ -428,7 +432,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     description = _build_description(results)
     if not description.strip():
-        description = "_No data this week (no NU counts retrieved)._"
+        description = NO_DATA_TEXT
     payload = _build_payload(description)
 
     # Persist state (with lock)
@@ -454,7 +458,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         or os.environ.get("DISCORD_NU_MESSAGE_ID", "").strip()
     )
     # Default to pinging roles unless explicitly disabled
-    allow_pings = os.environ.get("ALLOW_ROLE_PINGS", "true").lower() == "true"
+    allow_pings = DEFAULT_ALLOW_ROLE_PINGS
 
     if args.print_only or not token or not channel_id:
         print("\n=== EMBED PREVIEW (dry-run) ===")

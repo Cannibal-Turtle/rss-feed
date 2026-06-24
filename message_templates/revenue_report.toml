@@ -48,3 +48,8 @@ description = "{description}"
 color = "{embed_color}"
 timestamp = "{timestamp}"
 footer = { text = "Data retrieved" }
+
+[settings]
+global_mention = "||<@&1329392448798982214>||"
+embed_color = "C9D3FF"
+novel_discord_map_url = "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/config/novel_discord_map.toml"

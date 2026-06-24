@@ -43,31 +43,36 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from revenue.hosts.mistmint_haven import collect_revenue_rows as collect_mistmint_rows  # noqa: E402
-from message_renderer import render_message, to_discord_api_payload  # noqa: E402
+from message_renderer import load_template_settings, parse_color, render_message, to_discord_api_payload  # noqa: E402
 
 
 STATE_PATH = ROOT / "revenue" / "state.json"
-EMBED_COLOR = 0xC9D3FF
 DISCORD_API_BASE = "https://discord.com/api/v10"
 
-GLOBAL_MENTION = "||<@&1329392448798982214>||"
-OVERALL_TOTAL_MARKER = "<:kawaiiaccents:1435916448890617948> ̟ !!"
+_TEMPLATE_SETTINGS = load_template_settings("revenue_report")
 
-TITLE_BOX = (
-    "╔══.·:·.☽✧    ✦    ✧☾.·:·.══╗\n"
-    "            monthly revenue\n"
-    "╚══.·:·.☽✧    ✦    ✧☾.·:·.══╝"
-)
 
-DEFAULT_NOVEL_DISCORD_MAP_URL = (
-    "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/"
-    "main/config/novel_discord_map.toml"
-)
+def _setting_str(key: str, default: str = "", *, env: str = "") -> str:
+    env_value = os.environ.get(env, "").strip() if env else ""
+    if env_value:
+        return env_value
+    value = _TEMPLATE_SETTINGS.get(key, default)
+    return str(value if value is not None else default).strip()
 
-NOVEL_DISCORD_MAP_URL = (
-    os.environ.get("NOVEL_DISCORD_MAP_URL", "").strip()
-    or DEFAULT_NOVEL_DISCORD_MAP_URL
-)
+
+def _setting_color_int(key: str, default: int, *, env: str = "") -> int:
+    raw = os.environ.get(env, "").strip() if env else ""
+    if not raw and key == "embed_color":
+        raw = os.environ.get("EMBED_COLOR_HEX", "").strip()
+    if not raw:
+        raw = _TEMPLATE_SETTINGS.get(key, default)
+    parsed = parse_color(raw)
+    return int(parsed if parsed is not None else default)
+
+
+EMBED_COLOR = _setting_color_int("embed_color", 0xC9D3FF, env="REVENUE_EMBED_COLOR_HEX")
+GLOBAL_MENTION = _setting_str("global_mention", env="GLOBAL_MENTION")
+NOVEL_DISCORD_MAP_URL = _setting_str("novel_discord_map_url", env="NOVEL_DISCORD_MAP_URL")
 
 
 # ---------------------------------------------------------------------------
@@ -565,7 +570,7 @@ def normalize_role_id(value: Any) -> str:
     return match.group(0) if match else ""
 
 
-def load_role_map(url: str = NOVEL_DISCORD_MAP_URL) -> Dict[str, str]:
+def load_role_map(url: Optional[str] = None) -> Dict[str, str]:
     """
     Loads novel role IDs from discord-webhook/config/novel_discord_map.toml.
 
@@ -576,6 +581,7 @@ def load_role_map(url: str = NOVEL_DISCORD_MAP_URL) -> Dict[str, str]:
     Also supports simple string values:
       AMLWC = "123..."
     """
+    url = NOVEL_DISCORD_MAP_URL if url is None else str(url).strip()
     if not url:
         return {}
 

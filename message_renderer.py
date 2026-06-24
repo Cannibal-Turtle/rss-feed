@@ -55,6 +55,24 @@ def load_toml(path: str | Path) -> dict[str, Any]:
     return data
 
 
+def load_template_settings(name: str) -> dict[str, Any]:
+    """Load the optional [settings] table from message_templates/{name}.toml.
+
+    These settings are for script/user config that belongs beside the template
+    but should not be sent to Discord as part of the message payload.
+    """
+    path = TEMPLATE_DIR / f"{name}.toml"
+    data = load_toml(path)
+    settings = data.get("settings", {})
+
+    if settings in (None, ""):
+        return {}
+    if not isinstance(settings, dict):
+        raise RuntimeError(f"[settings] in {path} must be a table/object")
+
+    return copy.deepcopy(settings)
+
+
 def load_template(name: str, *, variant: str | None = None) -> dict[str, Any]:
     """
     Load message_templates/{name}.toml.
@@ -69,6 +87,9 @@ def load_template(name: str, *, variant: str | None = None) -> dict[str, Any]:
 
     Then call:
         render_message("token_alert", ctx, variant="expiring")
+
+    A top-level [settings] table is reserved for script/user config and is
+    removed from normal payload rendering. Read it with load_template_settings().
     """
     path = TEMPLATE_DIR / f"{name}.toml"
     data = load_toml(path)
@@ -80,7 +101,9 @@ def load_template(name: str, *, variant: str | None = None) -> dict[str, Any]:
             raise RuntimeError(f"[{variant}] in {path} must be a table/object")
         return copy.deepcopy(data[variant])
 
-    return copy.deepcopy(data)
+    data = copy.deepcopy(data)
+    data.pop("settings", None)
+    return data
 
 
 # ---------------------------------------------------------------------------

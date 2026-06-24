@@ -14,29 +14,43 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from novel_mappings import HOSTING_SITE_DATA
-from message_renderer import render_message, to_discord_api_payload
+from message_renderer import load_template_settings, render_message, to_discord_api_payload
 
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 
 API_BASE = "https://discord.com/api/v10"
 
-NOVEL_DISCORD_MAP_URL = "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/config/novel_discord_map.toml"
+_TEMPLATE_SETTINGS = load_template_settings("membership_update")
+
+
+def _setting_str(key: str, default: str = "", *, env: str = "") -> str:
+    env_value = os.environ.get(env, "").strip() if env else ""
+    if env_value:
+        return env_value
+    value = _TEMPLATE_SETTINGS.get(key, default)
+    return str(value if value is not None else default).strip()
+
+
+def _setting_int(key: str, default: int, *, env: str = "") -> int:
+    raw = _setting_str(key, str(default), env=env)
+    return int(raw)
+
+
+NOVEL_DISCORD_MAP_URL = _setting_str("novel_discord_map_url", env="NOVEL_DISCORD_MAP_URL")
 # currently only supports single server role attachment
 # Reads role IDs from discord-webhook's rich novel Discord TOML map.
 
 # Always post here first.
 # This is your server's news channel.
-NEWS_CHANNEL_ID = 1330049962129489930
+NEWS_CHANNEL_ID = _setting_int("news_channel_id", 1330049962129489930, env="NEWS_CHANNEL_ID")
 
 # Your server guild ID.
 # This is from your role URLs in novel_mappings.py.
-MY_SERVER_GUILD_ID = "1329384099609051136"
+MY_SERVER_GUILD_ID = _setting_str("private_guild_id", "1329384099609051136", env="MY_SERVER_GUILD_ID")
 
 # Membership role in your server.
-MEMBERSHIP_ROLE_ID = "1329502951764525187"
-
-# #c9d3ff
-ACCENT_COLOR = 0xC9D3FF
+MEMBERSHIP_ROLE_ID = _setting_str("membership_role_id", "1329502951764525187", env="MEMBERSHIP_ROLE_ID")
+PUBLIC_GLOBAL_MENTION = _setting_str("public_global_mention", "||@everyone||", env="PUBLIC_GLOBAL_MENTION")
 
 NOVELS_DIR = ROOT / "mappings" / "novels"
 
@@ -179,7 +193,7 @@ def build_global_mention(*, novel_role_mention, channel_id, guild_id):
     if int(channel_id) == NEWS_CHANNEL_ID or str(guild_id) == MY_SERVER_GUILD_ID:
         mention_parts = [
             novel_role_mention,
-            f"<@&{MEMBERSHIP_ROLE_ID}>",
+            f"<@&{MEMBERSHIP_ROLE_ID}>" if MEMBERSHIP_ROLE_ID else "",
         ]
         mention = " | ".join(part for part in mention_parts if part)
 
@@ -190,7 +204,7 @@ def build_global_mention(*, novel_role_mention, channel_id, guild_id):
             "roles": role_ids,
         }
 
-    return "||@everyone||", {
+    return PUBLIC_GLOBAL_MENTION, {
         "parse": ["everyone"],
     }
 
