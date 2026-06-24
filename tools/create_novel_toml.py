@@ -21,9 +21,9 @@ When a world-hopping checkbox is enabled, the selected world-hopping tag is
 included directly in tags for Discord role mentions. No separate world-hopping
 field is written to the TOML.
 
-For Mistmint Haven novels, the script also stores the full host genre list as
-mistmint_haven_genres so the original API genres are preserved even when tags
-are filtered down to Discord-supported mention tags.
+For supported hosts, the script also stores the full native host genre list as
+site_genres so the original API genres are preserved even when tags are filtered
+down to Discord-supported mention tags.
 """
 
 from __future__ import annotations
@@ -538,8 +538,8 @@ def infer_tags(api_novel: dict[str, Any], supported_tags: dict[str, str]) -> tup
     return ordered, unmapped
 
 
-def collect_mistmint_haven_genres(api_novel: dict[str, Any]) -> list[str]:
-    """Return the full Mistmint Haven genre names exactly as the API lists them."""
+def collect_site_genres(api_novel: dict[str, Any]) -> list[str]:
+    """Return the full native genre names exactly as the hosting site lists them."""
     result: list[str] = []
     genres = api_novel.get("genres") or []
     if not isinstance(genres, list):
@@ -608,7 +608,7 @@ def build_toml_text(
     last_chapter: str,
     discord_color: str,
     tags: list[str],
-    mistmint_haven_genres: list[str],
+    site_genres: list[str],
     history_file: str,
 ) -> str:
     title = str_clean(api_novel.get("title"))
@@ -636,8 +636,8 @@ def build_toml_text(
     lines.append("")
     tag_items = ", ".join(quote_toml(tag) for tag in tags)
     lines.append(f"tags = [{tag_items}]")
-    mh_genre_items = ", ".join(quote_toml(genre) for genre in mistmint_haven_genres)
-    lines.append(f"mistmint_haven_genres = [{mh_genre_items}]")
+    site_genre_items = ", ".join(quote_toml(genre) for genre in site_genres)
+    lines.append(f"site_genres = [{site_genre_items}]")
     lines.append(f"history_file = {quote_toml(history_file)}")
     lines.append("")
     lines.append(f"custom_description = {multiline_toml(description)}")
@@ -722,7 +722,7 @@ def main(argv: list[str]) -> int:
 
     supported_tags = load_supported_tags(args.tag_roles_url)
     tags, unmapped = infer_tags(api_novel, supported_tags)
-    mistmint_haven_genres = collect_mistmint_haven_genres(api_novel) if norm_key(host_name) == "mistmint haven" else []
+    site_genres = collect_site_genres(api_novel)
     quick_transmigration = yes_no(args.quick_transmigration, default=False)
     infinite_flow = yes_no(args.infinite_flow, default=False)
     if quick_transmigration and infinite_flow:
@@ -760,7 +760,7 @@ def main(argv: list[str]) -> int:
         last_chapter=args.last_chapter,
         discord_color=args.discord_color,
         tags=tags,
-        mistmint_haven_genres=mistmint_haven_genres,
+        site_genres=site_genres,
         history_file=history_file,
     )
 
@@ -782,8 +782,8 @@ def main(argv: list[str]) -> int:
         print(f"Created/kept {history_path.relative_to(ROOT)}")
     print(f"NovelUpdates URL guess: {novelupdates_url}")
     print(f"Tags: {tags}")
-    if mistmint_haven_genres:
-        print(f"Mistmint Haven genres: {mistmint_haven_genres}")
+    if site_genres:
+        print(f"Site genres: {site_genres}")
     print(f"World-hopping tag: {world_hopping_tag!r}")
     return 0
 
