@@ -28,19 +28,16 @@ on:
         description: "Discord color optional, e.g. #c90016. Leave blank to write an empty string."
         required: false
         type: string
-      use_special_tag:
-        description: "Use a world-hopping special tag"
+      quick_transmigration:
+        description: "World-hopping: quick transmigration"
         required: false
         default: false
         type: boolean
-      special_tag:
-        description: "World-hopping tag, used only when the checkbox above is enabled"
+      infinite_flow:
+        description: "World-hopping: infinite flow"
         required: false
-        default: "quick transmigration"
-        type: choice
-        options:
-          - "quick transmigration"
-          - "infinite flow"
+        default: false
+        type: boolean
       has_arcs:
         description: "Create arc_history/<short_code>_history.json and set history_file"
         required: true
@@ -103,8 +100,8 @@ jobs:
             --chapter-count "${{ github.event.inputs.chapter_count }}"
             --last-chapter "${{ github.event.inputs.last_chapter }}"
             --discord-color "${{ github.event.inputs.discord_color }}"
-            --special-tag-enabled "${{ github.event.inputs.use_special_tag }}"
-            --special-tag "${{ github.event.inputs.special_tag }}"
+            --quick-transmigration "${{ github.event.inputs.quick_transmigration }}"
+            --infinite-flow "${{ github.event.inputs.infinite_flow }}"
             --has-arcs "${{ github.event.inputs.has_arcs }}"
           )
 

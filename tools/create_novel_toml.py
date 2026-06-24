@@ -14,7 +14,7 @@ Designed for GitHub Actions workflow_dispatch inputs, but also works locally:
     --chapter-count "80 Chapters" \
     --last-chapter "Chapter 80" \
     --discord-color "#c90016" \
-    --special-tag "quick transmigration" \
+    --quick-transmigration true \
     --has-arcs false
 """
 
@@ -636,18 +636,20 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--chapter-count", default="", help='Optional display text, e.g. "93 Chapters"')
     p.add_argument("--last-chapter", default="", help='Optional target text, e.g. "Chapter 93"')
     p.add_argument("--discord-color", default="", help='Optional hex color, e.g. "#c90016"')
+    p.add_argument("--quick-transmigration", default="false", help="true/false. Writes special_tag as quick transmigration.")
+    p.add_argument("--infinite-flow", default="false", help="true/false. Writes special_tag as infinite flow.")
     p.add_argument(
         "--special-tag-enabled",
         default="auto",
         help=(
-            "true/false/auto. If false, ignore --special-tag and write special_tag = \"\". "
+            "Legacy/local option: true/false/auto. If false, ignore --special-tag and write special_tag = \"\". "
             "If auto, use --special-tag only when it is non-blank."
         ),
     )
     p.add_argument(
         "--special-tag",
         default="",
-        help='World-hopping tag: "quick transmigration" or "infinite flow". Removes normal transmigration tag if enabled.',
+        help='Legacy/local option. World-hopping tag: "quick transmigration" or "infinite flow".',
     )
     p.add_argument("--has-arcs", default="false", help="true/false. If true, create arc_history/<short_code>_history.json")
     p.add_argument("--tag-roles-url", default=DEFAULT_TAG_ROLES_URL, help="Raw JSON URL for Discord tag role keys")
@@ -676,15 +678,26 @@ def main(argv: list[str]) -> int:
 
     supported_tags = load_supported_tags(args.tag_roles_url)
     tags, unmapped = infer_tags(api_novel, supported_tags)
-    special_tag_mode = norm_key(args.special_tag_enabled)
-    if special_tag_mode in {"auto", ""}:
-        special_tag = normalize_special_tag(args.special_tag)
-    elif yes_no(args.special_tag_enabled, default=False):
-        special_tag = normalize_special_tag(args.special_tag)
-        if not special_tag:
-            raise ScriptError("special_tag is enabled, but no world-hopping tag was provided.")
+    quick_transmigration = yes_no(args.quick_transmigration, default=False)
+    infinite_flow = yes_no(args.infinite_flow, default=False)
+    if quick_transmigration and infinite_flow:
+        raise ScriptError("Choose only one world-hopping tag: quick transmigration or infinite flow, not both.")
+
+    if quick_transmigration:
+        special_tag = "quick transmigration"
+    elif infinite_flow:
+        special_tag = "infinite flow"
     else:
-        special_tag = ""
+        # Legacy/local fallback for older commands that still pass --special-tag.
+        special_tag_mode = norm_key(args.special_tag_enabled)
+        if special_tag_mode in {"auto", ""}:
+            special_tag = normalize_special_tag(args.special_tag)
+        elif yes_no(args.special_tag_enabled, default=False):
+            special_tag = normalize_special_tag(args.special_tag)
+            if not special_tag:
+                raise ScriptError("special_tag is enabled, but no world-hopping tag was provided.")
+        else:
+            special_tag = ""
 
     tags = apply_special_tag(tags, special_tag)
 
