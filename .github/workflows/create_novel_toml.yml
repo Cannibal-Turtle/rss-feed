@@ -33,7 +33,6 @@ on:
         default: ""
         type: choice
         options:
-          - ""
           - "quick transmigration"
           - "infinite flow"
       has_arcs:
