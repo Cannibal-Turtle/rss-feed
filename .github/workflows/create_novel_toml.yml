@@ -17,15 +17,15 @@ on:
         required: true
         type: string
       chapter_count:
-        description: "Chapter count optional, e.g. 93 Chapters. Leave blank to write an empty string."
+        description: "Chapter count: optional, e.g. 93 Chapters."
         required: false
         type: string
       last_chapter:
-        description: "Last chapter optional, e.g. Chapter 93. Leave blank to write an empty string."
+        description: "Last chapter: optional, e.g. Chapter 93."
         required: false
         type: string
       discord_color:
-        description: "Discord color optional, e.g. #c90016. Leave blank to write an empty string."
+        description: "Discord color: optional, e.g. #c90016."
         required: false
         type: string
       quick_transmigration:
