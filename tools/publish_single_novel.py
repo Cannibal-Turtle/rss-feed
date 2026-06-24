@@ -21,6 +21,7 @@ except ModuleNotFoundError:
     import tomli as tomllib
 
 from novel_mappings import HOSTING_SITE_DATA, get_novelupdates_url
+from host_utils import get_host_utils
 
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 STATE_FILE = "novel_status_targets.json"
@@ -406,7 +407,21 @@ async def on_ready():
             if novel.get("short_code", "").upper() != SHORT_CODE:
                 continue
 
-            api = fetch_api(novel["paid_feed_url"], hostdata["token_secret"])
+            utils = get_host_utils(host)
+            resolve_api_url = utils.get("resolve_chapter_api_url")
+
+            if not resolve_api_url:
+                print(f"❌ Host {host} does not support resolve_chapter_api_url.")
+                continue
+
+            api_url = resolve_api_url(hostdata, title, novel)
+
+            if not api_url:
+                print(f"❌ No chapter_api_url found for {host} / {title}")
+                continue
+
+            api = fetch_api(api_url, hostdata["token_secret"])
+            
             chapters = flatten_chapters(api)
 
             completed, next_free_dt, last_free_dt = compute_status(

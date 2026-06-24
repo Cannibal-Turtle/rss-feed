@@ -18,24 +18,51 @@ import types
 
 from novel_mappings import HOSTING_SITE_DATA
 
-# ================= MODE SWITCH =================
-USE_MISTMINT_API = 0  # 0 = RSS, 1 = API
-MISTMINT_MODE = 0   # 0 = AUTO, 1 = MANUAL
-# ==============================================
 
-# ================= CONFIG =================
+# ================= MODE CONFIG =================
+def _mistmint_hostdata():
+    return HOSTING_SITE_DATA.get("Mistmint Haven", {})
+
+
+def _free_chapters_source():
+    """
+    From mappings/hosts/mistmint_haven.toml:
+      free_chapters_source = "feed" or "api"
+    """
+    return str(_mistmint_hostdata().get("free_chapters_source", "feed")).strip().lower()
+
+
+def _paid_chapters_source():
+    """
+    From mappings/hosts/mistmint_haven.toml:
+      paid_chapters_source = "api" or "feed"
+    """
+    return str(_mistmint_hostdata().get("paid_chapters_source", "api")).strip().lower()
+
+
+def _chapter_mode():
+    """
+    From mappings/hosts/mistmint_haven.toml:
+      chapter_mode = "auto" or "manual"
+    """
+    return str(_mistmint_hostdata().get("chapter_mode", "auto")).strip().lower()
+
+
 def _use_api_feed():
-    return USE_MISTMINT_API == 1
+    return _free_chapters_source() == "api"
+
 
 def _manual_mode_on():
-    return MISTMINT_MODE == 1
+    return _chapter_mode() == "manual"
+
 
 os.environ["MISTMINT_FORCE_STATE"] = "1" if _manual_mode_on() else "0"
-# =========================================
+# ==============================================
 
 print(
-    f"[MODE] Free = {'API' if USE_MISTMINT_API else 'RSS'} | "
-    f"Paid = {'AUTO' if MISTMINT_MODE == 0 else 'MANUAL'}"
+    f"[MODE] Free = {_free_chapters_source().upper()} | "
+    f"Paid source = {_paid_chapters_source().upper()} | "
+    f"Paid mode = {'MANUAL' if _manual_mode_on() else 'AUTO'}"
 )
 
 # === GitHub Actions diagnostics helpers ======================================
@@ -203,6 +230,46 @@ def _load_mistmint_state() -> dict:
 
 def _mistmint_slug_from_url(novel_url: str) -> str:
     return (novel_url or "").rstrip("/").split("/")[-1]
+
+def resolve_chapter_api_url(hostdata, novel_title, novel):
+    """
+    Resolve Mistmint chapter API URL.
+
+    Order:
+    1. novel-level chapter_api_url override
+    2. host-level chapter_api_url template
+    3. fallback built from novel_url slug
+
+    Supports:
+    - {slug}
+    - {novel_url_slug}
+    """
+    novel_url = (novel.get("novel_url") or "").rstrip("/")
+    slug = _mistmint_slug_from_url(novel_url)
+
+    raw_url = (
+        novel.get("chapter_api_url")
+        or hostdata.get("chapter_api_url")
+        or ""
+    ).strip()
+
+    if raw_url:
+        if "{slug}" in raw_url:
+            if not slug:
+                return ""
+            return raw_url.replace("{slug}", slug)
+
+        if "{novel_url_slug}" in raw_url:
+            if not slug:
+                return ""
+            return raw_url.replace("{novel_url_slug}", slug)
+
+        return raw_url
+
+    if not slug:
+        return ""
+
+    return f"{BASE_API}/novels/slug/{slug}/chapters"
 
 def _mistmint_find_details_by_url(host: str, novel_url: str):
     block = HOSTING_SITE_DATA.get(host, {}).get("novels", {}) or {}
@@ -1368,10 +1435,20 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
 
     # we are in API mode here
     novel_title, details = _mistmint_find_details_by_url(host, novel_url)
-    desc_html = (details.get("custom_description") or "")
+    hostdata = HOSTING_SITE_DATA.get(host, {})
+
+    details_for_api = dict(details or {})
+    details_for_api.setdefault("novel_url", novel_url)
+
+    desc_html = (details_for_api.get("custom_description") or "")
     novel_slug = _mistmint_slug_from_url(novel_url)
-    short_code = (details.get("short_code") or "").strip()
-    api_url = f"{BASE_API}/novels/slug/{novel_slug}/chapters"
+    short_code = (details_for_api.get("short_code") or "").strip()
+
+    api_url = resolve_chapter_api_url(hostdata, novel_title, details_for_api)
+    if not api_url:
+        diag_fail("mistmint-paid-api-url-missing", novel_url=novel_url, host=host)
+        return [], ""
+
     base = f"{BASE_APP}/novels/{novel_slug}/"
 
     items = []
@@ -1464,8 +1541,19 @@ async def novel_has_paid_update_mistmint_async(session, novel_url: str) -> bool:
         return int(entry.get("latest_available_chapter", 0)) > int(entry.get("last_posted_chapter", 0))
 
     # API path
-    novel_slug = _mistmint_slug_from_url(novel_url)
-    url = f"{BASE_API}/novels/slug/{novel_slug}/chapters"
+    host = "Mistmint Haven"
+    hostdata = HOSTING_SITE_DATA.get(host, {})
+    novel_title, details = _mistmint_find_details_by_url(host, novel_url)
+
+    details_for_api = dict(details or {})
+    details_for_api.setdefault("novel_url", novel_url)
+
+    url = resolve_chapter_api_url(hostdata, novel_title, details_for_api)
+
+    if not url:
+        diag_fail("mistmint-paid-check-api-url-missing", novel_url=novel_url)
+        return False
+
     try:
         async with session.get(url, headers=_mistmint_headers(), timeout=AIOHTTP_TIMEOUT) as resp:
             if resp.status != 200:
@@ -1534,14 +1622,18 @@ def load_feed_mistmint_via_api(host: str):
     entries = []
 
     block = HOSTING_SITE_DATA.get(host, {}).get("novels", {})
+    hostdata = HOSTING_SITE_DATA.get(host, {})
 
     for novel_title, details in block.items():
-        novel_url = details.get("novel_url")
-        novel_slug = _mistmint_slug_from_url(novel_url)
+        api_url = resolve_chapter_api_url(hostdata, novel_title, details)
 
-        api_url = f"{BASE_API}/novels/slug/{novel_slug}/chapters"
+        if not api_url:
+            print(f"[mistmint] no chapter_api_url for {novel_title}")
+            diag_fail("free-feed-api-url-missing", novel=novel_title)
+            continue
 
         payload = _http_get_json(api_url)
+
         if not payload:
             print(f"[mistmint] free feed fetch failed for {novel_slug}")
             diag_fail("free-feed-fetch-fail", novel=novel_slug)
@@ -1689,7 +1781,8 @@ MISTMINT_UTILS = {
     # Free/public feed
     "split_title": split_title_mistmint,
     "extract_volume": extract_volume_mistmint,
-    "load_feed": load_feed_mistmint_via_api if USE_MISTMINT_API else None,
+    "load_feed": load_feed_mistmint_via_api if _use_api_feed() else None,
+    "resolve_chapter_api_url": resolve_chapter_api_url,
 
     # Paid feed (synthetic)
     "split_paid_title": split_paid_chapter_mistmint,

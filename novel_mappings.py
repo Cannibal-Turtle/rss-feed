@@ -121,19 +121,40 @@ HOSTING_SITE_DATA = _load_hosting_site_data()
 
 # ---------------- Utility Functions ----------------
 
-def get_translator(host, novel_title=""):
+def get_mapping_value(host, novel_title="", key="", default=""):
     """
-    Returns per-novel translator if set.
-    Falls back to host translator.
+    Generic novel → host fallback.
+    Novel-level value wins. Host-level value is fallback.
     """
     host_data = HOSTING_SITE_DATA.get(host, {})
     novel = host_data.get("novels", {}).get(novel_title, {}) if novel_title else {}
 
-    return (
-        novel.get("translator")
-        or host_data.get("translator")
-        or ""
-    ).strip()
+    value = novel.get(key) or host_data.get(key) or default
+    return value.strip() if isinstance(value, str) else value
+
+
+def get_translator(host, novel_title=""):
+    return get_mapping_value(host, novel_title, "translator", "")
+
+
+def get_free_feed_url(host, novel_title=""):
+    return get_mapping_value(host, novel_title, "free_feed_url", "")
+
+
+def get_paid_feed_url(host, novel_title=""):
+    return get_mapping_value(host, novel_title, "paid_feed_url", "")
+
+
+def get_feed_url(host, novel_title=""):
+    return get_mapping_value(host, novel_title, "feed_url", "")
+
+
+def get_chapter_api_url(host, novel_title=""):
+    return get_mapping_value(host, novel_title, "chapter_api_url", "")
+
+
+def get_comments_feed_url(host, novel_title=""):
+    return get_mapping_value(host, novel_title, "comments_feed_url", "")
 
 
 def get_host_logo(host):

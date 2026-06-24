@@ -128,20 +128,20 @@ def revenue_novels_url(host_cfg: Mapping[str, Any]) -> str:
     URL priority:
     1. GitHub secret/env MISTMINT_REVENUE_NOVELS_URL
     2. revenue_novels_url in mappings/hosts/mistmint_haven.toml
-    3. novel_api in mappings/hosts/mistmint_haven.toml
+    3. novel_api_url in mappings/hosts/mistmint_haven.toml
 
     Your current host TOML can simply use:
-      novel_api = "https://api.mistminthaven.com/api/my-novels"
+      novel_api_url = "https://api.mistminthaven.com/api/my-novels"
     """
     url = (
         os.getenv("MISTMINT_REVENUE_NOVELS_URL", "").strip()
         or str(host_cfg.get("revenue_novels_url") or "").strip()
-        or str(host_cfg.get("novel_api") or "").strip()
+        or str(host_cfg.get("novel_api_url") or "").strip()
     )
 
     if not url:
         raise RuntimeError(
-            "Missing Mistmint revenue URL. Add `novel_api` to "
+            "Missing Mistmint revenue URL. Add `novel_api_url` to "
             "mappings/hosts/mistmint_haven.toml."
         )
 
@@ -171,10 +171,7 @@ def load_local_novel_indexes() -> Dict[str, Dict[str, Dict[str, Any]]]:
             continue
 
         title = str(data.get("title") or "").strip()
-        slug = (
-            slug_from_url(str(data.get("novel_url") or ""))
-            or slug_from_url(str(data.get("paid_feed_url") or ""))
-        )
+        slug = slug_from_url(str(data.get("novel_url") or ""))
         novel_id = str(data.get("novel_id") or "").strip().lower()
 
         data = dict(data)

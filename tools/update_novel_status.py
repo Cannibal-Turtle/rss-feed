@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from novel_mappings import HOSTING_SITE_DATA
+from host_utils import get_host_utils
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
@@ -191,12 +192,29 @@ async def on_ready():
     print(f"🔄 Updating status for {short_code}")
 
     for host_name, data in HOSTING_SITE_DATA.items():
+        if host_name.strip().lower() != HOST.strip().lower():
+            continue
+
         for novel_title, novel in data["novels"].items():
             if novel.get("short_code") != short_code:
                 continue
 
-            api = fetch_api(novel["paid_feed_url"], data["token_secret"])
+            utils = get_host_utils(host_name)
+            resolve_api_url = utils.get("resolve_chapter_api_url")
+
+            if not resolve_api_url:
+                print(f"❌ Host {host_name} does not support resolve_chapter_api_url.")
+                continue
+
+            api_url = resolve_api_url(data, novel_title, novel)
+
+            if not api_url:
+                print(f"❌ No chapter_api_url found for {host_name} / {novel_title}")
+                continue
+
+            api = fetch_api(api_url, data["token_secret"])
             chapters = flatten_chapters(api)
+            
             completed, next_free, last_free = compute_status(
                 chapters,
                 novel.get("last_chapter")

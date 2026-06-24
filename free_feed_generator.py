@@ -12,6 +12,7 @@ from novel_mappings import (
     HOSTING_SITE_DATA,
     get_featured_image,
     get_translator,
+    get_free_feed_url,
     get_host_logo,
     get_novel_details,
     get_novel_short_code,
@@ -180,9 +181,9 @@ def main():
 
     # Loop over each host defined in the mapping.
     for host, data in HOSTING_SITE_DATA.items():
-        feed_url = data.get("feed_url")
+        feed_url = get_free_feed_url(host)
         if not feed_url:
-            print(f"No feed URL defined for host: {host}")
+            print(f"No free_feed_url defined for host: {host}")
             continue
 
         utils = get_host_utils(host)
