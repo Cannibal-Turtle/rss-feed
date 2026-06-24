@@ -14,3 +14,8 @@ thread_id_map_url = "https://raw.githubusercontent.com/Cannibal-Turtle/mistmint-
 free_chapters_source = "feed"
 paid_chapters_source = "api"
 chapter_mode = "auto"
+comments_source = "auto"
+# Comment source modes:
+# "trans"  = use tokened author dashboard endpoint; best metadata/reply tracking, token required
+# "public" = use no-token public novel comment APIs; less reply tracking, but no token needed
+# "auto"   = try "trans" first; if token is missing/expired, fall back to "public"

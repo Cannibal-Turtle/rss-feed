@@ -461,9 +461,243 @@ def normalize_mistmint_chapter_label(label: str) -> str:
     # Empty → Homepage. Otherwise keep exactly what the API says.
     return (label or "").strip() or "Homepage"
 
+# --- Public/no-token Mistmint comments fallback -------------------------------
+
+def _public_pick(d, *keys, default=""):
+    for key in keys:
+        value = d.get(key) if isinstance(d, dict) else None
+        if value not in (None, ""):
+            return value
+    return default
+
+
+def _public_data_list(payload):
+    if isinstance(payload, list):
+        return payload
+
+    if isinstance(payload, dict):
+        for key in ("data", "items", "results", "comments", "entries"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return value
+
+        data = payload.get("data")
+        if isinstance(data, dict):
+            for key in ("comments", "items", "results", "data", "entries"):
+                value = data.get(key)
+                if isinstance(value, list):
+                    return value
+
+    return []
+
+
+def _public_headers():
+    return {
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0",
+        "Origin": "https://www.mistminthaven.com",
+        "Referer": "https://www.mistminthaven.com/",
+    }
+
+
+def _fetch_public_novel_comments(novel_slug: str, novel_id: str, limit: int):
+    """
+    Public endpoint fallback.
+
+    The public Mistmint comments endpoint is /comments/novel/{identifier}.
+    Existing code has used novel_id successfully; some API paths may also accept
+    novel_slug. Try both and prefer the first response that actually has items.
+    """
+    candidates = []
+
+    # Prefer novel_id because the existing homepage matcher already uses it.
+    if novel_id:
+        candidates.append(novel_id)
+
+    if novel_slug and novel_slug not in candidates:
+        candidates.append(novel_slug)
+
+    first_url = ""
+    first_items = []
+
+    for ident in candidates:
+        url = f"{BASE_API}/comments/novel/{ident}?skipPage=0&limit={limit}"
+        payload = _http_get_json(url, headers=_public_headers())
+
+        if payload is None:
+            continue
+
+        items = _public_data_list(payload)
+        diag_ok("public-comments-fetch", ident=ident, count=len(items))
+
+        if not first_url:
+            first_url = url
+            first_items = items
+
+        if items:
+            return url, items
+
+    return first_url, first_items
+
+
+def _public_comment_item(
+    *,
+    novel_title: str,
+    novel_slug: str,
+    novel_id: str,
+    obj: dict,
+    reply_to: str = "",
+    default_chapter: str = "Homepage",
+):
+    author = _user_str(
+        obj.get("user")
+        or _public_pick(obj, "author", "username", "name", "displayName")
+    )
+
+    body_raw = (
+        _public_pick(obj, "content", "body", "text", "message")
+        or ""
+    ).strip()
+
+    body, comment_image_url = split_mistmint_sticker_image(body_raw)
+
+    posted_at = _public_pick(
+        obj,
+        "postedAt",
+        "createdAt",
+        "created_at",
+        "date",
+        "timestamp",
+    )
+
+    cid = _public_pick(obj, "commentId", "comment_id", "id", "_id")
+    cid = str(cid).strip() if cid else ""
+
+    pid = _public_pick(
+        obj,
+        "parentId",
+        "parent_id",
+        "replyToId",
+        "reply_to_id",
+        "inReplyTo",
+        "in_reply_to",
+    )
+    pid = str(pid).strip() if pid else ""
+
+    chapter_slug = _public_pick(obj, "chapterSlug", "chapter_slug")
+    chapter_lbl = _public_pick(
+        obj,
+        "chapter",
+        "chapterLabel",
+        "chapterTitle",
+        default=default_chapter,
+    )
+
+    chapter = normalize_mistmint_chapter_label(chapter_lbl)
+
+    url = MistmintClient.build_url(novel_slug, chapter_slug) if novel_slug else ""
+
+    guid = cid or _guid_from([
+        "mistmint-public",
+        novel_title,
+        author,
+        posted_at,
+        body_raw[:100],
+    ])
+
+    return {
+        "novel_title": novel_title,
+        "chapter": chapter,
+        "author": author,
+        "description": body,
+        "comment_image_url": comment_image_url,
+        "reply_to": reply_to,
+        "posted_at": posted_at or "",
+
+        "guid": guid,
+        "comment_id": cid,
+        "commentId": cid,
+        "id": cid,
+        "_id": cid,
+
+        "parent_id": pid,
+        "is_reply": bool(reply_to or pid),
+
+        "novel_id": novel_id,
+        "novel_slug": novel_slug,
+        "chapter_slug": chapter_slug,
+        "url": url,
+    }
+
+
+def load_comments_mistmint_public(comments_api_url: str = ""):
+    """
+    No-token fallback.
+
+    Loops through mapped Mistmint novels and fetches public novel comments.
+    This is intentionally simpler than trans/all-comments:
+    - no token needed
+    - reply target is best-effort from nested public replies
+    - chapter coverage depends on what Mistmint's public novel comments endpoint returns
+    """
+    out = []
+    limit = 50
+
+    novels = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("novels", {}) or {}
+
+    with diag_step("comments-public-load", novel_count=len(novels), limit=limit):
+        for novel_title, meta in novels.items():
+            novel_url = (meta.get("novel_url") or "").rstrip("/")
+            novel_slug = novel_url.split("/")[-1] if novel_url else ""
+            novel_id = str(meta.get("novel_id") or "").strip()
+
+            if not novel_slug and not novel_id:
+                diag_fail("public-comments-skip-no-id", novel=novel_title)
+                continue
+
+            url, items = _fetch_public_novel_comments(
+                novel_slug=novel_slug,
+                novel_id=novel_id,
+                limit=limit,
+            )
+
+            print(f"[mistmint/public] {novel_title}: {len(items)} item(s) from {url or 'no-url'}")
+
+            for top in items:
+                top_author = _user_str(top.get("user") or _public_pick(top, "author", "username", "name", "displayName"))
+
+                out.append(_public_comment_item(
+                    novel_title=novel_title,
+                    novel_slug=novel_slug,
+                    novel_id=novel_id,
+                    obj=top,
+                    reply_to="",
+                    default_chapter="Homepage",
+                ))
+
+                for rep in (top.get("replies") or []):
+                    reply_to = (
+                        _user_str(rep.get("toUser"))
+                        or _user_str(rep.get("replyToUser"))
+                        or top_author
+                    )
+
+                    out.append(_public_comment_item(
+                        novel_title=novel_title,
+                        novel_slug=novel_slug,
+                        novel_id=novel_id,
+                        obj=rep,
+                        reply_to=reply_to,
+                        default_chapter="Homepage",
+                    ))
+
+    diag_ok("comments-public-loaded", count=len(out))
+    print(f"[mistmint/public] loaded {len(out)} public comment(s)")
+    return out
+
 # --- Mistmint comments loader (JSON recent-comments endpoint) ---------------
 
-def load_comments_mistmint(comments_api_url: str):
+def load_comments_mistmint_trans(comments_api_url: str):
     """
     Returns list[dict] with keys:
       novel_title, chapter, author, description, reply_to, posted_at
@@ -764,6 +998,29 @@ def load_comments_mistmint(comments_api_url: str):
     return out
 
 
+def load_comments_mistmint(comments_api_url: str):
+    source = _comments_source()
+
+    if source == "public":
+        return load_comments_mistmint_public(comments_api_url)
+
+    if source == "trans":
+        return load_comments_mistmint_trans(comments_api_url)
+
+    # auto mode
+    try:
+        return load_comments_mistmint_trans(comments_api_url)
+    except RuntimeError as e:
+        msg = str(e)
+
+        if "AUTH_ERROR" not in msg:
+            raise
+
+        diag_fail("comments-auto-public-fallback", error=msg)
+        print("[mistmint] trans/all-comments auth failed; falling back to public per-novel comments")
+        return load_comments_mistmint_public(comments_api_url)
+
+
 if __name__ == "__main__":
     cli_main()
 
@@ -773,6 +1030,8 @@ __all__ = [
     "build_comment_link_mistmint",
     "normalize_mistmint_chapter_label",
     "load_comments_mistmint",
+    "load_comments_mistmint_trans",
+    "load_comments_mistmint_public",
     "pick_comment_html_default",
     "_mistmint_reply_flags_from_raw",
     "cli_main",

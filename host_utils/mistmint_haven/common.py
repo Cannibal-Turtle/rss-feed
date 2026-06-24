@@ -51,6 +51,18 @@ def _chapter_mode():
     return str(_mistmint_hostdata().get("chapter_mode", "auto")).strip().lower()
 
 
+def _comments_source():
+    """
+    From mappings/hosts/mistmint_haven.toml:
+
+    comments_source = "trans"   # tokened /comments/trans/all-comments
+    comments_source = "public"  # no-token public novel comments fallback
+    comments_source = "auto"    # try trans first, fall back to public on auth failure
+    """
+    value = str(_mistmint_hostdata().get("comments_source", "trans")).strip().lower()
+    return value if value in {"trans", "public", "auto"} else "trans"
+
+
 def _use_api_feed():
     return _free_chapters_source() == "api"
 
@@ -65,7 +77,8 @@ os.environ["MISTMINT_FORCE_STATE"] = "1" if _manual_mode_on() else "0"
 print(
     f"[MODE] Free = {_free_chapters_source().upper()} | "
     f"Paid source = {_paid_chapters_source().upper()} | "
-    f"Paid mode = {'MANUAL' if _manual_mode_on() else 'AUTO'}"
+    f"Paid mode = {'MANUAL' if _manual_mode_on() else 'AUTO'} | "
+    f"Comments = {_comments_source().upper()}"
 )
 
 # === GitHub Actions diagnostics helpers ======================================

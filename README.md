@@ -192,6 +192,12 @@ paid_chapters_source = "api"
 chapter_mode = "auto"
 comments_api_url = "https://api.example.com/..."
 
+# Comment source modes:
+# "trans"  = use tokened author dashboard endpoint; best metadata/reply tracking, token required
+# "public" = use no-token public novel comment APIs; less reply tracking, but no token needed
+# "auto"   = try "trans" first; if token is missing/expired, fall back to "public"
+comments_source = "auto"
+
 # Name of the GitHub secret that stores this host's login token/cookie.
 token_secret = "MISTMINT_COOKIE"
 ```
@@ -207,6 +213,7 @@ Examples:
 - `ticket_emoji`
 - feed/API mode settings
 - `comments_api_url`
+- `comments_source`
 - `token_secret`
 
 Do **not** put per-novel data here.
@@ -570,15 +577,26 @@ Mistmint host config can control source modes:
 free_chapters_source = "feed"
 paid_chapters_source = "api"
 chapter_mode = "auto"
+
+# Comment source modes:
+# "trans"  = use tokened author dashboard endpoint; best metadata/reply tracking, token required
+# "public" = use no-token public novel comment APIs; less reply tracking, but no token needed
+# "auto"   = try "trans" first; if token is missing/expired, fall back to "public"
+comments_source = "auto"
 ```
 
 Typical meaning:
 
 | Setting | Purpose |
 | --- | --- |
-| `free_chapters_source` | Whether free chapters come from feed/API |
-| `paid_chapters_source` | Whether paid chapters come from feed/API |
+| `free_chapters_source` | Whether free chapters come from Mistmint's public RSS feed or API |
+| `paid_chapters_source` | Whether paid chapters come from API/feed logic |
 | `chapter_mode` | How chapter parsing/resolution behaves |
+| `comments_source = "trans"` | Uses `comments_api_url` / `comments/trans/all-comments`; best metadata and reply tracking, but token/cookie is required |
+| `comments_source = "public"` | Uses public no-token novel comment APIs; less complete reply tracking, but avoids monthly token refresh |
+| `comments_source = "auto"` | Tries `trans` first, then falls back to public mode if the token is missing/expired |
+
+The public Mistmint comments endpoint is internal host logic, not user-facing repo config. The code builds it from `BASE_API` as `/comments/novel/{identifier}` and tries the mapped `novel_id` first, then the novel slug. Keep this in Python unless Mistmint changes endpoint structure often enough that it becomes worth exposing a separate URL template.
 
 ### Mapping
 
@@ -621,6 +639,14 @@ Template-specific user settings live in:
 [settings]
 global_mention = "||<@&1329392448798982214>||"
 ```
+
+Mistmint token alerts are skipped only when comments are intentionally public-only:
+
+```toml
+comments_source = "public"
+```
+
+In `comments_source = "auto"`, token alerts still run, but comment generation can fall back to public comments instead of fully failing when the token expires.
 
 The workflow:
 
@@ -1138,6 +1164,8 @@ Use:
 - `novel_status_targets.json` stores message targets by short code.
 - Discord role IDs, custom emojis, and role URLs belong in Discord bot repos, not in `rss-feed` mappings.
 - Direct-report template settings belong in `message_templates/*.toml`, not hardcoded Python.
+- Mistmint comments can run in `trans`, `public`, or `auto` mode via `comments_source`.
+- Public Mistmint comment fallback is best-effort; tokened `trans` mode remains the most complete source for author-wide comments and reply tracking.
 
 ---
 

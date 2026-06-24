@@ -222,8 +222,16 @@ class CustomCommentRSS2(PyRSS2Gen.RSS2):
         writer.write("</rss>" + newl)
 
 def main():
-    # Fire repo_dispatch if any host JWT is within 1 day of expiry (throttled).
-    maybe_dispatch_token_alerts(threshold_days=1)
+    # Fire repo_dispatch if any host JWT is within 1 day of expiry (throttled) unless it's public sources comments.
+    mistmint_comments_source = str(
+        HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("comments_source", "trans")
+    ).strip().lower()
+
+    if mistmint_comments_source != "public":
+        maybe_dispatch_token_alerts(threshold_days=1)
+    else:
+        print("[token-alert] skipped because Mistmint comments_source=public")
+
     all_rss_items = []
     # Loop over all hosts in your mappings.
     for host, data in HOSTING_SITE_DATA.items():
