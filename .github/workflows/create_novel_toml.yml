@@ -1,0 +1,133 @@
+name: Create Novel TOML
+
+on:
+  workflow_dispatch:
+    inputs:
+      host:
+        description: "Hosting site, e.g. Mistmint Haven"
+        required: true
+        default: "Mistmint Haven"
+        type: string
+      title:
+        description: "Novel title exactly/as shown in host dashboard"
+        required: true
+        type: string
+      short_code:
+        description: "Novel short code, e.g. AMLWC"
+        required: true
+        type: string
+      chapter_count:
+        description: "Optional, e.g. 93 Chapters. Leave blank to write an empty string."
+        required: false
+        type: string
+      last_chapter:
+        description: "Optional, e.g. Chapter 93. Leave blank to write an empty string."
+        required: false
+        type: string
+      discord_color:
+        description: "Optional hex color, e.g. #c90016. Leave blank to write an empty string."
+        required: false
+        type: string
+      special_tag:
+        description: "Optional world-hopping tag. If set, normal transmigration is removed from tags."
+        required: true
+        default: ""
+        type: choice
+        options:
+          - ""
+          - "quick transmigration"
+          - "infinite flow"
+      has_arcs:
+        description: "Create arc_history/<short_code>_history.json and set history_file"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      dry_run:
+        description: "Preview TOML without committing"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      overwrite:
+        description: "Allow replacing mappings/novels/<short_code>.toml"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: create-novel-toml
+  cancel-in-progress: false
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Create novel TOML
+        env:
+          MISTMINT_COOKIE: ${{ secrets.MISTMINT_COOKIE }}
+          MISTMINT_TOKEN: ${{ secrets.MISTMINT_TOKEN }}
+        run: |
+          ARGS=(
+            --host "${{ github.event.inputs.host }}"
+            --title "${{ github.event.inputs.title }}"
+            --short-code "${{ github.event.inputs.short_code }}"
+            --chapter-count "${{ github.event.inputs.chapter_count }}"
+            --last-chapter "${{ github.event.inputs.last_chapter }}"
+            --discord-color "${{ github.event.inputs.discord_color }}"
+            --special-tag "${{ github.event.inputs.special_tag }}"
+            --has-arcs "${{ github.event.inputs.has_arcs }}"
+          )
+
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ARGS+=(--dry-run)
+          fi
+
+          if [ "${{ github.event.inputs.overwrite }}" = "true" ]; then
+            ARGS+=(--overwrite)
+          fi
+
+          python tools/create_novel_toml.py "${ARGS[@]}"
+
+      - name: Commit generated files
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          git pull --rebase --autostash
+          git add mappings/novels/*.toml
+          if [ -d arc_history ]; then
+            git add arc_history/*.json || true
+          fi
+
+          if git diff --cached --quiet; then
+            echo "No mapping changes to commit."
+            exit 0
+          fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "ci: add ${{ github.event.inputs.short_code }} novel mapping"
+          git push
