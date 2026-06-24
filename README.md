@@ -301,7 +301,7 @@ TOML supports triple-quoted multiline strings, so summaries are easier to paste 
 | `start_date` | Used to calculate “After X of updates...” in completion messages |
 | `has_comments` | Comments feed flag; defaults to true unless explicitly set to false |
 | `tags` | Discord-supported genre tags, such as `chinese`, `modern`, `romance`, `bl` |
-| `special_tag` | Optional world-hopping tag, currently `quick transmigration` or `infinite flow` |
+| `special_tag` | Optional separate world-hopping tag. In Actions, enable `use_special_tag`, then choose `quick transmigration` or `infinite flow`. |
 | `history_file` | Arc checker history file |
 | `discord_color` | Novel-specific embed color for Discord repos |
 | `theme_color` | Optional alternate novel color field |
@@ -850,7 +850,8 @@ Workflow inputs:
 | `chapter_count` | No | Optional display text, e.g. `93 Chapters`; blank writes `""` |
 | `last_chapter` | No | Optional target text, e.g. `Chapter 93`; blank writes `""` |
 | `discord_color` | No | Optional hex color, e.g. `#c90016`; blank writes `""` |
-| `special_tag` | No | Optional world-hopping tag: `quick transmigration` or `infinite flow` |
+| `use_special_tag` | No | Checkbox. Enable only when the novel should get a world-hopping special tag |
+| `special_tag` | No | Dropdown with `quick transmigration` and `infinite flow`; ignored unless `use_special_tag` is enabled |
 | `has_arcs` | Yes | If true, creates `arc_history/<short_code>_history.json` and sets `history_file` |
 | `dry_run` | Yes | If true, previews the TOML in the Actions log without committing |
 | `overwrite` | Yes | If true, allows replacing an existing `mappings/novels/<short_code>.toml` |
@@ -874,7 +875,7 @@ once the generated TOML looks right.
 
 Normal `tags` should only contain tags that exist in the Discord repo's `config/tag_roles.json`.
 
-`special_tag` is for world-hopping labels that you may want to handle separately from normal genre tags:
+`special_tag` is for world-hopping labels that you may want to handle separately from normal genre tags. In GitHub Actions, leave `use_special_tag` unchecked when the novel is not quick transmigration or infinite flow. If it is world-hopping, check `use_special_tag`, then choose from the `special_tag` dropdown:
 
 ```toml
 tags = ["chinese", "modern", "romance", "bl"]
@@ -888,7 +889,7 @@ tags = ["transmigration"]
 special_tag = "quick transmigration"
 ```
 
-Leave it blank when the novel is not quick transmigration or infinite flow:
+Leaving `use_special_tag` unchecked writes a blank TOML value when the novel is not quick transmigration or infinite flow:
 
 ```toml
 special_tag = ""
@@ -1040,7 +1041,8 @@ public_global_mention = "||@everyone||"
 | `chapter_count` | Optional chapter count text |
 | `last_chapter` | Optional last-chapter text |
 | `discord_color` | Optional novel embed color |
-| `special_tag` | Optional world-hopping tag |
+| `use_special_tag` | Whether to use the world-hopping dropdown |
+| `special_tag` | World-hopping dropdown: `quick transmigration` or `infinite flow`; ignored unless `use_special_tag` is enabled |
 | `has_arcs` | Whether to create an arc history file |
 | `dry_run` | Preview without committing |
 | `overwrite` | Allow replacing an existing mapping file |
@@ -1227,7 +1229,7 @@ When adding a new novel:
 
 1. Run `create_novel_toml.yml`, or manually create a novel TOML file in `mappings/novels/`.
 2. Add a unique `short_code`.
-3. Check `tags`, `special_tag`, `chapter_count`, `last_chapter`, and `discord_color` before publishing.
+3. Check `tags`, `special_tag`, `chapter_count`, `last_chapter`, and `discord_color` before publishing. For world-hopping, enable `use_special_tag` before choosing the dropdown value.
 4. Add Discord role/emoji/role URL data in the Discord repo.
 5. Run `publish_single_novel.yml`.
 6. Confirm `novel_status_targets.json` was updated.
@@ -1321,7 +1323,7 @@ Use:
 - Paid/free feed sorting should not depend on mapping insertion order.
 - `history_file = ""` safely means no arc tracking.
 - `start_date = ""` safely means no duration phrase in completion messages.
-- `special_tag = ""` safely means no separate world-hopping tag.
+- Leaving `use_special_tag` unchecked safely writes `special_tag = ""`, meaning no separate world-hopping tag.
 - `update_novel_status.py` edits existing Discord messages instead of reposting.
 - `novel_status_targets.json` stores message targets by short code.
 - Discord role IDs, custom emojis, and role URLs belong in Discord bot repos, not in `rss-feed` mappings.

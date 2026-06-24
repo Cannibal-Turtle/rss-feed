@@ -28,13 +28,17 @@ on:
         description: "Discord color optional, e.g. #c90016. Leave blank to write an empty string."
         required: false
         type: string
-      special_tag:
-        description: "Special tag optional: quick transmigration or infinite flow. Removes normal transmigration from tags."
+      use_special_tag:
+        description: "Use a world-hopping special tag"
         required: false
-        default: ""
+        default: false
+        type: boolean
+      special_tag:
+        description: "World-hopping tag, used only when the checkbox above is enabled"
+        required: false
+        default: "quick transmigration"
         type: choice
         options:
-          - ""
           - "quick transmigration"
           - "infinite flow"
       has_arcs:
@@ -99,6 +103,7 @@ jobs:
             --chapter-count "${{ github.event.inputs.chapter_count }}"
             --last-chapter "${{ github.event.inputs.last_chapter }}"
             --discord-color "${{ github.event.inputs.discord_color }}"
+            --special-tag-enabled "${{ github.event.inputs.use_special_tag }}"
             --special-tag "${{ github.event.inputs.special_tag }}"
             --has-arcs "${{ github.event.inputs.has_arcs }}"
           )

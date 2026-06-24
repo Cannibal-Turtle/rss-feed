@@ -441,6 +441,9 @@ SPECIAL_TAG_CHOICES = {"", "quick transmigration", "infinite flow"}
 def normalize_special_tag(value: str) -> str:
     """Optional world-hopping tag stored separately from normal tags."""
     tag = norm_key(value)
+    if tag in {"", "none", "no", "n/a", "na"}:
+        return ""
+
     aliases = {
         "qt": "quick transmigration",
         "quick-transmigration": "quick transmigration",
@@ -634,9 +637,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--last-chapter", default="", help='Optional target text, e.g. "Chapter 93"')
     p.add_argument("--discord-color", default="", help='Optional hex color, e.g. "#c90016"')
     p.add_argument(
+        "--special-tag-enabled",
+        default="auto",
+        help=(
+            "true/false/auto. If false, ignore --special-tag and write special_tag = \"\". "
+            "If auto, use --special-tag only when it is non-blank."
+        ),
+    )
+    p.add_argument(
         "--special-tag",
         default="",
-        help='Optional world-hopping tag: "quick transmigration" or "infinite flow". Removes normal transmigration tag if set.',
+        help='World-hopping tag: "quick transmigration" or "infinite flow". Removes normal transmigration tag if enabled.',
     )
     p.add_argument("--has-arcs", default="false", help="true/false. If true, create arc_history/<short_code>_history.json")
     p.add_argument("--tag-roles-url", default=DEFAULT_TAG_ROLES_URL, help="Raw JSON URL for Discord tag role keys")
@@ -665,7 +676,16 @@ def main(argv: list[str]) -> int:
 
     supported_tags = load_supported_tags(args.tag_roles_url)
     tags, unmapped = infer_tags(api_novel, supported_tags)
-    special_tag = normalize_special_tag(args.special_tag)
+    special_tag_mode = norm_key(args.special_tag_enabled)
+    if special_tag_mode in {"auto", ""}:
+        special_tag = normalize_special_tag(args.special_tag)
+    elif yes_no(args.special_tag_enabled, default=False):
+        special_tag = normalize_special_tag(args.special_tag)
+        if not special_tag:
+            raise ScriptError("special_tag is enabled, but no world-hopping tag was provided.")
+    else:
+        special_tag = ""
+
     tags = apply_special_tag(tags, special_tag)
 
     has_arcs = yes_no(args.has_arcs, default=False)
