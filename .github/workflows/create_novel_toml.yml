@@ -29,7 +29,7 @@ on:
         required: false
       special_tag:
         description: "Special tag optional: quick transmigration or infinite flow. Removes normal transmigration from tags."
-        required: true
+        required: false
         default: ""
         type: choice
         options:
