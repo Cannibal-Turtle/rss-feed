@@ -16,6 +16,14 @@ Designed for GitHub Actions workflow_dispatch inputs, but also works locally:
     --discord-color "#c90016" \
     --quick-transmigration true \
     --has-arcs false
+
+When a world-hopping checkbox is enabled, the selected world-hopping tag is
+included directly in tags for Discord role mentions. No separate world-hopping
+field is written to the TOML.
+
+For Mistmint Haven novels, the script also stores the full host genre list as
+mistmint_haven_genres so the original API genres are preserved even when tags
+are filtered down to Discord-supported mention tags.
 """
 
 from __future__ import annotations
@@ -435,11 +443,11 @@ def load_supported_tags(tag_roles_url: str) -> dict[str, str]:
     return dict(FALLBACK_SUPPORTED_TAGS)
 
 
-SPECIAL_TAG_CHOICES = {"", "quick transmigration", "infinite flow"}
+WORLD_HOPPING_TAG_CHOICES = {"", "quick transmigration", "infinite flow"}
 
 
-def normalize_special_tag(value: str) -> str:
-    """Optional world-hopping tag stored separately from normal tags."""
+def normalize_world_hopping_tag(value: str) -> str:
+    """Optional world-hopping tag added directly to tags."""
     tag = norm_key(value)
     if tag in {"", "none", "no", "n/a", "na"}:
         return ""
@@ -454,21 +462,34 @@ def normalize_special_tag(value: str) -> str:
         "if": "infinite flow",
     }
     tag = aliases.get(tag, tag)
-    if tag not in SPECIAL_TAG_CHOICES:
-        allowed = ", ".join(repr(x) for x in sorted(SPECIAL_TAG_CHOICES) if x) or "blank"
-        raise ScriptError(f"Unknown special_tag {value!r}. Use blank, {allowed}.")
+    if tag not in WORLD_HOPPING_TAG_CHOICES:
+        allowed = ", ".join(repr(x) for x in sorted(WORLD_HOPPING_TAG_CHOICES) if x) or "blank"
+        raise ScriptError(f"Unknown world-hopping tag {value!r}. Use blank, {allowed}.")
     return tag
 
 
-def apply_special_tag(tags: list[str], special_tag: str) -> list[str]:
+def apply_world_hopping_tag(tags: list[str], world_hopping_tag: str, supported_tags: dict[str, str]) -> list[str]:
     """
-    If a world-hopping special tag is explicitly chosen, keep it out of normal tags
-    and remove plain transmigration so messages do not double-tag the novel.
+    If a world-hopping tag is chosen, keep it inside tags so downstream Discord
+    repos that only read tags still mention the matching role.
+
+    Plain transmigration is removed when quick transmigration/infinite flow is set,
+    so the novel does not get both the broad transmigration role and the specific
+    world-hopping role.
     """
-    if not special_tag:
+    if not world_hopping_tag:
         return tags
+
     blocked = {"transmigration", "quick transmigration", "infinite flow"}
-    return [tag for tag in tags if norm_key(tag) not in blocked]
+    cleaned = [tag for tag in tags if norm_key(tag) not in blocked]
+
+    normalized_special = norm_key(world_hopping_tag)
+    if normalized_special in supported_tags and normalized_special not in cleaned:
+        cleaned.append(normalized_special)
+
+    priority = [tag for tag in TAG_PRIORITY if tag in supported_tags]
+    priority_index = {tag: i for i, tag in enumerate(priority)}
+    return sorted(cleaned, key=lambda tag: priority_index.get(tag, 999))
 
 
 def infer_tags(api_novel: dict[str, Any], supported_tags: dict[str, str]) -> tuple[list[str], list[str]]:
@@ -515,6 +536,24 @@ def infer_tags(api_novel: dict[str, Any], supported_tags: dict[str, str]) -> tup
     priority_index = {tag: i for i, tag in enumerate(priority)}
     ordered = sorted(found, key=lambda tag: priority_index.get(tag, 999))
     return ordered, unmapped
+
+
+def collect_mistmint_haven_genres(api_novel: dict[str, Any]) -> list[str]:
+    """Return the full Mistmint Haven genre names exactly as the API lists them."""
+    result: list[str] = []
+    genres = api_novel.get("genres") or []
+    if not isinstance(genres, list):
+        return result
+
+    for item in genres:
+        if isinstance(item, dict):
+            name = str_clean(item.get("name"))
+        else:
+            name = str_clean(item)
+        if name and name not in result:
+            result.append(name)
+
+    return result
 
 
 def existing_mapping_paths() -> list[Path]:
@@ -569,7 +608,7 @@ def build_toml_text(
     last_chapter: str,
     discord_color: str,
     tags: list[str],
-    special_tag: str,
+    mistmint_haven_genres: list[str],
     history_file: str,
 ) -> str:
     title = str_clean(api_novel.get("title"))
@@ -597,7 +636,8 @@ def build_toml_text(
     lines.append("")
     tag_items = ", ".join(quote_toml(tag) for tag in tags)
     lines.append(f"tags = [{tag_items}]")
-    lines.append(f"special_tag = {quote_toml(special_tag)}")
+    mh_genre_items = ", ".join(quote_toml(genre) for genre in mistmint_haven_genres)
+    lines.append(f"mistmint_haven_genres = [{mh_genre_items}]")
     lines.append(f"history_file = {quote_toml(history_file)}")
     lines.append("")
     lines.append(f"custom_description = {multiline_toml(description)}")
@@ -636,20 +676,24 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--chapter-count", default="", help='Optional display text, e.g. "93 Chapters"')
     p.add_argument("--last-chapter", default="", help='Optional target text, e.g. "Chapter 93"')
     p.add_argument("--discord-color", default="", help='Optional hex color, e.g. "#c90016"')
-    p.add_argument("--quick-transmigration", default="false", help="true/false. Writes special_tag as quick transmigration.")
-    p.add_argument("--infinite-flow", default="false", help="true/false. Writes special_tag as infinite flow.")
+    p.add_argument("--quick-transmigration", default="false", help="true/false. Adds quick transmigration to tags.")
+    p.add_argument("--infinite-flow", default="false", help="true/false. Adds infinite flow to tags.")
     p.add_argument(
         "--special-tag-enabled",
+        "--world-hopping-tag-enabled",
+        dest="world_hopping_tag_enabled",
         default="auto",
         help=(
-            "Legacy/local option: true/false/auto. If false, ignore --special-tag and write special_tag = \"\". "
-            "If auto, use --special-tag only when it is non-blank."
+            "Legacy/local option: true/false/auto. If false, ignore --world-hopping-tag. "
+            "If auto, use --world-hopping-tag only when it is non-blank."
         ),
     )
     p.add_argument(
         "--special-tag",
+        "--world-hopping-tag",
+        dest="world_hopping_tag",
         default="",
-        help='Legacy/local option. World-hopping tag: "quick transmigration" or "infinite flow".',
+        help='Legacy/local option. World-hopping tag to add to tags: "quick transmigration" or "infinite flow".',
     )
     p.add_argument("--has-arcs", default="false", help="true/false. If true, create arc_history/<short_code>_history.json")
     p.add_argument("--tag-roles-url", default=DEFAULT_TAG_ROLES_URL, help="Raw JSON URL for Discord tag role keys")
@@ -678,28 +722,29 @@ def main(argv: list[str]) -> int:
 
     supported_tags = load_supported_tags(args.tag_roles_url)
     tags, unmapped = infer_tags(api_novel, supported_tags)
+    mistmint_haven_genres = collect_mistmint_haven_genres(api_novel) if norm_key(host_name) == "mistmint haven" else []
     quick_transmigration = yes_no(args.quick_transmigration, default=False)
     infinite_flow = yes_no(args.infinite_flow, default=False)
     if quick_transmigration and infinite_flow:
         raise ScriptError("Choose only one world-hopping tag: quick transmigration or infinite flow, not both.")
 
     if quick_transmigration:
-        special_tag = "quick transmigration"
+        world_hopping_tag = "quick transmigration"
     elif infinite_flow:
-        special_tag = "infinite flow"
+        world_hopping_tag = "infinite flow"
     else:
         # Legacy/local fallback for older commands that still pass --special-tag.
-        special_tag_mode = norm_key(args.special_tag_enabled)
-        if special_tag_mode in {"auto", ""}:
-            special_tag = normalize_special_tag(args.special_tag)
-        elif yes_no(args.special_tag_enabled, default=False):
-            special_tag = normalize_special_tag(args.special_tag)
-            if not special_tag:
-                raise ScriptError("special_tag is enabled, but no world-hopping tag was provided.")
+        world_hopping_tag_mode = norm_key(args.world_hopping_tag_enabled)
+        if world_hopping_tag_mode in {"auto", ""}:
+            world_hopping_tag = normalize_world_hopping_tag(args.world_hopping_tag)
+        elif yes_no(args.world_hopping_tag_enabled, default=False):
+            world_hopping_tag = normalize_world_hopping_tag(args.world_hopping_tag)
+            if not world_hopping_tag:
+                raise ScriptError("World-hopping tag is enabled, but no world-hopping tag was provided.")
         else:
-            special_tag = ""
+            world_hopping_tag = ""
 
-    tags = apply_special_tag(tags, special_tag)
+    tags = apply_world_hopping_tag(tags, world_hopping_tag, supported_tags)
 
     has_arcs = yes_no(args.has_arcs, default=False)
     history_file = f"arc_history/{short_code.casefold()}_history.json" if has_arcs else ""
@@ -715,7 +760,7 @@ def main(argv: list[str]) -> int:
         last_chapter=args.last_chapter,
         discord_color=args.discord_color,
         tags=tags,
-        special_tag=special_tag,
+        mistmint_haven_genres=mistmint_haven_genres,
         history_file=history_file,
     )
 
@@ -737,7 +782,9 @@ def main(argv: list[str]) -> int:
         print(f"Created/kept {history_path.relative_to(ROOT)}")
     print(f"NovelUpdates URL guess: {novelupdates_url}")
     print(f"Tags: {tags}")
-    print(f"Special tag: {special_tag!r}")
+    if mistmint_haven_genres:
+        print(f"Mistmint Haven genres: {mistmint_haven_genres}")
+    print(f"World-hopping tag: {world_hopping_tag!r}")
     return 0
 
 

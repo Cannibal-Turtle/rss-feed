@@ -261,8 +261,8 @@ is_membership = false
 
 discord_color = "#c90016"
 
-tags = ["chinese", "supernatural", "comedy", "bl"]
-special_tag = "quick transmigration"
+tags = ["chinese", "quick transmigration", "bl", "comedy", "supernatural"]
+mistmint_haven_genres = ["Horror", "Supernatural", "Transmigration", "Yaoi", "Comedy", "Fantasy", "Romance"]
 history_file = "arc_history/amlwc_history.json"
 
 custom_description = """
@@ -300,8 +300,8 @@ TOML supports triple-quoted multiline strings, so summaries are easier to paste 
 | `last_chapter` | Completion checker target |
 | `start_date` | Used to calculate “After X of updates...” in completion messages |
 | `has_comments` | Comments feed flag; defaults to true unless explicitly set to false |
-| `tags` | Discord-supported genre tags, such as `chinese`, `modern`, `romance`, `bl` |
-| `special_tag` | Optional separate world-hopping tag. In Actions, tick either the quick transmigration checkbox or the infinite flow checkbox. |
+| `tags` | Discord-supported genre tags, such as `chinese`, `modern`, `romance`, `bl`; downstream Discord repos use this for role mentions |
+| `mistmint_haven_genres` | Full original Mistmint Haven genre names from the API, kept for reference even if some are not Discord-supported tags |
 | `history_file` | Arc checker history file |
 | `discord_color` | Novel-specific embed color for Discord repos |
 | `theme_color` | Optional alternate novel color field |
@@ -316,7 +316,7 @@ Use empty strings instead of deleting optional fields when you want scripts to s
 ```toml
 start_date = ""
 discord_color = ""
-special_tag = ""
+mistmint_haven_genres = []
 history_file = ""
 ```
 
@@ -326,7 +326,7 @@ Meaning:
 | --- | --- |
 | `start_date = ""` | Completion announcement omits the duration phrase |
 | `discord_color = ""` | Discord repos use their normal/default color logic |
-| `special_tag = ""` | No separate world-hopping tag is used |
+| `mistmint_haven_genres = []` | No Mistmint host genres are stored |
 | `history_file = ""` | Arc checker skips arc tracking for the novel |
 
 ---
@@ -830,7 +830,8 @@ Purpose:
 - create `mappings/novels/<short_code>.toml`
 - fill host-provided fields automatically, including title, slug URL, novel ID, description, start date, NSFW flag, and Mistmint cover image
 - guess the Novel Updates URL from the title
-- keep only Discord-supported tags from `discord-webhook/config/tag_roles.json`
+- keep only Discord-supported mention tags from `discord-webhook/config/tag_roles.json` in `tags`
+- preserve the full Mistmint Haven API genre list in `mistmint_haven_genres`
 - optionally create `arc_history/<short_code>_history.json`
 
 For Mistmint Haven, the host file must include:
@@ -850,8 +851,8 @@ Workflow inputs:
 | `chapter_count` | No | Optional display text, e.g. `93 Chapters`; blank writes `""` |
 | `last_chapter` | No | Optional target text, e.g. `Chapter 93`; blank writes `""` |
 | `discord_color` | No | Optional hex color, e.g. `#c90016`; blank writes `""` |
-| `quick_transmigration` | No | Checkbox. Tick this only when the novel is quick transmigration. |
-| `infinite_flow` | No | Checkbox. Tick this only when the novel is infinite flow. |
+| `quick_transmigration` | No | Checkbox. Tick this only when the novel is quick transmigration; adds `quick transmigration` to `tags`. |
+| `infinite_flow` | No | Checkbox. Tick this only when the novel is infinite flow; adds `infinite flow` to `tags`. |
 | `has_arcs` | Yes | If true, creates `arc_history/<short_code>_history.json` and sets `history_file` |
 | `dry_run` | Yes | If true, previews the TOML in the Actions log without committing |
 | `overwrite` | Yes | If true, allows replacing an existing `mappings/novels/<short_code>.toml` |
@@ -871,28 +872,28 @@ dry_run = false
 
 once the generated TOML looks right.
 
-### Tags and `special_tag`
+### Tags and Mistmint genres
 
-Normal `tags` should only contain tags that exist in the Discord repo's `config/tag_roles.json`.
+`tags` should only contain tags that exist in the Discord repo's `config/tag_roles.json`, because downstream Discord repos use `tags` for role mentions.
 
-`special_tag` is for world-hopping labels that you may want to handle separately from normal genre tags. In GitHub Actions, leave both world-hopping checkboxes unchecked when the novel is not quick transmigration or infinite flow. If it is world-hopping, tick exactly one checkbox:
+`mistmint_haven_genres` stores the full original genre names from the Mistmint API. It does not need to match Discord role tags and is kept as a reference copy of what Mistmint lists on the novel.
+
+World-hopping uses two Actions checkboxes. Leave both unchecked when the novel is not quick transmigration or infinite flow. If it is world-hopping, tick exactly one checkbox.
+
+When a world-hopping checkbox is ticked, the selected tag is written directly into `tags`:
 
 ```toml
-tags = ["chinese", "modern", "romance", "bl"]
-special_tag = "quick transmigration"
+tags = ["chinese", "quick transmigration", "modern", "romance", "bl"]
+mistmint_haven_genres = ["Modern", "Romance", "Yaoi", "Transmigration"]
 ```
 
-If `special_tag` is set to `quick transmigration` or `infinite flow`, the tool removes plain `transmigration` from `tags` automatically. This keeps a quick-transmigration novel from ending up with both:
+If `quick transmigration` or `infinite flow` is selected, the tool removes plain `transmigration` from `tags` automatically. This keeps a world-hopping novel from ending up with both the broad transmigration role and the specific world-hopping role.
+
+Leaving both world-hopping checkboxes unchecked writes normal tags only:
 
 ```toml
-tags = ["transmigration"]
-special_tag = "quick transmigration"
-```
-
-Leaving both world-hopping checkboxes unchecked writes a blank TOML value when the novel is not quick transmigration or infinite flow:
-
-```toml
-special_tag = ""
+tags = ["chinese", "transmigration", "modern", "romance", "bl"]
+mistmint_haven_genres = ["Modern", "Romance", "Yaoi", "Transmigration"]
 ```
 
 ---
@@ -1041,8 +1042,8 @@ public_global_mention = "||@everyone||"
 | `chapter_count` | Optional chapter count text |
 | `last_chapter` | Optional last-chapter text |
 | `discord_color` | Optional novel embed color |
-| `quick_transmigration` | Whether to write `special_tag = "quick transmigration"` |
-| `infinite_flow` | Whether to write `special_tag = "infinite flow"` |
+| `quick_transmigration` | Whether to add `quick transmigration` to `tags` |
+| `infinite_flow` | Whether to add `infinite flow` to `tags` |
 | `has_arcs` | Whether to create an arc history file |
 | `dry_run` | Preview without committing |
 | `overwrite` | Allow replacing an existing mapping file |
@@ -1149,7 +1150,7 @@ Manual fallback:
    discord_color = ""
 
    tags = ["chinese"]
-   special_tag = ""
+   mistmint_haven_genres = []
    history_file = ""
 
    custom_description = """
@@ -1229,7 +1230,7 @@ When adding a new novel:
 
 1. Run `create_novel_toml.yml`, or manually create a novel TOML file in `mappings/novels/`.
 2. Add a unique `short_code`.
-3. Check `tags`, `special_tag`, `chapter_count`, `last_chapter`, and `discord_color` before publishing. For world-hopping, tick exactly one world-hopping checkbox.
+3. Check `tags`, `mistmint_haven_genres`, `chapter_count`, `last_chapter`, and `discord_color` before publishing. For world-hopping, tick exactly one world-hopping checkbox so the matching role tag appears inside `tags`.
 4. Add Discord role/emoji/role URL data in the Discord repo.
 5. Run `publish_single_novel.yml`.
 6. Confirm `novel_status_targets.json` was updated.
@@ -1323,7 +1324,8 @@ Use:
 - Paid/free feed sorting should not depend on mapping insertion order.
 - `history_file = ""` safely means no arc tracking.
 - `start_date = ""` safely means no duration phrase in completion messages.
-- Leaving both world-hopping checkboxes unchecked safely writes `special_tag = ""`, meaning no separate world-hopping tag.
+- `mistmint_haven_genres` is the full Mistmint API genre list; `tags` is the Discord-supported mention list.
+- Leaving both world-hopping checkboxes unchecked adds no world-hopping tag to `tags`.
 - `update_novel_status.py` edits existing Discord messages instead of reposting.
 - `novel_status_targets.json` stores message targets by short code.
 - Discord role IDs, custom emojis, and role URLs belong in Discord bot repos, not in `rss-feed` mappings.
