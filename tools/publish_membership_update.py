@@ -42,14 +42,17 @@ NOVEL_DISCORD_MAP_URL = _setting_str("novel_discord_map_url", env="NOVEL_DISCORD
 
 # Always post here first.
 # This is your server's news channel.
-NEWS_CHANNEL_ID = _setting_int("news_channel_id", 1330049962129489930, env="NEWS_CHANNEL_ID")
+NEWS_CHANNEL_ID = _setting_int("news_channel_id", 0, env="NEWS_CHANNEL_ID")
 
-# Your server guild ID.
-# This is from your role URLs in novel_mappings.py.
-MY_SERVER_GUILD_ID = _setting_str("private_guild_id", "1329384099609051136", env="MY_SERVER_GUILD_ID")
+# Private/news server uses novel role + status role.
+# Status role comes from discord-webhook roles.json:
+# complete if paid_completion exists in state.json, otherwise ongoing.
+# Non-private servers get public_global_mention.
+MY_SERVER_GUILD_ID = _setting_str("private_guild_id", env="MY_SERVER_GUILD_ID")
 
-# Membership role in your server.
-MEMBERSHIP_ROLE_ID = _setting_str("membership_role_id", "1329502951764525187", env="MEMBERSHIP_ROLE_ID")
+ROLES_JSON_URL = _setting_str("roles_json_url", env="ROLES_JSON_URL")
+COMPLETION_STATE_URL = _setting_str("completion_state_url", env="COMPLETION_STATE_URL")
+
 PUBLIC_GLOBAL_MENTION = _setting_str("public_global_mention", "||@everyone||", env="PUBLIC_GLOBAL_MENTION")
 
 NOVELS_DIR = ROOT / "mappings" / "novels"
@@ -189,11 +192,75 @@ def role_ids_from_text(text: str):
     return re.findall(r"<@&(\d+)>", text or "")
 
 
-def build_global_mention(*, novel_role_mention, channel_id, guild_id):
+_ROLES_JSON_CACHE = None
+_COMPLETION_STATE_CACHE = None
+
+
+def fetch_roles_json():
+    global _ROLES_JSON_CACHE
+
+    if _ROLES_JSON_CACHE is not None:
+        return _ROLES_JSON_CACHE
+
+    if not ROLES_JSON_URL:
+        _ROLES_JSON_CACHE = {}
+        return _ROLES_JSON_CACHE
+
+    r = requests.get(ROLES_JSON_URL, timeout=15)
+    r.raise_for_status()
+
+    data = r.json()
+    if not isinstance(data, dict):
+        raise RuntimeError(f"roles_json_url did not return a JSON object: {ROLES_JSON_URL}")
+
+    _ROLES_JSON_CACHE = data
+    return _ROLES_JSON_CACHE
+
+
+def fetch_completion_state():
+    global _COMPLETION_STATE_CACHE
+
+    if _COMPLETION_STATE_CACHE is not None:
+        return _COMPLETION_STATE_CACHE
+
+    if not COMPLETION_STATE_URL:
+        _COMPLETION_STATE_CACHE = {}
+        return _COMPLETION_STATE_CACHE
+
+    r = requests.get(COMPLETION_STATE_URL, timeout=15)
+    r.raise_for_status()
+
+    data = r.json()
+    if not isinstance(data, dict):
+        raise RuntimeError(f"completion_state_url did not return a JSON object: {COMPLETION_STATE_URL}")
+
+    _COMPLETION_STATE_CACHE = data
+    return _COMPLETION_STATE_CACHE
+
+
+def is_paid_completed_novel(novel_title: str) -> bool:
+    state = fetch_completion_state()
+    record = state.get(novel_title, {})
+
+    if not isinstance(record, dict):
+        return False
+
+    return bool(record.get("paid_completion"))
+
+
+def resolve_status_role_id(novel_title: str) -> str:
+    roles = fetch_roles_json()
+    role_key = "complete" if is_paid_completed_novel(novel_title) else "ongoing"
+    return normalize_role_id(roles.get(role_key, ""))
+
+
+def build_global_mention(*, novel_title, novel_role_mention, channel_id, guild_id):
     if int(channel_id) == NEWS_CHANNEL_ID or str(guild_id) == MY_SERVER_GUILD_ID:
+        status_role_id = resolve_status_role_id(novel_title)
+
         mention_parts = [
             novel_role_mention,
-            f"<@&{MEMBERSHIP_ROLE_ID}>" if MEMBERSHIP_ROLE_ID else "",
+            f"<@&{status_role_id}>" if status_role_id else "",
         ]
         mention = " | ".join(part for part in mention_parts if part)
 
@@ -213,6 +280,7 @@ def build_membership_payload(*, host, novel_title, novel, banner_url, channel_id
     novel_url = novel.get("novel_url", "").strip()
 
     global_mention, allowed_mentions = build_global_mention(
+        novel_title=novel_title,
         novel_role_mention=novel_role_mention,
         channel_id=channel_id,
         guild_id=guild_id,
@@ -228,8 +296,7 @@ def build_membership_payload(*, host, novel_title, novel, banner_url, channel_id
 
     payload = to_discord_api_payload(render_message("membership_update", ctx))
 
-    # Keep this in Python because it changes by target channel/server.
-    # Private/news server: novel role + membership role.
+    # Private/news server: novel role + ongoing/complete status role.
     # Public forum/thread: spoilered @everyone.
     payload["allowed_mentions"] = allowed_mentions
 
