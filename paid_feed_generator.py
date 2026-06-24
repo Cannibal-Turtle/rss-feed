@@ -12,6 +12,7 @@ from host_utils import get_host_utils
 # Import mapping functions and data from novel_mappings.py
 from novel_mappings import (
     HOSTING_SITE_DATA,
+    OUTPUT_FEEDS,
     get_novel_url,
     get_featured_image,
     get_translator,
@@ -25,6 +26,72 @@ from novel_mappings import (
 PAID_HISTORY_PATH = os.getenv("PAID_HISTORY_PATH", "paid_history.json")
 USE_HISTORY = os.getenv("PAID_USE_HISTORY", "1") == "1"
 NSFW_PAREN_RE = re.compile(r'\([^)]*\b(?:nsfw|r-?18|18\+|h{1,3})\b[^)]*\)', re.I)
+
+
+def truthy(value) -> bool:
+    if isinstance(value, bool):
+        return value
+
+    if value is None:
+        return False
+
+    text = str(value).strip().casefold()
+    return text in {"1", "true", "yes", "y", "on"}
+
+
+def normalize_title_key(title: str) -> str:
+    return re.sub(r"\s+", " ", str(title or "")).strip().casefold()
+
+
+def should_check_paid_novel(novel_title: str, details: dict, completed_paid_titles: set[str]) -> bool:
+    if not details.get("paid_feed"):
+        print(f"Skipping {novel_title}: has_paid=false or no paid_feed configured.")
+        return False
+
+    if truthy(details.get("force_paid_check", False)):
+        print(f"Checking {novel_title}: force_paid_check=true.")
+        return True
+
+    if normalize_title_key(novel_title) in completed_paid_titles:
+        print(f"Skipping {novel_title}: paid_completion already exists.")
+        return False
+
+    return True
+
+
+def paid_completion_state_url() -> str:
+    return str(OUTPUT_FEEDS.get("paid_completion_state_url", "") or "").strip()
+
+
+async def fetch_paid_completion_titles(session) -> set[str]:
+    completed: set[str] = set()
+    url = paid_completion_state_url()
+
+    if not url:
+        return completed
+
+    try:
+        async with session.get(url, timeout=20) as resp:
+            if resp.status != 200:
+                print(f"Warning: completion state returned HTTP {resp.status}: {url}")
+                return completed
+
+            data = await resp.json(content_type=None)
+
+    except Exception as e:
+        print(f"Warning: could not fetch completion state {url}: {e}")
+        return completed
+
+    if not isinstance(data, dict):
+        print(f"Warning: completion state is not a JSON object: {url}")
+        return completed
+
+    for title, record in data.items():
+        if isinstance(record, dict) and record.get("paid_completion"):
+            completed.add(normalize_title_key(title))
+
+    return completed
+
 
 def load_history():
     if not USE_HISTORY: return []
@@ -275,10 +342,16 @@ async def main_async():
     # 1) scrape fresh items
     scraped = []
     async with aiohttp.ClientSession() as session:
+        completed_paid_titles = await fetch_paid_completion_titles(session)
+
         tasks = []
         for host, data in HOSTING_SITE_DATA.items():
-            for novel_title in data.get("novels", {}).keys():
+            for novel_title, details in data.get("novels", {}).items():
+                if not should_check_paid_novel(novel_title, details, completed_paid_titles):
+                    continue
+
                 tasks.append(asyncio.create_task(process_novel(session, host, novel_title)))
+
         results = await asyncio.gather(*tasks)
         for items in results:
             scraped.extend(items)
