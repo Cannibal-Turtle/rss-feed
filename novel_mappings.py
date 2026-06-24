@@ -61,6 +61,13 @@ def _load_output_feeds() -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+OUTPUT_FEEDS = _load_output_feeds()
+
+
+def get_output_feed_url(feed_key: str) -> str:
+    return str(OUTPUT_FEEDS.get(feed_key, "") or "").strip()
+
+
 def _load_hosting_site_data() -> dict[str, dict[str, Any]]:
     hosts: dict[str, dict[str, Any]] = {}
 
@@ -76,7 +83,7 @@ def _load_hosting_site_data() -> dict[str, dict[str, Any]]:
         host_cfg.setdefault("novels", {})
         hosts[host_name] = host_cfg
 
-    output_feeds = _load_output_feeds()
+    output_feeds = OUTPUT_FEEDS
 
     for item in _iter_toml_resources("novels"):
         novel = _read_resource_toml(item)

@@ -53,7 +53,7 @@ def match_comment_on_homepage_by_id(novel_id: str, author: str, body_raw: str, p
         payload = _MISTMINT_HOME_CACHE[novel_id]
         diag_ok("homepage-cache-hit", novel_id=novel_id)
     else:
-        url = f"https://api.mistminthaven.com/api/comments/novel/{novel_id}?skipPage=0&limit=50"
+        url = f"https://api.mistminthaven.com/api/comments/novel/{novel_id}"
         payload = _http_get_json(url) or {}
         _MISTMINT_HOME_CACHE[novel_id] = payload
         diag_ok("homepage-fetch", novel_id=novel_id)
@@ -368,7 +368,7 @@ def resolve_reply_to_on_homepage_by_id(novel_id: str, author: str, body_raw: str
         payload = _MISTMINT_HOME_CACHE[novel_id]
         diag_ok("homepage-cache-hit", novel_id=novel_id)
     else:
-        url = f"https://api.mistminthaven.com/api/comments/novel/{novel_id}?skipPage=0&limit=50"
+        url = f"https://api.mistminthaven.com/api/comments/novel/{novel_id}"
         payload = _http_get_json(url) or {}
         _MISTMINT_HOME_CACHE[novel_id] = payload
         diag_ok("homepage-fetch", novel_id=novel_id)
