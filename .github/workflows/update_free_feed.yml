@@ -8,7 +8,13 @@ on:
 permissions:
   contents: write
 
-# Share this same group in BOTH free and paid workflows:
+env:
+  FORCE_DOWNSTREAM: "false"  # change to "true" to force both cron + manual runs for downstream workflows (discord-webhook, mistmint-discord) even if no new feed GUIDs were added
+  DOWNSTREAM_REPOS: >-
+    Cannibal-Turtle/discord-webhook
+    Cannibal-Turtle/mistmint-discord
+
+# Match the paid job so only one feed job pushes at a time
 concurrency:
   group: feeds-main
   cancel-in-progress: false
@@ -36,8 +42,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Snapshot current free feed GUIDs
+        run: python feed_guid_gate.py snapshot free_chapters_feed.xml /tmp/free_guids_before.txt
+
       - name: Run Feed Generator
         run: python free_feed_generator.py
+
+      - name: Detect new free feed items
+        id: feed_changes
+        run: python feed_guid_gate.py detect free_chapters_feed.xml /tmp/free_guids_before.txt
 
       - name: Commit and Push Changes
         env:
@@ -59,24 +72,31 @@ jobs:
           # Safe force so bot overwrites only its own last commit
           git push --force-with-lease origin HEAD:main
 
-      - name: Wait for RSS to update
-        run: sleep 10
-
-      - name: Trigger Discord Webhook Workflow
+      - name: Trigger Discord Webhook Workflow if needed
         env:
           PAT_GITHUB: ${{ secrets.PAT_GITHUB }}
+          NEW_ITEMS: ${{ steps.feed_changes.outputs.new_items }}
         run: |
-          curl -sS --fail-with-body \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $PAT_GITHUB" \
-            https://api.github.com/repos/Cannibal-Turtle/discord-webhook/dispatches \
-            -d '{"event_type":"trigger-discord-notify","client_payload":{"feed":"free"}}'
+          set -euo pipefail
 
-          curl -sS --fail-with-body \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $PAT_GITHUB" \
-            https://api.github.com/repos/Cannibal-Turtle/mistmint-discord/dispatches \
-            -d '{"event_type":"trigger-discord-notify","client_payload":{"feed":"free"}}'
+          echo "NEW_ITEMS=$NEW_ITEMS"
+          echo "FORCE_DOWNSTREAM=$FORCE_DOWNSTREAM"
+          echo "DOWNSTREAM_REPOS=$DOWNSTREAM_REPOS"
 
+          if [ "$NEW_ITEMS" != "true" ] && [ "$FORCE_DOWNSTREAM" != "true" ]; then
+            echo "No new free feed GUIDs and FORCE_DOWNSTREAM=false. Skipping downstream trigger."
+            exit 0
+          fi
 
+          sleep 10
+
+          for REPO in $DOWNSTREAM_REPOS; do
+            echo "Dispatching free workflow to $REPO..."
+            curl -sS --fail-with-body \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $PAT_GITHUB" \
+              "https://api.github.com/repos/$REPO/dispatches" \
+              -d '{"event_type":"trigger-discord-notify","client_payload":{"feed":"free"}}'
+            echo
+          done
 
