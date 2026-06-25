@@ -18,13 +18,16 @@ Behavior:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import datetime as dt
 import hashlib
 import html
+import os
 import re
 from email.utils import parsedate_to_datetime
 from typing import Any, Dict, List
 
+import aiohttp
 import feedparser
 from xml.sax.saxutils import escape as _xesc, quoteattr as _xqa
 
@@ -39,6 +42,10 @@ except Exception:
 
 NU_HOST_NAME  = "Novel Updates"
 NU_HOST_LOGO  = "https://www.novelupdates.com/appicon.png"
+
+NU_FETCH_CONCURRENCY = int(os.getenv("NU_FETCH_CONCURRENCY", "6"))
+NU_FETCH_TIMEOUT_SECONDS = int(os.getenv("NU_FETCH_TIMEOUT_SECONDS", "20"))
+NU_USER_AGENT = "CannibalTurtle RSS Feed Bot/1.0"
 
 # XML 1.0 legal char filter: tab, LF, CR, U+0020–U+D7FF, U+E000–U+FFFD, U+10000–U+10FFFF
 _XML10_BAD = re.compile(r"[^\x09\x0A\x0D\x20-\uD7FF\uE000-\uFFFD\U00010000-\U0010FFFF]")
@@ -133,49 +140,124 @@ def _block_guid(block: str) -> str:
 
 # -------------------- NU collection and item building -------------------
 
-def _collect_nu_items_from_mappings() -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
+def _nu_targets_from_mappings() -> List[Dict[str, Any]]:
+    targets: List[Dict[str, Any]] = []
+    nsfw_novels = set(get_nsfw_novels())
+
     for host, cfg in (HOSTING_SITE_DATA or {}).items():
         novels = (cfg.get("novels") or {})
         for novel_title, nd in novels.items():
-            translator = (nd.get("translator") or cfg.get("translator") or "").strip()
             nu_url = get_novelupdates_feed_url(nd)
             if not nu_url:
                 continue
-            parsed = feedparser.parse(nu_url)
-            for e in getattr(parsed, "entries", []) or []:
-                author = _strip_by_prefix(
-                    e.get("title", "") or e.get("author", "") or ""
-                )
-                desc   = html.unescape(e.get("description", "") or "")
-                # prefer published_parsed/updated_parsed; fallback now
-                pp = getattr(e, "published_parsed", None) or getattr(e, "updated_parsed", None)
-                pub_dt = (dt.datetime(*pp[:6], tzinfo=dt.timezone.utc)
-                          if pp else dt.datetime.now(dt.timezone.utc))
-                guid_v = getattr(e, "id", "") or e.get("guid") or e.get("link") or _guid_from(
-                    [novel_title, author, e.get("link", ""), desc[:80]]
-                )
-                is_perm = bool(getattr(e, "guidislink", False))
-                link_v  = e.get("link", "") or ""
-                category_value = "NSFW" if novel_title in get_nsfw_novels() else "SFW"
 
-                out.append({
-                    "novel_title": novel_title,
-                    "host": NU_HOST_NAME,
-                    "translator": translator,
-                    "short_code": (nd.get("short_code") or "").strip().upper(),
-                    "featured_image": (nd.get("featured_image") or ""),
-                    "category": category_value,
-                    "host_logo": NU_HOST_LOGO,
-                    "link": link_v,
-                    "author": author,
-                    "description": desc,
-                    "pubDate": pub_dt,
-                    "guid": guid_v,
-                    "isPermaLink": is_perm,
-                    "chapter": "",  # NU doesn't provide per-chapter label
-                })
+            targets.append({
+                "novel_title": novel_title,
+                "translator": (nd.get("translator") or cfg.get("translator") or "").strip(),
+                "short_code": (nd.get("short_code") or "").strip().upper(),
+                "featured_image": (nd.get("featured_image") or ""),
+                "category": "NSFW" if novel_title in nsfw_novels else "SFW",
+                "nu_url": nu_url,
+            })
+
+    return targets
+
+
+def _items_from_parsed_nu_feed(target: Dict[str, Any], parsed: Any) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    novel_title = target["novel_title"]
+
+    for e in getattr(parsed, "entries", []) or []:
+        author = _strip_by_prefix(
+            e.get("title", "") or e.get("author", "") or ""
+        )
+        desc = html.unescape(e.get("description", "") or "")
+
+        pp = getattr(e, "published_parsed", None) or getattr(e, "updated_parsed", None)
+        pub_dt = (
+            dt.datetime(*pp[:6], tzinfo=dt.timezone.utc)
+            if pp else dt.datetime.now(dt.timezone.utc)
+        )
+
+        guid_v = getattr(e, "id", "") or e.get("guid") or e.get("link") or _guid_from(
+            [novel_title, author, e.get("link", ""), desc[:80]]
+        )
+        is_perm = bool(getattr(e, "guidislink", False))
+        link_v = e.get("link", "") or ""
+
+        out.append({
+            "novel_title": novel_title,
+            "host": NU_HOST_NAME,
+            "translator": target["translator"],
+            "short_code": target["short_code"],
+            "featured_image": target["featured_image"],
+            "category": target["category"],
+            "host_logo": NU_HOST_LOGO,
+            "link": link_v,
+            "author": author,
+            "description": desc,
+            "pubDate": pub_dt,
+            "guid": guid_v,
+            "isPermaLink": is_perm,
+            "chapter": "",
+        })
+
     return out
+
+
+async def _fetch_one_nu_feed(
+    session: aiohttp.ClientSession,
+    sem: asyncio.Semaphore,
+    target: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    novel_title = target["novel_title"]
+    nu_url = target["nu_url"]
+
+    async with sem:
+        try:
+            async with session.get(nu_url) as resp:
+                resp.raise_for_status()
+                raw = await resp.read()
+        except Exception as exc:
+            print(f"[nu-merge] failed to fetch NU feed for {novel_title}: {exc}")
+            return []
+
+    parsed = feedparser.parse(raw)
+    return _items_from_parsed_nu_feed(target, parsed)
+
+
+async def _collect_nu_items_from_mappings_async() -> List[Dict[str, Any]]:
+    targets = _nu_targets_from_mappings()
+    if not targets:
+        return []
+
+    concurrency = max(1, NU_FETCH_CONCURRENCY)
+    timeout = aiohttp.ClientTimeout(total=NU_FETCH_TIMEOUT_SECONDS)
+    headers = {
+        "User-Agent": NU_USER_AGENT,
+        "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
+    }
+
+    sem = asyncio.Semaphore(concurrency)
+    connector = aiohttp.TCPConnector(limit=concurrency, limit_per_host=concurrency)
+
+    print(f"[nu-merge] fetching {len(targets)} NU feed(s) with concurrency={concurrency}")
+
+    async with aiohttp.ClientSession(timeout=timeout, headers=headers, connector=connector) as session:
+        chunks = await asyncio.gather(*(
+            _fetch_one_nu_feed(session, sem, target)
+            for target in targets
+        ))
+
+    out: List[Dict[str, Any]] = []
+    for chunk in chunks:
+        out.extend(chunk)
+    return out
+
+
+def _collect_nu_items_from_mappings() -> List[Dict[str, Any]]:
+    return asyncio.run(_collect_nu_items_from_mappings_async())
+
 
 def _build_nu_item_block(it: Dict[str, Any]) -> str:
     """Build a single NU <item> block with normalized role mention."""
