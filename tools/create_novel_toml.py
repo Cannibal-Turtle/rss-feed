@@ -94,6 +94,7 @@ DIRECT_GENRE_ALIASES = {
     "horror": "horror",
     "modern": "modern",
     "transmigration": "transmigration",
+    "isekai": "transmigration",
     "reincarnation": "reincarnation",
     "time travel": "regression",
     "post-apocalyptic": "post-apocalyptic",
