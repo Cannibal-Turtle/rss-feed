@@ -15,7 +15,7 @@ env:
     Cannibal-Turtle/mistmint-discord
     
 concurrency:
-  group: feeds-main
+  group: comments-feed
   cancel-in-progress: false
 
 jobs:
@@ -70,17 +70,45 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
+
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
+
           git add aggregated_comments_feed.xml token/token_alert_state.json
+
           if git diff --cached --quiet; then
             echo "No changes to commit"
-          else
-            git commit -m "Update Comments Feed + token state"
-            git pull --rebase --autostash
-            git push
+            exit 0
           fi
+
+          git commit -m "Update Comments Feed + token state"
+
+          for attempt in 1 2 3; do
+            echo "Push attempt $attempt..."
+
+            git fetch origin main
+
+            if ! git rebase origin/main; then
+              echo "Rebase failed. Aborting."
+              git rebase --abort || true
+              exit 1
+            fi
+
+            if git push origin HEAD:main; then
+              echo "Push succeeded."
+              exit 0
+            fi
+
+            echo "Push failed, probably because main moved. Retrying..."
+            sleep 3
+          done
+
+          echo "Push failed after 3 attempts."
+          exit 1
 
       - name: Trigger Discord Bot Workflows if needed
         env:
