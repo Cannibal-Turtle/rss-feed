@@ -14,7 +14,8 @@ from feed_common import (
     has_nsfw_marker,
     host_level_feed_url,
     load_completion_state,
-    novel_level_feed_url,
+    needs_novel_value,
+    resolved_novel_feed_url,
     should_skip_completed,
     sort_feed_items,
     truthy,
@@ -354,14 +355,14 @@ async def main_async():
             # No completion gate here; the feed itself is the source of current entries.
             if mode == "feed":
                 host_feed_url = host_level_feed_url(host, "paid")
-                if host_feed_url:
+                if host_feed_url and not needs_novel_value(host_feed_url):
                     scraped.extend(process_host_paid_feed(host, host_feed_url))
                     continue
 
                 # Feed source, novel scope: loop novels and gate before fetching.
                 any_novel_feed = False
                 for novel_title, details in data.get("novels", {}).items():
-                    feed_url = novel_level_feed_url(details, "paid")
+                    feed_url = resolved_novel_feed_url(host, novel_title, details, "paid")
                     if not feed_url:
                         continue
 

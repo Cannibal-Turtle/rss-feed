@@ -100,6 +100,43 @@ def host_level_feed_url(host: str, chapter_type: str) -> str:
     return str(host_data_for(host).get(key, "") or "").strip()
 
 
+def slug_from_url(url: str) -> str:
+    value = str(url or "").strip().rstrip("/")
+    if not value:
+        return ""
+    return value.split("/")[-1]
+
+
+def fill_novel_template(template: str, novel_title: str, details: dict[str, Any]) -> str:
+    value = str(template or "")
+
+    novel_url = str(details.get("novel_url") or "").strip()
+    slug = str(details.get("slug") or slug_from_url(novel_url) or "").strip()
+    novel_id = str(details.get("novel_id") or details.get("id") or "").strip()
+    short_code = str(details.get("short_code") or "").strip()
+
+    replacements = {
+        "{slug}": slug,
+        "{novel_slug}": slug,
+        "{novel_url_slug}": slug,
+        "{novel_id}": novel_id,
+        "{id}": novel_id,
+        "{novel_url}": novel_url,
+        "{title}": novel_title,
+        "{short_code}": short_code,
+    }
+
+    for key, replacement in replacements.items():
+        value = value.replace(key, replacement)
+
+    return value.strip()
+
+
+def resolved_novel_feed_url(host: str, novel_title: str, details: dict[str, Any], chapter_type: str) -> str:
+    raw = novel_level_feed_url(details, chapter_type) or host_level_feed_url(host, chapter_type)
+    return fill_novel_template(raw, novel_title, details)
+
+
 def novel_level_feed_url(details: dict[str, Any], chapter_type: str) -> str:
     """Return only the novel-level feed URL, without host fallback."""
 
@@ -114,6 +151,22 @@ def chapters_api_template(host: str, details: dict[str, Any] | None = None) -> s
     return str(details.get("chapters_api_url") or host_data_for(host).get("chapters_api_url") or "").strip()
 
 
+NOVEL_URL_MARKERS = (
+    "{slug}",
+    "{novel_slug}",
+    "{novel_url_slug}",
+    "{novel_id}",
+    "{id}",
+    "{novel_url}",
+    "{title}",
+    "{short_code}",
+)
+
+
+def needs_novel_value(template: str) -> bool:
+    lowered = str(template or "").casefold()
+    return any(marker in lowered for marker in NOVEL_URL_MARKERS)
+
 def api_source_scope(host: str, details: dict[str, Any] | None = None) -> str:
     """Return "novel" or "host" for a chapters API template.
 
@@ -125,17 +178,7 @@ def api_source_scope(host: str, details: dict[str, Any] | None = None) -> str:
     if not template:
         return ""
 
-    lowered = template.casefold()
-    novel_markers = (
-        "{slug}",
-        "{novel_slug}",
-        "{novel_id}",
-        "{id}",
-        "{novel_url}",
-        "{title}",
-        "{short_code}",
-    )
-    if any(marker in lowered for marker in novel_markers):
+    if needs_novel_value(template):
         return "novel"
 
     # If the API URL is defined directly on one novel, treat it as novel-scoped.
@@ -155,15 +198,23 @@ def source_scope_for(host: str, novel_title: str, details: dict[str, Any], chapt
     mode = chapter_source_mode(host, chapter_type)
 
     if mode == "feed":
-        if novel_level_feed_url(details, chapter_type):
+        novel_feed = novel_level_feed_url(details, chapter_type)
+        if novel_feed:
             return "novel_feed"
-        if host_level_feed_url(host, chapter_type):
-            return "host_feed"
+
+        host_feed = host_level_feed_url(host, chapter_type)
+        if host_feed:
+            return "novel_feed" if needs_novel_value(host_feed) else "host_feed"
+
         return ""
 
     if mode == "api":
         scope = api_source_scope(host, details)
-        return f"{scope}_api" if scope else ""
+        if scope == "novel":
+            return "novel_api"
+        if scope == "host":
+            return "host_api"
+        return ""
 
     return ""
 
