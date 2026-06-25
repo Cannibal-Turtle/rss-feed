@@ -5,6 +5,9 @@ from bs4 import BeautifulSoup
 import asyncio
 import aiohttp
 
+# --- Config-----------------------
+PUBLIC_CONCURRENCY_DEFAULT = 6
+
 # --- Mistmint website sticker text -> comment image URL -----------------------
 MISTMINT_STICKER_IMAGES = {
     ":shirone_banned:": "https://cdn.discordapp.com/emojis/1514344193378619392.webp?size=128&quality=lossless",
@@ -506,13 +509,13 @@ def _comments_public_concurrency() -> int:
     raw = (
         os.getenv("MISTMINT_COMMENTS_PUBLIC_CONCURRENCY")
         or str(_mistmint_hostdata().get("comments_public_concurrency", "") or "")
-        or "3"
+        or str(PUBLIC_CONCURRENCY_DEFAULT)
     )
 
     try:
         value = int(str(raw).strip())
     except Exception:
-        value = 3
+        value = PUBLIC_CONCURRENCY_DEFAULT
 
     return max(1, min(value, 10))
 
