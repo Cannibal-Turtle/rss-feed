@@ -2,7 +2,7 @@ name: Update Comments Feed
 
 on:
   schedule:
-    - cron: "55 15 * * *"
+    - cron: '55 14 * * *'    # 22:55 MYT
   workflow_dispatch:
 
 permissions:
