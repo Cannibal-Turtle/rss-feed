@@ -2,6 +2,8 @@
 from .common import *
 from .client import MistmintClient, _http_get_json
 from bs4 import BeautifulSoup
+import asyncio
+import aiohttp
 
 # --- Mistmint website sticker text -> comment image URL -----------------------
 MISTMINT_STICKER_IMAGES = {
@@ -500,6 +502,21 @@ def _public_headers():
     }
 
 
+def _comments_public_concurrency() -> int:
+    raw = (
+        os.getenv("MISTMINT_COMMENTS_PUBLIC_CONCURRENCY")
+        or str(_mistmint_hostdata().get("comments_public_concurrency", "") or "")
+        or "3"
+    )
+
+    try:
+        value = int(str(raw).strip())
+    except Exception:
+        value = 3
+
+    return max(1, min(value, 10))
+
+
 def _fetch_public_novel_comments(novel_slug: str, novel_id: str, limit: int):
     """
     Public endpoint fallback.
@@ -538,6 +555,117 @@ def _fetch_public_novel_comments(novel_slug: str, novel_id: str, limit: int):
             return url, items
 
     return first_url, first_items
+
+
+async def _http_get_json_async(session: aiohttp.ClientSession, url: str, headers: dict | None = None):
+    try:
+        async with session.get(url, headers=headers or {}, timeout=aiohttp.ClientTimeout(total=20)) as resp:
+            if resp.status // 100 != 2:
+                diag_fail("public-comments-http", status=resp.status, url=url)
+                return None
+
+            try:
+                return await resp.json(content_type=None)
+            except Exception as e:
+                diag_fail("public-comments-json", url=url, error=str(e))
+                return None
+
+    except Exception as e:
+        diag_fail("public-comments-exception", url=url, error=str(e))
+        return None
+
+
+async def _fetch_public_novel_comments_async(
+    session: aiohttp.ClientSession,
+    novel_slug: str,
+    novel_id: str,
+    limit: int,
+):
+    """
+    Async version of _fetch_public_novel_comments().
+
+    Try novel_id first, then slug. Prefer the first response that actually has items.
+    """
+    candidates = []
+
+    if novel_id:
+        candidates.append(novel_id)
+
+    if novel_slug and novel_slug not in candidates:
+        candidates.append(novel_slug)
+
+    first_url = ""
+    first_items = []
+
+    for ident in candidates:
+        url = f"{BASE_API}/comments/novel/{ident}?skipPage=0&limit={limit}"
+        payload = await _http_get_json_async(session, url, headers=_public_headers())
+
+        if payload is None:
+            continue
+
+        items = _public_data_list(payload)
+        diag_ok("public-comments-fetch", ident=ident, count=len(items))
+
+        if not first_url:
+            first_url = url
+            first_items = items
+
+        if items:
+            return url, items
+
+    return first_url, first_items
+
+
+async def _fetch_public_comments_for_novel_async(
+    session: aiohttp.ClientSession,
+    sem: asyncio.Semaphore,
+    novel_title: str,
+    meta: dict,
+    limit: int,
+):
+    async with sem:
+        novel_url = (meta.get("novel_url") or "").rstrip("/")
+        novel_slug = novel_url.split("/")[-1] if novel_url else ""
+        novel_id = str(meta.get("novel_id") or "").strip()
+
+        if not novel_slug and not novel_id:
+            diag_fail("public-comments-skip-no-id", novel=novel_title)
+            return novel_title, novel_slug, novel_id, "", []
+
+        url, items = await _fetch_public_novel_comments_async(
+            session=session,
+            novel_slug=novel_slug,
+            novel_id=novel_id,
+            limit=limit,
+        )
+
+        return novel_title, novel_slug, novel_id, url, items
+
+
+async def _load_comments_mistmint_public_async(novels: dict, limit: int):
+    concurrency = _comments_public_concurrency()
+    sem = asyncio.Semaphore(concurrency)
+
+    headers = _public_headers()
+    timeout = aiohttp.ClientTimeout(total=60)
+
+    async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
+        tasks = [
+            _fetch_public_comments_for_novel_async(
+                session=session,
+                sem=sem,
+                novel_title=novel_title,
+                meta=meta,
+                limit=limit,
+            )
+            for novel_title, meta in novels.items()
+        ]
+
+        if not tasks:
+            return []
+
+        return await asyncio.gather(*tasks)
 
 
 def _public_comment_item(
@@ -635,32 +763,18 @@ def load_comments_mistmint_public(comments_api_url: str = ""):
     No-token fallback.
 
     Loops through mapped Mistmint novels and fetches public novel comments.
-    This is intentionally simpler than trans/all-comments:
-    - no token needed
-    - reply target is best-effort from nested public replies
-    - chapter coverage depends on what Mistmint's public novel comments endpoint returns
+    Public mode is novel-level, so this uses gentle concurrency.
     """
     out = []
     limit = 50
 
     novels = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("novels", {}) or {}
+    concurrency = _comments_public_concurrency()
 
-    with diag_step("comments-public-load", novel_count=len(novels), limit=limit):
-        for novel_title, meta in novels.items():
-            novel_url = (meta.get("novel_url") or "").rstrip("/")
-            novel_slug = novel_url.split("/")[-1] if novel_url else ""
-            novel_id = str(meta.get("novel_id") or "").strip()
+    with diag_step("comments-public-load", novel_count=len(novels), limit=limit, concurrency=concurrency):
+        results = asyncio.run(_load_comments_mistmint_public_async(novels, limit))
 
-            if not novel_slug and not novel_id:
-                diag_fail("public-comments-skip-no-id", novel=novel_title)
-                continue
-
-            url, items = _fetch_public_novel_comments(
-                novel_slug=novel_slug,
-                novel_id=novel_id,
-                limit=limit,
-            )
-
+        for novel_title, novel_slug, novel_id, url, items in results:
             print(f"[mistmint/public] {novel_title}: {len(items)} item(s) from {url or 'no-url'}")
 
             for top in items:
