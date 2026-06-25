@@ -72,6 +72,7 @@ FALLBACK_SUPPORTED_TAGS = {
     "modern": "",
     "school life": "",
     "sci-fi": "",
+    "post-apocalyptic": "",
     "romance": "",
     "bl": "",
     "np": "",
@@ -92,7 +93,10 @@ DIRECT_GENRE_ALIASES = {
     "historical": "historical",
     "horror": "horror",
     "modern": "modern",
+    "transmigration": "transmigration",
     "reincarnation": "reincarnation",
+    "time travel": "regression",
+    "post-apocalyptic": "post-apocalyptic",
     "romance": "romance",
     "school life": "school life",
     "sci-fi": "sci-fi",
@@ -514,10 +518,6 @@ def infer_tags(api_novel: dict[str, Any], supported_tags: dict[str, str]) -> tup
                 raw = str_clean(item)
             key = norm_key(raw)
             if not key:
-                continue
-
-            if key == "transmigration":
-                add("transmigration")
                 continue
 
             mapped = DIRECT_GENRE_ALIASES.get(key)
