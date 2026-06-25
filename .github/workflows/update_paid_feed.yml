@@ -3,7 +3,7 @@ name: Update Paid Feed
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '30 5 * * *'
 
 permissions:
   contents: write
