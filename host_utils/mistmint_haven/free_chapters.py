@@ -13,7 +13,16 @@ def load_feed_mistmint_via_api(host: str):
     block = HOSTING_SITE_DATA.get(host, {}).get("novels", {})
     hostdata = HOSTING_SITE_DATA.get(host, {})
 
+    # This loader is API/novel-scoped even though it returns feed-shaped entries.
+    # Gate here so completed novels are skipped before API calls.
+    from feed_common import load_completion_state, should_skip_completed
+    completion_state = load_completion_state()
+
     for novel_title, details in block.items():
+        if should_skip_completed(novel_title, "free", details, state=completion_state):
+            print(f"Skipping {novel_title}: free completion already exists.")
+            continue
+
         novel_slug = _mistmint_slug_from_url(details.get("novel_url", ""))
         api_url = resolve_chapters_api_url(hostdata, novel_title, details)
 

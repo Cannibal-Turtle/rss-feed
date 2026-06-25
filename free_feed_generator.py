@@ -6,65 +6,26 @@ import re
 from xml.sax.saxutils import escape
 
 from host_utils import get_host_utils
+from feed_common import (
+    chapter_source_mode,
+    has_nsfw_marker,
+    host_level_feed_url,
+    load_completion_state,
+    novel_level_feed_url,
+    should_skip_completed,
+    sort_feed_items,
+)
 
 # Import mapping functions and data from novel_mappings.py
 from novel_mappings import (
     HOSTING_SITE_DATA,
     get_featured_image,
     get_translator,
-    get_free_feed_url,
     get_host_logo,
     get_novel_details,
     get_novel_short_code,
     get_nsfw_novels,
 )
-
-NSFW_PAREN_RE = re.compile(r'\([^)]*\b(?:nsfw|r-?18|18\+|h{1,3})\b[^)]*\)', re.I)
-
-def has_nsfw_marker(*texts: str) -> bool:
-    for t in texts:
-        if t and NSFW_PAREN_RE.search(t):
-            return True
-    return False
-
-def _normalized_pubdate(item):
-    dt = getattr(item, "pubDate", None)
-
-    if not isinstance(dt, datetime.datetime):
-        return datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
-
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=datetime.timezone.utc)
-
-    return dt.astimezone(datetime.timezone.utc).replace(microsecond=0)
-
-def _novel_alpha_sort_key(item):
-    return (
-        getattr(item, "host", "").casefold(),
-        getattr(item, "title", "").casefold(),
-    )
-
-def _chapter_sort_key(item):
-    return get_host_utils(getattr(item, "host", "")).get(
-        "chapter_num", lambda s: (0,)
-    )(getattr(item, "chapter", ""))
-
-def sort_feed_items(items):
-    """
-    Sort newest pubDate first.
-
-    Tie-breakers:
-      1. host/title alphabetical
-      2. chapter number newest first within the same novel/date
-    """
-    # weakest tie-breaker first
-    items.sort(key=_chapter_sort_key, reverse=True)
-
-    # then alphabetical novel tie-breaker
-    items.sort(key=_novel_alpha_sort_key)
-
-    # strongest sort last
-    items.sort(key=_normalized_pubdate, reverse=True)
 
 def compact_cdata(xml_str):
     """
@@ -176,79 +137,135 @@ class CustomRSS2(PyRSS2Gen.RSS2):
         writer.write(indent + "</channel>" + newl)
         writer.write("</rss>" + newl)
 
+
+def entry_pub_date(entry):
+    tt = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
+    if tt:
+        return datetime.datetime(*tt[:6], tzinfo=datetime.timezone.utc)
+
+    # very rare: some feeds omit dates — fall back to "now" so we don't crash
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
+def append_free_entry_item(rss_items, host, utils, entry, *, forced_title="", forced_details=None):
+    """Convert one source entry into the existing free RSS item shape.
+
+    forced_title is used only for novel-level feeds where the source may omit
+    the novel name from entry.title. Host/global feeds still match by title.
+    """
+
+    main_title, chapter, chaptername = utils["split_title"](entry.title)
+
+    # Make sure this novel is one YOU actually mapped.
+    novel_details = get_novel_details(host, main_title)
+    if not novel_details and forced_title:
+        main_title = forced_title
+        novel_details = forced_details or get_novel_details(host, forced_title)
+
+    if not novel_details:
+        # Skip other translators' stuff from the same site.
+        print("Skipping item (novel not found in mapping):", main_title)
+        return
+
+    # volume (Dragonholic = from URL fallback, Mistmint = from title pre ", Chapter")
+    volume = utils.get("extract_volume", lambda _t, _l: "")(entry.title, entry.link)
+
+    # description (prefer custom, else cleaned RSS)
+    entry_title = getattr(entry, "title", "") or ""
+    raw_desc = getattr(entry, "description", "") or ""
+    cleaner = utils.get("clean_description", lambda s: s)
+    cleaned_desc = cleaner(raw_desc)
+    desc_override = novel_details.get("custom_description")
+    final_description = desc_override if desc_override else cleaned_desc
+
+    # pubDate: take it exactly from the RSS/source entry (no overrides here)
+    pub_date = entry_pub_date(entry)
+
+    # Case-insensitive detection for "(NSFW)", "(18+)", "(H)", "(HH)", "(HHH)"
+    is_nsfw = has_nsfw_marker(
+        chapter,
+        chaptername,
+        entry_title,
+        raw_desc
+    )
+
+    # Build RSS item object
+    item = MyRSSItem(
+        title=main_title,
+        link=entry.link,  # could also be get_novel_url(main_title, host) if you ever want series root link
+        description=final_description,
+        guid=PyRSS2Gen.Guid(getattr(entry, "id", "") or entry.link, isPermaLink=False),
+        pubDate=pub_date,
+        volume=volume,
+        chapter=chapter,
+        chaptername=chaptername,
+        host=host,
+        is_nsfw=is_nsfw,
+    )
+    rss_items.append(item)
+
+
 def main():
     rss_items = []
 
+    # Loaded only if we actually hit a novel-scoped source.
+    completion_state = None
+
     # Loop over each host defined in the mapping.
     for host, data in HOSTING_SITE_DATA.items():
-        feed_url = get_free_feed_url(host)
-        if not feed_url:
-            print(f"No free_feed_url defined for host: {host}")
-            continue
-
         utils = get_host_utils(host)
-        
-        load_feed = utils.get("load_feed")
-        
-        if load_feed:
-            parsed_feed = load_feed(host)
-        else:
-            parsed_feed = feedparser.parse(feed_url)
+        mode = chapter_source_mode(host, "free")
 
-        for entry in parsed_feed.entries:
-            # host-specific title parsing
-            # Dragonholic: "Novel Title - Chapter 123 - Extra blah"
-            # Mistmint:   "Novel Title — Volume 1: Arc Name, Chapter 30 — Card Master"
-            main_title, chapter, chaptername = utils["split_title"](entry.title)
-
-            # Make sure this novel is one YOU actually mapped.
-            novel_details = get_novel_details(host, main_title)
-            if not novel_details:
-                # Skip other translators' stuff from the same site.
-                print("Skipping item (novel not found in mapping):", main_title)
+        # API source. Mistmint currently exposes this as load_feed(host), but
+        # internally it loops novels and applies the completion gate before API fetch.
+        if mode == "api":
+            load_feed = utils.get("load_feed")
+            if not load_feed:
+                print(f"No free API loader defined for host: {host}")
                 continue
 
-            # volume (Dragonholic = from URL fallback, Mistmint = from title pre ", Chapter")
-            volume = utils.get("extract_volume", lambda _t, _l: "")(entry.title, entry.link)
+            parsed_feed = load_feed(host)
+            for entry in parsed_feed.entries:
+                append_free_entry_item(rss_items, host, utils, entry)
+            continue
 
-            # description (prefer custom, else cleaned RSS)
-            entry_title = getattr(entry, "title", "") or ""
-            raw_desc = getattr(entry, "description", "") or ""
-            cleaner = utils.get("clean_description", lambda s: s)
-            cleaned_desc = cleaner(raw_desc)
-            desc_override = novel_details.get("custom_description")
-            final_description = desc_override if desc_override else cleaned_desc
+        # Feed source, host/global scope: fetch once, match title after.
+        # No completion gate here; the feed itself is the source of current entries.
+        host_feed_url = host_level_feed_url(host, "free")
+        if host_feed_url:
+            parsed_feed = feedparser.parse(host_feed_url)
+            for entry in parsed_feed.entries:
+                append_free_entry_item(rss_items, host, utils, entry)
+            continue
 
-            # pubDate: take it exactly from the RSS entry (no overrides here)
-            tt = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
-            if tt:
-                pub_date = datetime.datetime(*tt[:6], tzinfo=datetime.timezone.utc)
-            else:
-                # very rare: some feeds omit dates — fall back to "now" so we don't crash
-                pub_date = datetime.datetime.now(datetime.timezone.utc)
+        # Feed source, novel scope: loop novels and gate before fetching.
+        any_novel_feed = False
+        for novel_title, details in data.get("novels", {}).items():
+            feed_url = novel_level_feed_url(details, "free")
+            if not feed_url:
+                continue
 
-            # Case-insensitive detection for "(NSFW)", "(18+)", "(H)", "(HH)", "(HHH)"
-            is_nsfw = has_nsfw_marker(
-                chapter,
-                chaptername,
-                entry_title,
-                raw_desc
-            )
-            
-            # Build RSS item object
-            item = MyRSSItem(
-                title=main_title,
-                link=entry.link,  # could also be get_novel_url(main_title, host) if you ever want series root link
-                description=final_description,
-                guid=PyRSS2Gen.Guid(entry.id, isPermaLink=False),
-                pubDate=pub_date,
-                volume=volume,
-                chapter=chapter,
-                chaptername=chaptername,
-                host=host,
-                is_nsfw=is_nsfw,
-            )
-            rss_items.append(item)
+            any_novel_feed = True
+            if completion_state is None:
+                completion_state = load_completion_state()
+
+            if should_skip_completed(novel_title, "free", details, state=completion_state):
+                print(f"Skipping {novel_title}: free completion already exists.")
+                continue
+
+            parsed_feed = feedparser.parse(feed_url)
+            for entry in parsed_feed.entries:
+                append_free_entry_item(
+                    rss_items,
+                    host,
+                    utils,
+                    entry,
+                    forced_title=novel_title,
+                    forced_details=details,
+                )
+
+        if not any_novel_feed:
+            print(f"No free feed source defined for host: {host}")
 
     # Sort all items newest-first.
     # Tie-breaker: host/title alphabetical, then chapter number.
@@ -258,9 +275,9 @@ def main():
     now_utc = datetime.datetime.now(datetime.timezone.utc)
 
     seven_days_ago = now_utc - datetime.timedelta(days=7)
-    
+
     rss_items = [item for item in rss_items if item.pubDate >= seven_days_ago]
-    
+
     rss_items = rss_items[:200]
 
     # Build the aggregated feed.
@@ -277,6 +294,7 @@ def main():
     # Write raw
     with open(output_file, "w", encoding="utf-8") as f:
         new_feed.writexml(f, indent="  ", addindent="  ", newl="\n")
+
 
     # Pretty-print pass (keeps line breaks in <description> because we DO NOT compact here)
     with open(output_file, "r", encoding="utf-8") as f:

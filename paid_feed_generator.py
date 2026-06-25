@@ -2,24 +2,35 @@ import re
 import datetime
 import asyncio
 import aiohttp
+import feedparser
 import PyRSS2Gen
 import xml.dom.minidom
 import json
 import os
 from xml.sax.saxutils import escape
 from host_utils import get_host_utils
+from feed_common import (
+    chapter_source_mode,
+    has_nsfw_marker,
+    host_level_feed_url,
+    load_completion_state,
+    novel_level_feed_url,
+    should_skip_completed,
+    sort_feed_items,
+    truthy,
+)
 
 # Import mapping functions and data from novel_mappings.py
 from novel_mappings import (
     HOSTING_SITE_DATA,
-    OUTPUT_FEEDS,
     get_novel_url,
     get_featured_image,
     get_translator,
     get_host_logo,
     get_novel_short_code,
     get_nsfw_novels,
-    get_coin_emoji
+    get_coin_emoji,
+    get_novel_details
 )
 
 # ---------------- History Control ----------------
@@ -28,22 +39,7 @@ USE_HISTORY = os.getenv("PAID_USE_HISTORY", "1") == "1"
 NSFW_PAREN_RE = re.compile(r'\([^)]*\b(?:nsfw|r-?18|18\+|h{1,3})\b[^)]*\)', re.I)
 
 
-def truthy(value) -> bool:
-    if isinstance(value, bool):
-        return value
-
-    if value is None:
-        return False
-
-    text = str(value).strip().casefold()
-    return text in {"1", "true", "yes", "y", "on"}
-
-
-def normalize_title_key(title: str) -> str:
-    return re.sub(r"\s+", " ", str(title or "")).strip().casefold()
-
-
-def should_check_paid_novel(novel_title: str, details: dict, completed_paid_titles: set[str]) -> bool:
+def should_check_paid_novel(novel_title: str, details: dict, completion_state: dict) -> bool:
     if not details.get("paid_feed"):
         print(f"Skipping {novel_title}: has_paid=false or no paid_feed configured.")
         return False
@@ -52,47 +48,11 @@ def should_check_paid_novel(novel_title: str, details: dict, completed_paid_titl
         print(f"Checking {novel_title}: force_paid_check=true.")
         return True
 
-    if normalize_title_key(novel_title) in completed_paid_titles:
+    if should_skip_completed(novel_title, "paid", details, state=completion_state):
         print(f"Skipping {novel_title}: paid_completion already exists.")
         return False
 
     return True
-
-
-def paid_completion_state_url() -> str:
-    return str(OUTPUT_FEEDS.get("paid_completion_state_url", "") or "").strip()
-
-
-async def fetch_paid_completion_titles(session) -> set[str]:
-    completed: set[str] = set()
-    url = paid_completion_state_url()
-
-    if not url:
-        return completed
-
-    try:
-        async with session.get(url, timeout=20) as resp:
-            if resp.status != 200:
-                print(f"Warning: completion state returned HTTP {resp.status}: {url}")
-                return completed
-
-            data = await resp.json(content_type=None)
-
-    except Exception as e:
-        print(f"Warning: could not fetch completion state {url}: {e}")
-        return completed
-
-    if not isinstance(data, dict):
-        print(f"Warning: completion state is not a JSON object: {url}")
-        return completed
-
-    for title, record in data.items():
-        if isinstance(record, dict) and record.get("paid_completion"):
-            completed.add(normalize_title_key(title))
-
-    return completed
-
-
 def load_history():
     if not USE_HISTORY: return []
     try:
@@ -115,12 +75,6 @@ def _dt_to_iso(dt: datetime.datetime) -> str:
 
 def _iso_to_dt(s: str) -> datetime.datetime:
     return datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
-
-def has_nsfw_marker(*texts: str) -> bool:
-    for t in texts:
-        if t and NSFW_PAREN_RE.search(t):
-            return True
-    return False
 
 def item_to_dict(item: PyRSS2Gen.RSSItem):
     return {
@@ -156,54 +110,137 @@ def dict_to_item(d):
 # ---------------- Concurrency Control ----------------
 semaphore = asyncio.Semaphore(100)
 
-def normalize_date(dt):
-    return dt.replace(microsecond=0)
+def entry_pub_date(entry):
+    tt = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
+    if tt:
+        return datetime.datetime(*tt[:6], tzinfo=datetime.timezone.utc)
 
-def _normalized_pubdate(item):
-    dt = getattr(item, "pubDate", None)
+    return datetime.datetime.now(datetime.timezone.utc)
 
-    if not isinstance(dt, datetime.datetime):
-        return datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
 
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=datetime.timezone.utc)
+def build_paid_item(host, novel_title, chap):
+    raw_chapter = chap["chapter"].strip()
+    raw_chaptername = chap["chaptername"].strip()
 
-    return dt.astimezone(datetime.timezone.utc).replace(microsecond=0)
+    chapter = raw_chapter
+    chaptername = f"***{raw_chaptername}***" if raw_chaptername else ""
+    volume = chap.get("volume", "")
 
-def _novel_alpha_sort_key(item):
-    return (
-        getattr(item, "host", "").casefold(),
-        getattr(item, "title", "").casefold(),
+    pub_date = chap["pubDate"]
+    if pub_date.tzinfo is None:
+        pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
+
+    # Case-insensitive detection for "(NSFW)", "(18+)", "(H)", "(HH)", "(HHH)"
+    is_nsfw = has_nsfw_marker(
+        raw_chapter,
+        raw_chaptername,
+        chap.get("description", ""),
+        chap.get("volume", "")
     )
 
-def _chapter_sort_key(item):
-    return get_host_utils(getattr(item, "host", "")).get(
-        "chapter_num", lambda s: (0,)
-    )(getattr(item, "chapter", ""))
+    return MyRSSItem(
+        title=novel_title,
+        link=chap["link"],
+        description=chap["description"],
+        guid=PyRSS2Gen.Guid(chap["guid"], isPermaLink=False),
+        pubDate=pub_date,
+        volume=volume,
+        chapter=chapter,
+        chaptername=chaptername,
+        coin=chap.get("coin", ""),
+        host=host,
+        is_nsfw=is_nsfw,
+    )
 
-def sort_feed_items(items):
+
+def append_paid_feed_entry_item(rss_items, host, utils, entry, *, forced_title="", forced_details=None):
+    """Convert one paid feed entry into the existing paid RSS item shape.
+
+    Host/global paid feeds match the novel from entry.title. Novel-level paid
+    feeds can pass forced_title if entry.title omits the novel name.
     """
-    Sort newest pubDate first.
 
-    Tie-breakers:
-      1. host/title alphabetical
-      2. chapter number newest first within the same novel/date
-    """
-    # weakest tie-breaker first
-    items.sort(key=_chapter_sort_key, reverse=True)
+    main_title = ""
+    chapter = ""
+    chaptername = ""
 
-    # then alphabetical novel tie-breaker
-    items.sort(key=_novel_alpha_sort_key)
+    split_title = utils.get("split_title")
+    if split_title:
+        main_title, chapter, chaptername = split_title(getattr(entry, "title", "") or "")
 
-    # strongest sort last
-    items.sort(key=_normalized_pubdate, reverse=True)
+    novel_details = get_novel_details(host, main_title) if main_title else {}
+    if not novel_details and forced_title:
+        main_title = forced_title
+        novel_details = forced_details or get_novel_details(host, forced_title)
+
+    if not novel_details:
+        print("Skipping paid item (novel not found in mapping):", main_title or getattr(entry, "title", ""))
+        return
+
+    if not chapter:
+        split_paid_title = utils.get("split_paid_title", lambda raw: (raw, ""))
+        chapter, chaptername = split_paid_title(getattr(entry, "title", "") or "")
+
+    volume = utils.get("extract_volume", lambda _t, _l: "")(
+        getattr(entry, "title", "") or "",
+        getattr(entry, "link", "") or "",
+    )
+
+    cleaner = utils.get("clean_description", lambda s: s)
+    raw_desc = getattr(entry, "description", "") or ""
+    description = cleaner(raw_desc)
+
+    guid = getattr(entry, "id", "") or getattr(entry, "guid", "") or getattr(entry, "link", "") or chapter
+
+    chap = {
+        "volume": volume,
+        "chapter": chapter,
+        "chaptername": chaptername,
+        "link": getattr(entry, "link", "") or "",
+        "description": description,
+        "pubDate": entry_pub_date(entry),
+        "guid": guid,
+        "coin": str(getattr(entry, "coin", "") or getattr(entry, "price", "") or ""),
+    }
+
+    rss_items.append(build_paid_item(host, main_title, chap))
+
+
+def process_host_paid_feed(host, feed_url):
+    utils = get_host_utils(host)
+    parsed_feed = feedparser.parse(feed_url)
+    items = []
+
+    for entry in parsed_feed.entries:
+        append_paid_feed_entry_item(items, host, utils, entry)
+
+    return items
+
+
+def process_novel_paid_feed(host, novel_title, details, feed_url):
+    utils = get_host_utils(host)
+    parsed_feed = feedparser.parse(feed_url)
+    items = []
+
+    for entry in parsed_feed.entries:
+        append_paid_feed_entry_item(
+            items,
+            host,
+            utils,
+            entry,
+            forced_title=novel_title,
+            forced_details=details,
+        )
+
+    return items
+
 
 async def process_novel(session, host, novel_title):
     async with semaphore:
         novel_url = get_novel_url(novel_title, host)
         print(f"Scraping: {novel_url}")
         utils = get_host_utils(host)
-        
+
         # Host-agnostic: if the host exposes a cheap update check, use it.
         if "novel_has_paid_update_async" in utils:
             try:
@@ -214,45 +251,9 @@ async def process_novel(session, host, novel_title):
             except Exception:
                 # If a host-specific check fails, fall back to scraping attempt.
                 pass
-        
+
         paid_chapters, _main_desc = await utils["scrape_paid_chapters_async"](session, novel_url, host)
-        items = []
-        if paid_chapters:
-            for chap in paid_chapters:
-                raw_chapter = chap["chapter"].strip()
-                raw_chaptername  = chap["chaptername"].strip()
-
-                chapter = raw_chapter
-                chaptername  = f"***{raw_chaptername}***" if raw_chaptername else ""
-                volume = chap.get("volume", "")
-
-                pub_date = chap["pubDate"]
-                if pub_date.tzinfo is None:
-                    pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
-
-                # Case-insensitive detection for "(NSFW)", "(18+)", "(H)", "(HH)", "(HHH)"
-                is_nsfw = has_nsfw_marker(
-                    raw_chapter,
-                    raw_chaptername,
-                    chap.get("description", ""),
-                    chap.get("volume", "")
-                )
-
-                item = MyRSSItem(
-                    title=novel_title,
-                    link=chap["link"],
-                    description=chap["description"],
-                    guid=PyRSS2Gen.Guid(chap["guid"], isPermaLink=False),
-                    pubDate=pub_date,
-                    volume=volume,
-                    chapter=chapter,
-                    chaptername=chaptername,
-                    coin=chap.get("coin", ""),
-                    host=host,
-                    is_nsfw=is_nsfw,
-                )
-                items.append(item)
-        return items
+        return [build_paid_item(host, novel_title, chap) for chap in (paid_chapters or [])]
 
 class MyRSSItem(PyRSS2Gen.RSSItem):
     def __init__(self, *args, volume="", chapter="", chaptername="", coin="", host="", is_nsfw=None, **kwargs):
@@ -341,20 +342,55 @@ class CustomRSS2(PyRSS2Gen.RSS2):
 async def main_async():
     # 1) scrape fresh items
     scraped = []
-    async with aiohttp.ClientSession() as session:
-        completed_paid_titles = await fetch_paid_completion_titles(session)
+    completion_state = load_completion_state()
 
+    async with aiohttp.ClientSession() as session:
         tasks = []
+
         for host, data in HOSTING_SITE_DATA.items():
+            mode = chapter_source_mode(host, "paid")
+
+            # Feed source, host/global scope: fetch once, match title after.
+            # No completion gate here; the feed itself is the source of current entries.
+            if mode == "feed":
+                host_feed_url = host_level_feed_url(host, "paid")
+                if host_feed_url:
+                    scraped.extend(process_host_paid_feed(host, host_feed_url))
+                    continue
+
+                # Feed source, novel scope: loop novels and gate before fetching.
+                any_novel_feed = False
+                for novel_title, details in data.get("novels", {}).items():
+                    feed_url = novel_level_feed_url(details, "paid")
+                    if not feed_url:
+                        continue
+
+                    any_novel_feed = True
+                    if not details.get("paid_feed"):
+                        print(f"Skipping {novel_title}: has_paid=false or no paid_feed configured.")
+                        continue
+
+                    if should_skip_completed(novel_title, "paid", details, state=completion_state):
+                        print(f"Skipping {novel_title}: paid_completion already exists.")
+                        continue
+
+                    scraped.extend(process_novel_paid_feed(host, novel_title, details, feed_url))
+
+                if not any_novel_feed:
+                    print(f"No paid feed source defined for host: {host}")
+                continue
+
+            # API/source handled per novel.
             for novel_title, details in data.get("novels", {}).items():
-                if not should_check_paid_novel(novel_title, details, completed_paid_titles):
+                if not should_check_paid_novel(novel_title, details, completion_state):
                     continue
 
                 tasks.append(asyncio.create_task(process_novel(session, host, novel_title)))
 
-        results = await asyncio.gather(*tasks)
-        for items in results:
-            scraped.extend(items)
+        if tasks:
+            results = await asyncio.gather(*tasks)
+            for items in results:
+                scraped.extend(items)
 
     # 2) load previous history
     old_items = [dict_to_item(x) for x in load_history()]
@@ -375,7 +411,7 @@ async def main_async():
     kept = [it for it in merged.values() if it.pubDate >= seven_days_ago]
 
     sort_feed_items(kept)
-    
+
     kept = kept[:200]
 
     # 5) save history back

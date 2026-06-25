@@ -2,5 +2,5 @@ free_feed = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/fre
 paid_feed = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml"
 comments_feed = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml"
 
-[paid_completion_state_url]
+[completion_state_url]
 discord_webhook = "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/state.json"

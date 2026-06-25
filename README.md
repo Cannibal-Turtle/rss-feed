@@ -51,6 +51,7 @@ rss-feed/
 │     ├─ free_chapters.py
 │     ├─ paid_chapters.py
 │     └─ comments.py
+├─ feed_common.py
 ├─ free_feed_generator.py
 ├─ paid_feed_generator.py
 ├─ comments.py
@@ -151,7 +152,12 @@ These are global repo-level feeds, not host-specific feeds.
 free_feed = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml"
 paid_feed = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml"
 comments_feed = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml"
+
+[completion_state_url]
+discord_webhook = "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/state.json"
 ```
+
+`completion_state_url.discord_webhook` points to the canonical Discord announcement state. The feed generators use it only for **novel-scoped fetching** so completed novels can be skipped before an API/novel-feed request. Host/global feeds are still scanned normally.
 
 Novel TOML files use flags like:
 
@@ -189,6 +195,9 @@ host_logo = "https://example.com/logo.png"
 coin_emoji = "🪙"
 ticket_emoji = "🎟️"
 
+free_feed_url = "https://example.com/feed/"
+chapters_api_url = "https://api.example.com/api/novels/slug/{slug}/chapters"
+
 free_chapters_source = "feed"
 paid_chapters_source = "api"
 chapter_mode = "auto"
@@ -214,6 +223,8 @@ Examples:
 - `host_logo`
 - `coin_emoji`
 - `ticket_emoji`
+- host/global feed URLs, such as `free_feed_url`
+- API URL templates, such as `chapters_api_url = ".../{slug}/..."`
 - feed/API mode settings
 - `comments_api_url`
 - `comments_source`
@@ -495,6 +506,95 @@ The host registry should lazy-load hosts so one host does not require another ho
 
 ## RSS Feed Generators
 
+The chapter generators are separated by **chapter type**, not by source method:
+
+```text
+free_feed_generator.py
+→ builds free_chapters_feed.xml
+→ formats free/public chapter items
+
+paid_feed_generator.py
+→ builds paid_chapters_feed.xml
+→ formats paid/premium chapter items, including paid history and coin/price fields
+```
+
+Shared generator rules live in:
+
+```text
+feed_common.py
+```
+
+`feed_common.py` owns shared helpers such as:
+
+- reading the canonical completion state URL from `mappings/output_feeds.toml`
+- loading `discord-webhook/state.json`
+- resolving completion keys:
+  - `paid` → `paid_completion`
+  - `free` + novel has paid feed → `free_completion`
+  - `free` + novel has no paid feed → `only_free_completion`
+- detecting whether a source is host/global or novel-scoped from mapping shape
+- shared sorting and NSFW marker helpers
+
+### Source Scope Rule
+
+The generators treat **scope** separately from **chapter type**.
+
+```text
+host/global feed
+→ fetch once
+→ scan entries
+→ match entry title to mapped novel
+→ no completion gate
+
+novel-level feed
+→ loop novels
+→ check completion state before fetching that novel feed
+→ parse entries for that novel
+
+novel-level API
+→ loop novels
+→ check completion state before API request
+→ fetch chapter data
+→ filter by chapter type
+```
+
+This keeps host/global feeds simple: if the feed has an entry, the generator includes it. Completion state is only a fetch-saving gate for novel-scoped sources.
+
+### Source Config
+
+Host TOML controls which source method each chapter type uses:
+
+```toml
+free_chapters_source = "feed"
+paid_chapters_source = "api"
+```
+
+The source method is not the same as chapter type.
+
+For example, Mistmint's chapter API returns all chapters. The free and paid logic filter the same chapter data differently:
+
+```text
+free API logic
+→ keep chapters where isFree is true
+
+paid API logic
+→ keep chapters where isFree is false and the chapter is not hidden
+```
+
+A host/global feed is recognized when a feed URL is defined in `mappings/hosts/*.toml`, such as:
+
+```toml
+free_feed_url = "https://www.mistminthaven.com/feed/"
+```
+
+A novel-level feed is recognized when a feed URL is defined in a specific `mappings/novels/*.toml` file.
+
+A URL template like this is stored at host level but fetched per novel because it needs the novel slug:
+
+```toml
+chapters_api_url = "https://api.mistminthaven.com/api/novels/slug/{slug}/chapters"
+```
+
 ### `free_feed_generator.py`
 
 Builds:
@@ -508,6 +608,16 @@ Uses novel TOML entries with:
 ```toml
 has_free = true
 ```
+
+Supports:
+
+```text
+host/global free feed
+novel-level free feed
+host utility/API loader, such as Mistmint free API mode
+```
+
+The XML item structure is kept inside this generator so the free RSS output format stays stable.
 
 ### `paid_feed_generator.py`
 
@@ -523,6 +633,24 @@ Uses novel TOML entries with:
 has_paid = true
 ```
 
+Supports:
+
+```text
+host/global paid feed
+novel-level paid feed
+novel-level paid API/scraper logic
+manual/state fallback when a host uses it
+```
+
+Paid-only behavior stays inside this generator, including:
+
+```text
+paid_history.json
+coin/price fields
+paid GUID handling
+paid-specific item formatting
+```
+
 ### `comments.py`
 
 Builds:
@@ -536,6 +664,8 @@ Uses novel TOML entries with:
 ```toml
 has_comments = true
 ```
+
+The comments generator already asks `novel_mappings.py` for comment source URLs with novel fallback, so it can use host-level or novel-level comment API/feed config depending on the mapping.
 
 ---
 
@@ -580,8 +710,15 @@ Where possible, sorting should use parsed dates, chapter numbers, and stable tie
 Mistmint host config can control source modes:
 
 ```toml
+# Chapter source modes:
+# "feed" = use a host-provided feed/RSS-style source for this chapter type
+# "api"  = use the host chapter API/data source, then filter by chapter type
 free_chapters_source = "feed"
 paid_chapters_source = "api"
+
+# Paid chapter fallback mode:
+# "auto"   = try API/chapter data first; cookie is optional if the endpoint allows it
+# "manual" = force mistmint_state.json/manual paid chapter fallback instead of API
 chapter_mode = "auto"
 
 # Comment source modes:
@@ -595,9 +732,9 @@ Typical meaning:
 
 | Setting | Purpose |
 | --- | --- |
-| `free_chapters_source` | Whether free chapters come from Mistmint's public RSS feed or API |
-| `paid_chapters_source` | Whether paid chapters come from API/feed logic |
-| `chapter_mode` | How chapter parsing/resolution behaves |
+| `free_chapters_source` | Whether free chapters come from a feed-style source or the chapter API/data source |
+| `paid_chapters_source` | Whether paid chapters come from a feed-style source or the chapter API/data source |
+| `chapter_mode` | Mistmint paid fallback mode; `auto` tries API/chapter data, `manual` forces manual/state fallback |
 | `comments_source = "trans"` | Uses `comments_api_url` / `comments/trans/all-comments`; best metadata and reply tracking, but token/cookie is required |
 | `comments_source = "public"` | Uses public no-token novel comment APIs; less complete reply tracking, but avoids monthly token refresh |
 | `comments_source = "auto"` | Tries `trans` first, then falls back to public mode if the token is missing/expired |
@@ -1204,23 +1341,48 @@ Manual fallback:
    mappings/novels/code.toml
    ```
 
-3. Add or update host utilities in:
+3. Decide the source scope/method for free and paid chapters.
+
+   Host/global feed example:
+
+   ```toml
+   # mappings/hosts/new_host.toml
+   free_chapters_source = "feed"
+   free_feed_url = "https://example.com/feed/"
+   ```
+
+   Novel-level feed example:
+
+   ```toml
+   # mappings/novels/code.toml
+   free_feed_url = "https://example.com/novel/code/feed/"
+   ```
+
+   Novel-level API example:
+
+   ```toml
+   # mappings/hosts/new_host.toml
+   paid_chapters_source = "api"
+   chapters_api_url = "https://api.example.com/novels/{slug}/chapters"
+   ```
+
+4. Add or update host utilities in:
 
    ```text
    host_utils/
    ```
 
-4. Register the host in:
+5. Register the host in:
 
    ```text
    host_utils/__init__.py
    ```
 
-5. Make sure feed generators can load the host utils.
+6. Make sure feed generators can load the host utils.
 
-6. Add any required token/cookie secret name in the host TOML.
+7. Add any required token/cookie secret name in the host TOML.
 
-7. Add Discord-side config in the Discord repos only if that host needs announcements.
+8. Add Discord-side config in the Discord repos only if that host needs announcements.
 
 ---
 
@@ -1299,6 +1461,17 @@ global_mention = "||<@&1329392448798982214>||"
 novel_discord_map_url = "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/config/novel_discord_map.toml"
 ```
 
+### Completion state URL is missing
+
+`feed_common.py` expects the canonical Discord completion state URL in:
+
+```toml
+[completion_state_url]
+discord_webhook = "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/state.json"
+```
+
+If this URL is missing or unreachable, generators continue without completion skipping instead of failing the whole feed run.
+
 ### JSON state file crashed
 
 Empty files are invalid JSON.
@@ -1320,7 +1493,9 @@ Use:
 - Novel descriptions can use TOML multiline strings.
 - NSFW status comes from `is_nsfw`.
 - Membership status comes from `is_membership`.
-- Output feed URLs are centralized in `mappings/output_feeds.toml`.
+- Output feed URLs and the canonical Discord completion state URL are centralized in `mappings/output_feeds.toml`.
+- `feed_common.py` owns shared generator helpers; free/paid XML item formatting stays in the individual generator files.
+- Completion state is a fetch-saving gate for novel-scoped sources, not a filter for host/global feeds.
 - Paid/free feed sorting should not depend on mapping insertion order.
 - `history_file = ""` safely means no arc tracking.
 - `start_date = ""` safely means no duration phrase in completion messages.
@@ -1340,7 +1515,7 @@ Use:
 ```text
 Host sites / APIs
    ↓
-rss-feed host utils
+rss-feed host utils + feed_common.py
    ↓
 free / paid / comments RSS XML
    ↓
