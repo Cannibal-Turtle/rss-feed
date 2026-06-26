@@ -4,7 +4,7 @@
     <title>Aggregated Paid Chapters Feed</title>
     <link>https://github.com/cannibal-turtle/</link>
     <description>Aggregated RSS feed for paid chapters across mapped novels.</description>
-    <lastBuildDate>Fri, 26 Jun 2026 16:07:07 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 26 Jun 2026 16:09:09 +0000</lastBuildDate>
     <docs>http://blogs.law.harvard.edu/tech/rss</docs>
     <generator>PyRSS2Gen-1.1.0</generator>
     <item>
@@ -1611,36 +1611,6 @@ Damn dog:
       <host>Mistmint Haven</host>
       <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
       <guid isPermaLink="false">ce0d9e70-5525-4a89-93d2-f3451e96d735</guid>
-    </item>
-    <item>
-      <title>Help! I Accidentally Flirted with the Lord God, What Do I Do?!</title>
-      <volume>Arc 8: Cannon Fodder in a Supernatural Novel</volume>
-      <chapter>Chapter 268</chapter>
-      <chaptername>***8.6***</chaptername>
-      <link>https://www.mistminthaven.com/novels/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do/arc-8-cannon-fodder-in-a-supernatural-novel-chapter-268</link>
-      <description><![CDATA[【Quick Transmigration + Double Male Leads + Cannon Fodder Counterattack + Main Shou + 1v1 + Double Clean】
-The Lord God got scammed in an online relationship!
-The other party even ran off on the way to meet in person!
-Enraged, the Lord God issued a special-class wanted order, determined to drag back the wife who suddenly disappeared on him.
-......
-Xie Yaochen, who has already hidden himself inside a small world to carry out missions, blinks innocently.
-“Dating? Never done that.”
-“Online dating scam? No idea.”
-“Special-class wanted criminal? Don’t know him either.”
-Bound to a cannon fodder counterattack system, he happily travels through various small worlds. While cleaning up idiots, he even starts a sweet romance on the side.
-His boyfriend is tall and handsome and loves him so much. If certain parts of him didn’t keep making him see that damn dog Lord God, it would be perfect...
-Damn dog:
-^_^
-]]></description>
-      <category>SFW</category>
-      <translator>CannibalTurtle</translator>
-      <short_code>HIAFLG</short_code>
-      <featuredImage url="https://i.imgur.com/7LRK6Uw.png"/>
-      <coin>&lt;:mistmint_currency:1433046707121422487&gt; 5</coin>
-      <pubDate>Fri, 19 Jun 2026 16:08:44 +0000</pubDate>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <guid isPermaLink="false">46931b43-2e74-45e5-bb7b-0008a1abdbb3</guid>
     </item>
   </channel>
 </rss>
