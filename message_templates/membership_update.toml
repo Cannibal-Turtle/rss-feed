@@ -66,9 +66,4 @@ name = "purple_crown"
 animated = true
 
 [settings]
-novel_discord_map_url = "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/config/novel_discord_map.toml"
-roles_json_url = "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/config/roles.json"
-completion_state_url = "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/state.json"
-news_channel_id = "1330049962129489930"
-private_guild_id = "1329384099609051136"
 public_global_mention = "||@everyone||"

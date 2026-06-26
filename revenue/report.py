@@ -42,8 +42,33 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from revenue.hosts.mistmint_haven import collect_revenue_rows as collect_mistmint_rows  # noqa: E402
-from message_renderer import load_template_settings, parse_color, render_message, to_discord_api_payload  # noqa: E402
+from revenue.hosts.mistmint_haven import collect_revenue_rows as collect_mistmint_rows
+
+from message_renderer import (
+    load_template_settings,
+    render_message,
+    to_discord_api_payload,
+)
+from message_settings import (
+    global_mention_from_settings,
+    setting_color_int,
+)
+
+try:
+    from config_loader import (
+        get_discord_webhook_channel_id,
+        get_discord_webhook_role_id,
+        get_novel_discord_map_url,
+    )
+except Exception:
+    def get_discord_webhook_channel_id(key: str, default: str = "") -> str:
+        return default
+
+    def get_discord_webhook_role_id(key: str, default: str = "") -> str:
+        return default
+
+    def get_novel_discord_map_url(default: str = "") -> str:
+        return default
 
 
 STATE_PATH = ROOT / "revenue" / "state.json"
@@ -51,28 +76,20 @@ DISCORD_API_BASE = "https://discord.com/api/v10"
 
 _TEMPLATE_SETTINGS = load_template_settings("revenue_report")
 
+EMBED_COLOR = setting_color_int(
+    _TEMPLATE_SETTINGS,
+    "embed_color",
+    0xC9D3FF,
+    env="REVENUE_EMBED_COLOR_HEX",
+    fallback_env="EMBED_COLOR_HEX",
+)
 
-def _setting_str(key: str, default: str = "", *, env: str = "") -> str:
-    env_value = os.environ.get(env, "").strip() if env else ""
-    if env_value:
-        return env_value
-    value = _TEMPLATE_SETTINGS.get(key, default)
-    return str(value if value is not None else default).strip()
+GLOBAL_MENTION = global_mention_from_settings(_TEMPLATE_SETTINGS)
 
-
-def _setting_color_int(key: str, default: int, *, env: str = "") -> int:
-    raw = os.environ.get(env, "").strip() if env else ""
-    if not raw and key == "embed_color":
-        raw = os.environ.get("EMBED_COLOR_HEX", "").strip()
-    if not raw:
-        raw = _TEMPLATE_SETTINGS.get(key, default)
-    parsed = parse_color(raw)
-    return int(parsed if parsed is not None else default)
-
-
-EMBED_COLOR = _setting_color_int("embed_color", 0xC9D3FF, env="REVENUE_EMBED_COLOR_HEX")
-GLOBAL_MENTION = _setting_str("global_mention", env="GLOBAL_MENTION")
-NOVEL_DISCORD_MAP_URL = _setting_str("novel_discord_map_url", env="NOVEL_DISCORD_MAP_URL")
+NOVEL_DISCORD_MAP_URL = (
+    os.environ.get("NOVEL_DISCORD_MAP_URL", "").strip()
+    or get_novel_discord_map_url()
+)
 
 
 # ---------------------------------------------------------------------------
@@ -919,7 +936,11 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(json.dumps(payload_preview, ensure_ascii=False, indent=2))
         else:
             token = os.getenv("DISCORD_BOT_TOKEN", "").strip()
-            channel_id = args.channel or os.getenv("DISCORD_MOD_CHANNEL_ID", "").strip()
+            channel_id = (
+                args.channel
+                or os.getenv("DISCORD_MOD_CHANNEL_ID", "").strip()
+                or get_discord_webhook_channel_id("mod")
+            )
             message_id = args.message or os.getenv("DISCORD_REVENUE_MESSAGE_ID", "").strip()
 
             mid = send_discord_embeds(

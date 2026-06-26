@@ -292,6 +292,32 @@ def render_message_sequence(name: str, ctx: dict[str, Any], *, variant: str | No
 
     return rendered_messages
 
+# ---------------------------------------------------------------------------
+# Hide mentions in template control
+# ---------------------------------------------------------------------------
+
+def truthy(value) -> bool:
+    if isinstance(value, bool):
+        return value
+
+    return str(value or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+    }
+
+
+def format_role_mention(role_id: str, *, hidden: bool = False) -> str:
+    role_id = str(role_id or "").strip()
+
+    if not role_id:
+        return ""
+
+    mention = f"<@&{role_id}>"
+    return f"||{mention}||" if hidden else mention
+
 
 # ---------------------------------------------------------------------------
 # Emoji / button helpers

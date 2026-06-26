@@ -18,8 +18,8 @@ timestamp = "{timestamp}"
 color = "{embed_color}"
 
 [settings]
-global_mention = "||<@&1329392448798982214>||"
 embed_color = "2D3F51"
-novel_discord_map_url = "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/config/novel_discord_map.toml"
 allow_role_pings = true
+global_mention_role = "admin"
+hide_global_mention = true
 no_data_text = "_No data this week (no NU counts retrieved)._"

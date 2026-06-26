@@ -6,7 +6,19 @@ import asyncio
 import aiohttp
 
 # --- Config-----------------------
-PUBLIC_CONCURRENCY_DEFAULT = 6
+try:
+    from config_loader import get_mistmint_comments_config
+except Exception:
+    def get_mistmint_comments_config():
+        return {}
+
+
+def _mistmint_comments_int(key: str, default: int) -> int:
+    cfg = get_mistmint_comments_config()
+    try:
+        return int(cfg.get(key, default))
+    except Exception:
+        return default
 
 # --- Mistmint website sticker text -> comment image URL -----------------------
 MISTMINT_STICKER_IMAGES = {
@@ -506,18 +518,34 @@ def _public_headers():
 
 
 def _comments_public_concurrency() -> int:
+    default = _mistmint_comments_int("public_concurrency_default", 6)
+    max_value = _mistmint_comments_int("public_concurrency_max", 10)
+
     raw = (
         os.getenv("MISTMINT_COMMENTS_PUBLIC_CONCURRENCY")
         or str(_mistmint_hostdata().get("comments_public_concurrency", "") or "")
-        or str(PUBLIC_CONCURRENCY_DEFAULT)
+        or str(default)
     )
 
     try:
         value = int(str(raw).strip())
     except Exception:
-        value = PUBLIC_CONCURRENCY_DEFAULT
+        value = default
 
-    return max(1, min(value, 10))
+    return max(1, min(value, max_value))
+
+
+def _comments_public_timeout_seconds() -> int:
+    default = _mistmint_comments_int("public_fetch_timeout_seconds", 20)
+
+    raw = os.getenv("MISTMINT_COMMENTS_PUBLIC_TIMEOUT_SECONDS") or str(default)
+
+    try:
+        value = int(str(raw).strip())
+    except Exception:
+        value = default
+
+    return max(1, value)
 
 
 def _fetch_public_novel_comments(novel_slug: str, novel_id: str, limit: int):
@@ -562,7 +590,12 @@ def _fetch_public_novel_comments(novel_slug: str, novel_id: str, limit: int):
 
 async def _http_get_json_async(session: aiohttp.ClientSession, url: str, headers: dict | None = None):
     try:
-        async with session.get(url, headers=headers or {}, timeout=aiohttp.ClientTimeout(total=20)) as resp:
+        async with session.get(
+            url,
+            headers=headers or {},
+            timeout=aiohttp.ClientTimeout(total=_comments_public_timeout_seconds()),
+        ) as resp:
+
             if resp.status // 100 != 2:
                 diag_fail("public-comments-http", status=resp.status, url=url)
                 return None

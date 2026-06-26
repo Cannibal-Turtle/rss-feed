@@ -15,6 +15,31 @@ sys.path.insert(0, str(ROOT))
 
 from novel_mappings import HOSTING_SITE_DATA
 from message_renderer import load_template_settings, render_message, to_discord_api_payload
+from message_settings import setting_str
+
+try:
+    from config_loader import (
+        get_completion_state_url,
+        get_discord_webhook_channel_id,
+        get_discord_webhook_guild_id,
+        get_novel_discord_map_url,
+        get_roles_json_url,
+    )
+except Exception:
+    def get_completion_state_url(default: str = "") -> str:
+        return default
+
+    def get_discord_webhook_channel_id(key: str, default: str = "") -> str:
+        return default
+
+    def get_discord_webhook_guild_id(default: str = "") -> str:
+        return default
+
+    def get_novel_discord_map_url(default: str = "") -> str:
+        return default
+
+    def get_roles_json_url(default: str = "") -> str:
+        return default
 
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 
@@ -22,38 +47,53 @@ API_BASE = "https://discord.com/api/v10"
 
 _TEMPLATE_SETTINGS = load_template_settings("membership_update")
 
-
-def _setting_str(key: str, default: str = "", *, env: str = "") -> str:
-    env_value = os.environ.get(env, "").strip() if env else ""
-    if env_value:
-        return env_value
-    value = _TEMPLATE_SETTINGS.get(key, default)
-    return str(value if value is not None else default).strip()
-
-
-def _setting_int(key: str, default: int, *, env: str = "") -> int:
-    raw = _setting_str(key, str(default), env=env)
-    return int(raw)
-
-
-NOVEL_DISCORD_MAP_URL = _setting_str("novel_discord_map_url", env="NOVEL_DISCORD_MAP_URL")
+NOVEL_DISCORD_MAP_URL = (
+    os.environ.get("NOVEL_DISCORD_MAP_URL", "").strip()
+    or get_novel_discord_map_url()
+    or setting_str(_TEMPLATE_SETTINGS, "novel_discord_map_url")
+)
 # currently only supports single server role attachment
 # Reads role IDs from discord-webhook's rich novel Discord TOML map.
 
 # Always post here first.
 # This is your server's news channel.
-NEWS_CHANNEL_ID = _setting_int("news_channel_id", 0, env="NEWS_CHANNEL_ID")
+NEWS_CHANNEL_ID = int(
+    os.environ.get("NEWS_CHANNEL_ID", "").strip()
+    or get_discord_webhook_channel_id("announcements")
+    or setting_str(_TEMPLATE_SETTINGS, "news_channel_id", "0")
+    or 0
+)
 
 # Private/news server uses novel role + status role.
 # Status role comes from discord-webhook roles.json:
 # complete if paid_completion exists in state.json, otherwise ongoing.
 # Non-private servers get public_global_mention.
-MY_SERVER_GUILD_ID = _setting_str("private_guild_id", env="MY_SERVER_GUILD_ID")
+MY_SERVER_GUILD_ID = (
+    os.environ.get("MY_SERVER_GUILD_ID", "").strip()
+    or get_discord_webhook_guild_id()
+    or setting_str(_TEMPLATE_SETTINGS, "private_guild_id")
+)
 
-ROLES_JSON_URL = _setting_str("roles_json_url", env="ROLES_JSON_URL")
-COMPLETION_STATE_URL = _setting_str("completion_state_url", env="COMPLETION_STATE_URL")
+ROLES_JSON_URL = (
+    os.environ.get("ROLES_JSON_URL", "").strip()
+    or get_roles_json_url()
+    or setting_str(_TEMPLATE_SETTINGS, "roles_json_url")
+)
 
-PUBLIC_GLOBAL_MENTION = _setting_str("public_global_mention", "||@everyone||", env="PUBLIC_GLOBAL_MENTION")
+COMPLETION_STATE_URL = (
+    os.environ.get("COMPLETION_STATE_URL", "").strip()
+    or get_completion_state_url()
+    or setting_str(_TEMPLATE_SETTINGS, "completion_state_url")
+)
+
+# Used only for non-private/public targets.
+# Private/news server uses novel role + ongoing/complete status role instead.
+PUBLIC_GLOBAL_MENTION = setting_str(
+    _TEMPLATE_SETTINGS,
+    "public_global_mention",
+    "||@everyone||",
+    env="PUBLIC_GLOBAL_MENTION",
+)
 
 NOVELS_DIR = ROOT / "mappings" / "novels"
 

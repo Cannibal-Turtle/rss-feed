@@ -1,18 +1,21 @@
 name: Update Paid Feed
 
 on:
-  workflow_dispatch:
   schedule:
     - cron: '0 * * * *'
+  workflow_dispatch:
+    inputs:
+      force_downstream:
+        description: "Force trigger downstream repos even if no new feed GUIDs were added"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
 
 env:
   FORCE_DOWNSTREAM: "false"  # change to "true" to force both cron + manual runs for downstream workflows (discord-webhook, mistmint-discord) even if no new feed GUIDs were added
-  DOWNSTREAM_REPOS: >-
-    Cannibal-Turtle/discord-webhook
-    Cannibal-Turtle/mistmint-discord
 
 # Match the free job so only one feed job pushes at a time
 concurrency:
@@ -71,8 +74,8 @@ jobs:
       
           # Only stage manual state/history when STATE mode is ON
           if [ "${MISTMINT_FORCE_STATE:-0}" = "1" ]; then
-            [ -f rss-feed/manual_scripts/mistmint_state.json ] && git add rss-feed/manual_scripts/mistmint_state.json || true
-            [ -f rss-feed/manual_scripts/paid_history.json ]   && git add rss-feed/manual_scripts/paid_history.json   || true
+            [ -f manual_scripts/mistmint_state.json ] && git add manual_scripts/mistmint_state.json || true
+            [ -f manual_scripts/paid_history.json ]   && git add manual_scripts/paid_history.json   || true
           fi
       
           # Commit only if something is staged
@@ -91,19 +94,37 @@ jobs:
         env:
           PAT_GITHUB: ${{ secrets.PAT_GITHUB }}
           NEW_ITEMS: ${{ steps.feed_changes.outputs.new_items }}
+          MANUAL_FORCE_DOWNSTREAM: ${{ inputs.force_downstream == true && 'true' || 'false' }}
         run: |
           set -euo pipefail
 
+          DOWNSTREAM_REPOS=$(python - <<'PY'
+          from config_loader import get_downstream_repos
+          print(" ".join(get_downstream_repos()))
+          PY
+          )
+
+          DISPATCH_EVENT=$(python - <<'PY'
+          from config_loader import get_dispatch_event
+          print(get_dispatch_event("chapters", "trigger-discord-notify"))
+          PY
+          )
+
           echo "NEW_ITEMS=$NEW_ITEMS"
           echo "FORCE_DOWNSTREAM=$FORCE_DOWNSTREAM"
+          echo "MANUAL_FORCE_DOWNSTREAM=$MANUAL_FORCE_DOWNSTREAM"
           echo "DOWNSTREAM_REPOS=$DOWNSTREAM_REPOS"
+          echo "DISPATCH_EVENT=$DISPATCH_EVENT"
 
-          if [ "$NEW_ITEMS" != "true" ] && [ "$FORCE_DOWNSTREAM" != "true" ]; then
-            echo "No new paid feed GUIDs and FORCE_DOWNSTREAM=false. Skipping downstream trigger."
+          if [ "$NEW_ITEMS" != "true" ] && [ "$FORCE_DOWNSTREAM" != "true" ] && [ "$MANUAL_FORCE_DOWNSTREAM" != "true" ]; then
+            echo "No new paid feed GUIDs and downstream force is false. Skipping downstream trigger."
             exit 0
           fi
 
-          sleep 10
+          if [ -z "$DOWNSTREAM_REPOS" ]; then
+            echo "No downstream repos configured. Skipping downstream trigger."
+            exit 0
+          fi
 
           for REPO in $DOWNSTREAM_REPOS; do
             echo "Dispatching paid workflow to $REPO..."
@@ -111,6 +132,6 @@ jobs:
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer $PAT_GITHUB" \
               "https://api.github.com/repos/$REPO/dispatches" \
-              -d '{"event_type":"trigger-discord-notify","client_payload":{"feed":"paid"}}'
+              -d "{\"event_type\":\"$DISPATCH_EVENT\",\"client_payload\":{\"feed\":\"paid\"}}"
             echo
           done

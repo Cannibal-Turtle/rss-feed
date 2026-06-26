@@ -1,0 +1,49 @@
+{
+  "downstream_dispatch": {
+    "repos": [
+      "Cannibal-Turtle/discord-webhook",
+      "Cannibal-Turtle/mistmint-discord"
+    ],
+    "events": {
+      "chapters": "trigger-discord-notify",
+      "comments": "trigger-discord-comments"
+    }
+  },
+  "discord_webhook": {
+    "raw_base": "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main",
+    "paths": {
+      "server_json": "config/server.json",
+      "roles_json": "config/roles.json",
+      "tag_roles": "config/tag_roles.json",
+      "novel_discord_map": "config/novel_discord_map.toml",
+      "state": "state.json"
+    }
+  },
+  "card_status_update": {
+    "enabled": true,
+    "repo": "Cannibal-Turtle/rss-feed",
+    "event_type": "update-novel-status"
+  },
+  "mistmint": {
+    "comments": {
+      "public_concurrency_default": 6,
+      "public_concurrency_max": 10,
+      "public_fetch_timeout_seconds": 20
+    }
+  },
+  "novelupdates": {
+    "host": {
+      "name": "Novel Updates",
+      "logo": "https://www.novelupdates.com/appicon.png"
+    },
+    "comments": {
+      "fetch_concurrency_default": 6,
+      "fetch_concurrency_max": 10,
+      "fetch_timeout_seconds": 20
+    }
+  },
+  "paid_feed": {
+    "api_concurrency_default": 100,
+    "api_concurrency_max": 100
+  }
+}

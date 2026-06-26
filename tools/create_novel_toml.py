@@ -52,9 +52,22 @@ ROOT = Path(__file__).resolve().parents[1]
 HOSTS_DIR = ROOT / "mappings" / "hosts"
 NOVELS_DIR = ROOT / "mappings" / "novels"
 
-DEFAULT_TAG_ROLES_URL = (
-    "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/"
-    "main/config/tag_roles.json"
+try:
+    from config_loader import get_tag_roles_url
+except Exception:
+    def get_tag_roles_url(default: str = "") -> str:
+        return default
+
+
+try:
+    from config_loader import get_tag_roles_url
+except Exception:
+    def get_tag_roles_url(default: str = "") -> str:
+        return default
+
+
+DEFAULT_TAG_ROLES_URL = get_tag_roles_url(
+    "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/config/tag_roles.json"
 )
 
 # Fallback if GitHub/raw URL is unavailable. Keep keys only; role IDs are not needed here.

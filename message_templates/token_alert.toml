@@ -64,4 +64,5 @@ label = "Update secret"
 url = "{secret_url}"
 
 [settings]
-global_mention = "||<@&1329392448798982214>||"
+global_mention_role = "admin"
+hide_global_mention = true

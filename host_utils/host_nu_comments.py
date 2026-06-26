@@ -32,19 +32,27 @@ import feedparser
 from xml.sax.saxutils import escape as _xesc, quoteattr as _xqa
 
 from novel_mappings import HOSTING_SITE_DATA, get_novelupdates_feed_url
+
 try:
     from novel_mappings import get_nsfw_novels  # optional
 except Exception:
     def get_nsfw_novels() -> List[str]:
         return []
 
+try:
+    from config_loader import (
+        get_novelupdates_comments_config,
+        get_novelupdates_host_config,
+    )
+except Exception:
+    def get_novelupdates_comments_config():
+        return {}
+
+    def get_novelupdates_host_config():
+        return {}
+
 # ---------------------------- constants --------------------------------
 
-NU_HOST_NAME  = "Novel Updates"
-NU_HOST_LOGO  = "https://www.novelupdates.com/appicon.png"
-
-NU_FETCH_CONCURRENCY = int(os.getenv("NU_FETCH_CONCURRENCY", "6"))
-NU_FETCH_TIMEOUT_SECONDS = int(os.getenv("NU_FETCH_TIMEOUT_SECONDS", "20"))
 NU_USER_AGENT = "CannibalTurtle RSS Feed Bot/1.0"
 
 # XML 1.0 legal char filter: tab, LF, CR, U+0020–U+D7FF, U+E000–U+FFFD, U+10000–U+10FFFF
@@ -58,6 +66,59 @@ _GUID_RE = re.compile(r"<guid[^>]*>(.*?)</guid>", re.IGNORECASE | re.DOTALL)
 _ROLE_RE = re.compile(r"^\s*(?:<@&)?(\d+)>?\s*$", re.ASCII)
 
 # ---------------------------- helpers ----------------------------------
+
+def _nu_comments_int(key: str, default: int) -> int:
+    cfg = get_novelupdates_comments_config()
+    try:
+        return int(cfg.get(key, default))
+    except Exception:
+        return default
+
+
+def _nu_fetch_concurrency() -> int:
+    default = _nu_comments_int("fetch_concurrency_default", 6)
+    max_value = _nu_comments_int("fetch_concurrency_max", 10)
+
+    raw = os.getenv("NU_FETCH_CONCURRENCY") or str(default)
+
+    try:
+        value = int(str(raw).strip())
+    except Exception:
+        value = default
+
+    return max(1, min(value, max_value))
+
+
+def _nu_fetch_timeout_seconds() -> int:
+    default = _nu_comments_int("fetch_timeout_seconds", 20)
+
+    raw = os.getenv("NU_FETCH_TIMEOUT_SECONDS") or str(default)
+
+    try:
+        value = int(str(raw).strip())
+    except Exception:
+        value = default
+
+    return max(1, value)
+
+
+def _nu_comments_str(key: str, default: str) -> str:
+    cfg = get_novelupdates_comments_config()
+    return str(cfg.get(key) or default).strip()
+
+
+def _nu_host_str(key: str, default: str) -> str:
+    cfg = get_novelupdates_host_config()
+    return str(cfg.get(key) or default).strip()
+
+
+def _nu_host_name() -> str:
+    return _nu_host_str("name", "Novel Updates")
+
+
+def _nu_host_logo() -> str:
+    return _nu_host_str("logo", "https://www.novelupdates.com/appicon.png")
+
 
 def _xml10(s: str) -> str:
     return _XML10_BAD.sub("", s or "")
@@ -187,12 +248,12 @@ def _items_from_parsed_nu_feed(target: Dict[str, Any], parsed: Any) -> List[Dict
 
         out.append({
             "novel_title": novel_title,
-            "host": NU_HOST_NAME,
+            "host": _nu_host_name(),
             "translator": target["translator"],
             "short_code": target["short_code"],
             "featured_image": target["featured_image"],
             "category": target["category"],
-            "host_logo": NU_HOST_LOGO,
+            "host_logo": _nu_host_logo(),
             "link": link_v,
             "author": author,
             "description": desc,
@@ -231,8 +292,8 @@ async def _collect_nu_items_from_mappings_async() -> List[Dict[str, Any]]:
     if not targets:
         return []
 
-    concurrency = max(1, NU_FETCH_CONCURRENCY)
-    timeout = aiohttp.ClientTimeout(total=NU_FETCH_TIMEOUT_SECONDS)
+    concurrency = _nu_fetch_concurrency()
+    timeout = aiohttp.ClientTimeout(total=_nu_fetch_timeout_seconds())
     headers = {
         "User-Agent": NU_USER_AGENT,
         "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
@@ -264,7 +325,7 @@ def _build_nu_item_block(it: Dict[str, Any]) -> str:
     title       = _xml10(it.get("novel_title", ""))
     link        = _xml10(it.get("link", ""))
     translator  = _xml10(it.get("translator", ""))
-    host        = _xml10(it.get("host", NU_HOST_NAME))
+    host        = _xml10(it.get("host") or _nu_host_name())
     category    = _xml10(it.get("category", "SFW"))
     guid        = _xml10(it.get("guid", ""))
     is_perm     = "true" if it.get("isPermaLink") else "false"

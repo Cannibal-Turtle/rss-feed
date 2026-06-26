@@ -34,6 +34,12 @@ from novel_mappings import (
     get_novel_details
 )
 
+try:
+    from config_loader import get_paid_feed_config
+except Exception:
+    def get_paid_feed_config():
+        return {}
+
 # ---------------- History Control ----------------
 PAID_HISTORY_PATH = os.getenv("PAID_HISTORY_PATH", "paid_history.json")
 USE_HISTORY = os.getenv("PAID_USE_HISTORY", "1") == "1"
@@ -77,6 +83,26 @@ def _dt_to_iso(dt: datetime.datetime) -> str:
 def _iso_to_dt(s: str) -> datetime.datetime:
     return datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
 
+def _paid_feed_int(key: str, default: int) -> int:
+    cfg = get_paid_feed_config()
+    try:
+        return int(cfg.get(key, default))
+    except Exception:
+        return default
+
+def _paid_api_concurrency() -> int:
+    default = _paid_feed_int("api_concurrency_default", 100)
+    max_value = _paid_feed_int("api_concurrency_max", 100)
+
+    raw = os.getenv("PAID_API_CONCURRENCY") or str(default)
+
+    try:
+        value = int(str(raw).strip())
+    except Exception:
+        value = default
+
+    return max(1, min(value, max_value))
+
 def item_to_dict(item: PyRSS2Gen.RSSItem):
     return {
         "title": item.title,
@@ -109,7 +135,7 @@ def dict_to_item(d):
     )
 
 # ---------------- Concurrency Control ----------------
-semaphore = asyncio.Semaphore(100)
+semaphore = asyncio.Semaphore(_paid_api_concurrency())
 
 def entry_pub_date(entry):
     tt = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)

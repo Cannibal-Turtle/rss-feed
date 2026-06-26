@@ -14,19 +14,42 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from message_renderer import load_template_settings, render_message, to_discord_api_payload
+from message_renderer import (
+    load_template_settings,
+    render_message,
+    to_discord_api_payload,
+)
+from message_settings import global_mention_from_settings
 from novel_mappings import HOSTING_SITE_DATA
 
+try:
+    from config_loader import (
+        get_discord_webhook_channel_id,
+        get_discord_webhook_role_id,
+    )
+except Exception:
+    def get_discord_webhook_channel_id(key: str, default: str = "") -> str:
+        return default
+
+    def get_discord_webhook_role_id(key: str, default: str = "") -> str:
+        return default
+
 DISCORD_TOKEN = os.environ["DISCORD_BOT_TOKEN"]
-CHANNEL_ID = int(os.environ["DISCORD_MOD_CHANNEL_ID"])
+
+CHANNEL_ID = int(
+    os.environ.get("DISCORD_MOD_CHANNEL_ID", "").strip()
+    or get_discord_webhook_channel_id("mod")
+    or 0
+)
+
 EVENT_PATH = os.environ["GITHUB_EVENT_PATH"]
 REPO_SLUG = os.environ.get("GITHUB_REPOSITORY", "")
 
 _TEMPLATE_SETTINGS = load_template_settings("token_alert")
-GLOBAL_MENTION = (
-    os.environ.get("TOKEN_ALERT_GLOBAL_MENTION", "").strip()
-    or os.environ.get("GLOBAL_MENTION", "").strip()
-    or str(_TEMPLATE_SETTINGS.get("global_mention", "")).strip()
+
+GLOBAL_MENTION = global_mention_from_settings(
+    _TEMPLATE_SETTINGS,
+    envs=("TOKEN_ALERT_GLOBAL_MENTION", "GLOBAL_MENTION"),
 )
 
 

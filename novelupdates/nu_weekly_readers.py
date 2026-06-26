@@ -24,50 +24,70 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-try:
-    from novel_mappings import HOSTING_SITE_DATA, get_novelupdates_url
-except Exception as e:
-    print("[fatal] Could not import novel_mappings.HOSTING_SITE_DATA:", e, file=sys.stderr)
-    raise
+from novel_mappings import HOSTING_SITE_DATA, get_novelupdates_url
+
+from message_renderer import (
+    load_template_settings,
+    render_message,
+    to_discord_api_payload,
+)
+
+from message_settings import (
+    global_mention_from_settings,
+    setting_bool,
+    setting_str,
+)
 
 try:
-    from message_renderer import load_template_settings, render_message, to_discord_api_payload
-except Exception as e:
-    print("[fatal] Could not import message_renderer:", e, file=sys.stderr)
-    raise
+    from config_loader import (
+        get_discord_webhook_channel_id,
+        get_novel_discord_map_url,
+    )
+except Exception:
+    def get_discord_webhook_channel_id(key: str, default: str = "") -> str:
+        return default
 
+    def get_novel_discord_map_url(default: str = "") -> str:
+        return default
+    
 
 DISCORD_API_BASE = "https://discord.com/api/v10"
 
 _TEMPLATE_SETTINGS = load_template_settings("nu_weekly_readers")
 
+GLOBAL_MENTION = global_mention_from_settings(_TEMPLATE_SETTINGS)
 
-def _setting_str(key: str, default: str = "", *, env: str = "") -> str:
-    env_value = os.environ.get(env, "").strip() if env else ""
-    if env_value:
-        return env_value
-    value = _TEMPLATE_SETTINGS.get(key, default)
-    return str(value if value is not None else default).strip()
+CHANNEL_DEFAULT = (
+    os.environ.get("DISCORD_MOD_CHANNEL_ID", "").strip()
+    or get_discord_webhook_channel_id("mod")
+)
 
+EMBED_COLOR_HEX = setting_str(
+    _TEMPLATE_SETTINGS,
+    "embed_color",
+    "2D3F51",
+    env="NU_EMBED_COLOR_HEX",
+    fallback_env="EMBED_COLOR_HEX",
+).lstrip("#")
 
-def _setting_bool(key: str, default: bool = False, *, env: str = "") -> bool:
-    raw = os.environ.get(env, "").strip() if env else ""
-    if raw == "":
-        raw = _TEMPLATE_SETTINGS.get(key, default)
-    if isinstance(raw, bool):
-        return raw
-    return str(raw).strip().lower() in {"1", "true", "yes", "y", "on"}
+NOVEL_DISCORD_MAP_URL = (
+    os.environ.get("NOVEL_DISCORD_MAP_URL", "").strip()
+    or get_novel_discord_map_url()
+    or setting_str(_TEMPLATE_SETTINGS, "novel_discord_map_url")
+)
 
+NO_DATA_TEXT = setting_str(
+    _TEMPLATE_SETTINGS,
+    "no_data_text",
+    "_No data this week (no NU counts retrieved)._",
+)
 
-GLOBAL_MENTION = _setting_str("global_mention", env="GLOBAL_MENTION")
-
-# Same target channel/thread as revenue. Kept as env because it is a secret/workflow target.
-CHANNEL_DEFAULT = os.environ.get("DISCORD_MOD_CHANNEL_ID", "").strip()
-
-EMBED_COLOR_HEX = _setting_str("embed_color", "2D3F51", env="EMBED_COLOR_HEX").lstrip("#")
-NOVEL_DISCORD_MAP_URL = _setting_str("novel_discord_map_url", env="NOVEL_DISCORD_MAP_URL")
-NO_DATA_TEXT = _setting_str("no_data_text", "_No data this week (no NU counts retrieved)._")
-DEFAULT_ALLOW_ROLE_PINGS = _setting_bool("allow_role_pings", True, env="ALLOW_ROLE_PINGS")
+DEFAULT_ALLOW_ROLE_PINGS = setting_bool(
+    _TEMPLATE_SETTINGS,
+    "allow_role_pings",
+    True,
+    env="ALLOW_ROLE_PINGS",
+)
 
 DEFAULT_STATE_PATH = os.environ.get(
     "NU_STATE_PATH",

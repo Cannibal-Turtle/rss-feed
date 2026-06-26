@@ -17,36 +17,43 @@ from dateutil import parser as dateparser
 
 import discord
 
+from novel_mappings import HOSTING_SITE_DATA, get_novelupdates_url
+from host_utils import get_host_utils
+from message_renderer import load_template_settings, render_message, to_discord_py_kwargs
+from message_settings import setting_str
+
+try:
+    from config_loader import (
+        get_discord_webhook_channel_id,
+        get_novel_discord_map_url,
+    )
+except Exception:
+    def get_discord_webhook_channel_id(key: str, default: str = "") -> str:
+        return default
+
+    def get_novel_discord_map_url(default: str = "") -> str:
+        return default
+
 try:
     import tomllib
 except ModuleNotFoundError:
     import tomli as tomllib
-
-from novel_mappings import HOSTING_SITE_DATA, get_novelupdates_url
-from host_utils import get_host_utils
-from message_renderer import load_template_settings, render_message, to_discord_py_kwargs
 
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 STATE_FILE = "novel_status_targets.json"
 
 _TEMPLATE_SETTINGS = load_template_settings("publish_single_novel")
 
+ARCHIVE_CHANNEL_ID = int(
+    os.environ.get("ARCHIVE_CHANNEL_ID", "").strip()
+    or get_discord_webhook_channel_id("novel_cards_archive")
+    or setting_str(_TEMPLATE_SETTINGS, "archive_channel_id", "1463476725253144751")
+)
 
-def _setting_str(key: str, default: str = "", *, env: str = "") -> str:
-    env_value = os.environ.get(env, "").strip() if env else ""
-    if env_value:
-        return env_value
-    value = _TEMPLATE_SETTINGS.get(key, default)
-    return str(value if value is not None else default).strip()
-
-
-def _setting_int(key: str, default: int, *, env: str = "") -> int:
-    raw = _setting_str(key, str(default), env=env)
-    return int(raw)
-
-
-ARCHIVE_CHANNEL_ID = _setting_int("archive_channel_id", 1463476725253144751, env="ARCHIVE_CHANNEL_ID")
-NOVEL_DISCORD_MAP_URL = _setting_str("novel_discord_map_url", env="NOVEL_DISCORD_MAP_URL")
+NOVEL_DISCORD_MAP_URL = (
+    os.environ.get("NOVEL_DISCORD_MAP_URL", "").strip()
+    or get_novel_discord_map_url()
+)
 # Reads role IDs from discord-webhook's rich novel Discord TOML map.
 # currently only supports single server role attachment
 

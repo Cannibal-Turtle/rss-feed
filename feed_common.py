@@ -20,7 +20,8 @@ from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
-from novel_mappings import HOSTING_SITE_DATA, OUTPUT_FEEDS
+from novel_mappings import HOSTING_SITE_DATA
+from config_loader import get_completion_state_url as get_config_completion_state_url
 
 NSFW_PAREN_RE = re.compile(r"\([^)]*\b(?:nsfw|r-?18|18\+|h{1,3})\b[^)]*\)", re.I)
 
@@ -221,33 +222,17 @@ def source_scope_for(host: str, novel_title: str, details: dict[str, Any], chapt
 
 # ---------------- Completion State Gate ----------------
 
-def _output_feed_nested_value(section_key: str, nested_key: str = "discord_webhook") -> str:
-    value = OUTPUT_FEEDS.get(section_key, "")
-
-    if isinstance(value, dict):
-        value = value.get(nested_key, "")
-
-    return str(value or "").strip()
-
-
 def completion_state_url() -> str:
-    """Return the canonical discord-webhook completion state URL.
-
-    Current output_feeds.toml shape:
-
-        [completion_state_url]
-        discord_webhook = "https://.../discord-webhook/main/state.json"
-    """
-
     env_url = str(
         os.getenv("COMPLETION_STATE_URL")
         or os.getenv("DISCORD_WEBHOOK_STATE_URL")
         or ""
     ).strip()
+
     if env_url:
         return env_url
 
-    return _output_feed_nested_value("completion_state_url")
+    return get_config_completion_state_url()
 
 
 def completion_state_path() -> str:
@@ -303,7 +288,7 @@ def _load_json_url(url: str) -> dict[str, Any]:
 def load_completion_state() -> dict[str, Any]:
     """Load canonical discord-webhook/state.json.
 
-    Path env wins for local testing; otherwise use output_feeds.toml URL.
+    Path env wins for local testing; otherwise use integrations.json URL.
     Missing/unreadable state returns {}, which means "do not skip anything".
     """
 

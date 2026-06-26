@@ -25,7 +25,3 @@ inline = false
 [embeds.thumbnail]
 url = "{featured_image}"
 url_when = "featured_image"
-
-[settings]
-archive_channel_id = "1463476725253144751"
-novel_discord_map_url = "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/config/novel_discord_map.toml"

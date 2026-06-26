@@ -152,12 +152,7 @@ These are global repo-level feeds, not host-specific feeds.
 free_feed = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/free_chapters_feed.xml"
 paid_feed = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/paid_chapters_feed.xml"
 comments_feed = "https://raw.githubusercontent.com/Cannibal-Turtle/rss-feed/main/aggregated_comments_feed.xml"
-
-[completion_state_url]
-discord_webhook = "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/state.json"
 ```
-
-`completion_state_url.discord_webhook` points to the canonical Discord announcement state. The feed generators use it only for **novel-scoped fetching** so completed novels can be skipped before an API/novel-feed request. Host/global feeds are still scanned normally.
 
 Novel TOML files use flags like:
 
