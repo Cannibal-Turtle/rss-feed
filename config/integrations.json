@@ -37,6 +37,7 @@
       "logo": "https://www.novelupdates.com/appicon.png"
     },
     "comments": {
+      "enabled": true,
       "fetch_concurrency_default": 6,
       "fetch_concurrency_max": 10,
       "fetch_timeout_seconds": 20

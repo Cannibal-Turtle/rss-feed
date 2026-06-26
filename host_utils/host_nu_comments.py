@@ -42,11 +42,15 @@ except Exception:
 try:
     from config_loader import (
         get_novelupdates_comments_config,
+        get_novelupdates_comments_enabled,
         get_novelupdates_host_config,
     )
 except Exception:
     def get_novelupdates_comments_config():
         return {}
+
+    def get_novelupdates_comments_enabled(default: bool = True) -> bool:
+        return default
 
     def get_novelupdates_host_config():
         return {}
@@ -105,6 +109,22 @@ def _nu_fetch_timeout_seconds() -> int:
 def _nu_comments_str(key: str, default: str) -> str:
     cfg = get_novelupdates_comments_config()
     return str(cfg.get(key) or default).strip()
+
+
+def _env_bool(name: str) -> bool | None:
+    raw = os.getenv(name)
+    if raw is None:
+        return None
+
+    return str(raw).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _nu_comments_enabled() -> bool:
+    env_value = _env_bool("NU_COMMENTS_ENABLED")
+    if env_value is not None:
+        return env_value
+
+    return get_novelupdates_comments_enabled(True)
 
 
 def _nu_host_str(key: str, default: str) -> str:
@@ -367,6 +387,10 @@ def _build_nu_item_block(it: Dict[str, Any]) -> str:
 # ------------------------------- merge ---------------------------------
 
 def merge_into_aggregated(aggregated_path: str) -> None:
+    if not _nu_comments_enabled():
+        print("[nu-merge] Novel Updates comments disabled; skipping merge")
+        return
+
     # 1) read existing XML
     with open(aggregated_path, "r", encoding="utf-8") as f:
         original = f.read()

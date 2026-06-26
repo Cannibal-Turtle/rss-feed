@@ -202,6 +202,16 @@ def get_novelupdates_comments_config() -> dict[str, Any]:
     return comments if isinstance(comments, dict) else {}
 
 
+def get_novelupdates_comments_enabled(default: bool = True) -> bool:
+    comments = get_novelupdates_comments_config()
+    raw = comments.get("enabled", default)
+
+    if isinstance(raw, bool):
+        return raw
+
+    return str(raw).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
 def get_paid_feed_config() -> dict[str, Any]:
     cfg = load_integrations_config()
     paid_feed = cfg.get("paid_feed", {})
