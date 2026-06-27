@@ -8,9 +8,18 @@ on:
         required: true
         type: string
       banner_url:
-        description: "Membership banner image URL"
-        required: true
+        description: "Optional banner image URL. Leave empty to auto-crop the novel featured_image to 4:1."
+        required: false
         type: string
+      mode:
+        description: "What do you want to do?"
+        required: true
+        default: crop_preview
+        type: choice
+        options:
+          - crop_preview
+          - preview
+          - publish
 
 permissions:
   contents: write
@@ -35,20 +44,32 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests>=2.31
+          python -m pip install -r requirements.txt
 
       - name: Resolve arguments
         run: |
           echo "SHORT_CODE=${{ github.event.inputs.short_code }}" >> $GITHUB_ENV
           echo "BANNER_URL=${{ github.event.inputs.banner_url }}" >> $GITHUB_ENV
+          echo "MODE=${{ github.event.inputs.mode }}" >> $GITHUB_ENV
+          echo "MEMBERSHIP_BANNER_OUTPUT=membership_banner.png" >> $GITHUB_ENV
 
-      - name: Publish membership update
+      - name: Run membership update tool
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         run: |
-          python tools/publish_membership_update.py "$SHORT_CODE" "$BANNER_URL"
+          python tools/publish_membership_update.py "$SHORT_CODE" "$BANNER_URL" "$MODE"
+
+      - name: Upload cropped banner preview
+        if: ${{ github.event.inputs.mode == 'crop_preview' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: membership-banner-preview-${{ github.event.inputs.short_code }}
+          path: membership_banner.png
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Commit updated novel TOML
+        if: ${{ github.event.inputs.mode == 'publish' }}
         run: |
           git pull --rebase --autostash
           git add mappings/novels/*.toml

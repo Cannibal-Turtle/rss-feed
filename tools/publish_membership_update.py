@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
+import io
+import json
 import os
 import sys
 import re
 import requests
 from pathlib import Path
+
+from PIL import Image, ImageOps
 
 try:
     import tomllib
@@ -41,7 +45,7 @@ except Exception:
     def get_roles_json_url(default: str = "") -> str:
         return default
 
-TOKEN = os.environ["DISCORD_BOT_TOKEN"]
+TOKEN = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
 
 API_BASE = "https://discord.com/api/v10"
 
@@ -61,6 +65,16 @@ NEWS_CHANNEL_ID = int(
     os.environ.get("NEWS_CHANNEL_ID", "").strip()
     or get_discord_webhook_channel_id("announcements")
     or setting_str(_TEMPLATE_SETTINGS, "news_channel_id", "0")
+    or 0
+)
+
+# Preview mode posts to discord-webhook/config/server.json -> channels.mod.
+# No channel ID is hardcoded here.
+PREVIEW_CHANNEL_ID = int(
+    os.environ.get("MEMBERSHIP_PREVIEW_CHANNEL_ID", "").strip()
+    or os.environ.get("DISCORD_MOD_CHANNEL_ID", "").strip()
+    or get_discord_webhook_channel_id("mod")
+    or setting_str(_TEMPLATE_SETTINGS, "preview_channel_id", "0")
     or 0
 )
 
@@ -96,20 +110,40 @@ PUBLIC_GLOBAL_MENTION = setting_str(
 )
 
 NOVELS_DIR = ROOT / "mappings" / "novels"
+BANNER_OUTPUT_PATH = Path(os.environ.get("MEMBERSHIP_BANNER_OUTPUT", "membership_banner.png")).resolve()
+BANNER_FILENAME = BANNER_OUTPUT_PATH.name
+BANNER_SIZE = (1600, 400)
+BANNER_RATIO = BANNER_SIZE[0] / BANNER_SIZE[1]
+VALID_MODES = {"crop_preview", "preview", "publish"}
 
 
-def discord_headers():
+def require_discord_token():
+    if not TOKEN:
+        raise RuntimeError("DISCORD_BOT_TOKEN is required for preview/publish mode.")
+
+
+def discord_json_headers():
+    require_discord_token()
     return {
         "Authorization": f"Bot {TOKEN}",
         "Content-Type": "application/json",
     }
 
 
+def discord_auth_headers():
+    require_discord_token()
+    return {
+        "Authorization": f"Bot {TOKEN}",
+    }
+
+
 _NOVEL_ROLE_ID_MAP_CACHE = {}
+
 
 def normalize_role_id(value):
     m = re.search(r"\d{5,}", str(value or ""))
     return m.group(0) if m else ""
+
 
 def fetch_novel_role_id_map():
     """
@@ -148,6 +182,7 @@ def fetch_novel_role_id_map():
     _NOVEL_ROLE_ID_MAP_CACHE[url] = normalized
     return normalized
 
+
 def resolve_novel_role_mention(short_code):
     role_map = fetch_novel_role_id_map()
     role_id = role_map.get(short_code.upper())
@@ -155,6 +190,7 @@ def resolve_novel_role_mention(short_code):
 
 
 _THREAD_ID_MAP_CACHE = {}
+
 
 def fetch_thread_id_map(hostdata):
     """
@@ -218,7 +254,7 @@ def fetch_channel(channel_id: int):
     try:
         r = requests.get(
             f"{API_BASE}/channels/{channel_id}",
-            headers=discord_headers(),
+            headers=discord_json_headers(),
             timeout=15,
         )
         r.raise_for_status()
@@ -316,7 +352,7 @@ def build_global_mention(*, novel_title, novel_role_mention, channel_id, guild_i
     }
 
 
-def build_membership_payload(*, host, novel_title, novel, banner_url, channel_id, guild_id, novel_role_mention):
+def build_membership_payload(*, host, novel_title, novel, banner_url, channel_id, guild_id, novel_role_mention, suppress_mentions=False):
     novel_url = novel.get("novel_url", "").strip()
 
     global_mention, allowed_mentions = build_global_mention(
@@ -338,18 +374,36 @@ def build_membership_payload(*, host, novel_title, novel, banner_url, channel_id
 
     # Private/news server: novel role + ongoing/complete status role.
     # Public forum/thread: spoilered @everyone.
-    payload["allowed_mentions"] = allowed_mentions
+    payload["allowed_mentions"] = {"parse": []} if suppress_mentions else allowed_mentions
 
     return payload
 
 
-def post_message(channel_id: int, payload: dict):
-    r = requests.post(
-        f"{API_BASE}/channels/{channel_id}/messages",
-        headers=discord_headers(),
-        json=payload,
-        timeout=20,
-    )
+def post_message(channel_id: int, payload: dict, *, banner_file: Path | None = None):
+    if banner_file:
+        api_payload = dict(payload)
+        api_payload["attachments"] = [
+            {
+                "id": 0,
+                "filename": banner_file.name,
+            }
+        ]
+
+        with banner_file.open("rb") as f:
+            r = requests.post(
+                f"{API_BASE}/channels/{channel_id}/messages",
+                headers=discord_auth_headers(),
+                data={"payload_json": json.dumps(api_payload, ensure_ascii=False)},
+                files={"files[0]": (banner_file.name, f, "image/png")},
+                timeout=30,
+            )
+    else:
+        r = requests.post(
+            f"{API_BASE}/channels/{channel_id}/messages",
+            headers=discord_json_headers(),
+            json=payload,
+            timeout=20,
+        )
 
     if r.status_code >= 400:
         print("Discord error response:")
@@ -357,6 +411,92 @@ def post_message(channel_id: int, payload: dict):
 
     r.raise_for_status()
     return r.json()
+
+
+def download_image(url: str) -> Image.Image:
+    url = (url or "").strip()
+
+    if not url:
+        raise RuntimeError("No image URL was provided.")
+
+    r = requests.get(
+        url,
+        headers={"User-Agent": "Mozilla/5.0"},
+        timeout=30,
+    )
+    r.raise_for_status()
+
+    image = Image.open(io.BytesIO(r.content))
+    image.load()
+    return ImageOps.exif_transpose(image)
+
+
+def center_crop_to_ratio(image: Image.Image, ratio: float) -> Image.Image:
+    width, height = image.size
+
+    if width <= 0 or height <= 0:
+        raise RuntimeError(f"Invalid image size: {width}x{height}")
+
+    current_ratio = width / height
+
+    if current_ratio > ratio:
+        new_width = int(height * ratio)
+        left = max((width - new_width) // 2, 0)
+        return image.crop((left, 0, left + new_width, height))
+
+    if current_ratio < ratio:
+        new_height = int(width / ratio)
+        top = max((height - new_height) // 2, 0)
+        return image.crop((0, top, width, top + new_height))
+
+    return image
+
+
+def save_image_as_png(image: Image.Image, path: Path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    if image.mode not in {"RGB", "RGBA"}:
+        image = image.convert("RGBA")
+
+    image.save(path, "PNG", optimize=True)
+
+
+def save_banner_preview_from_url(url: str, path: Path, *, crop: bool):
+    image = download_image(url)
+
+    if crop:
+        image = center_crop_to_ratio(image, BANNER_RATIO)
+        image = image.resize(BANNER_SIZE, Image.Resampling.LANCZOS)
+
+    save_image_as_png(image, path)
+    return path
+
+
+def prepare_banner_image(*, novel: dict, manual_banner_url: str, mode: str):
+    """
+    Returns (banner_url_for_discord, optional_local_file, banner_source_label).
+
+    - manual_banner_url filled: publish/preview uses the URL exactly as before.
+    - manual_banner_url empty: use novel featured_image, center-crop to 4:1,
+      and send it to Discord as an attachment.
+    - crop_preview: always writes membership_banner.png for GitHub artifact upload.
+    """
+    manual_banner_url = (manual_banner_url or "").strip()
+
+    if manual_banner_url:
+        if mode == "crop_preview":
+            save_banner_preview_from_url(manual_banner_url, BANNER_OUTPUT_PATH, crop=False)
+            return manual_banner_url, BANNER_OUTPUT_PATH, "provided banner_url"
+
+        return manual_banner_url, None, "provided banner_url"
+
+    featured_image = (novel.get("featured_image") or "").strip()
+
+    if not featured_image:
+        raise RuntimeError("banner_url was empty and this novel has no featured_image to auto-crop.")
+
+    save_banner_preview_from_url(featured_image, BANNER_OUTPUT_PATH, crop=True)
+    return f"attachment://{BANNER_FILENAME}", BANNER_OUTPUT_PATH, "auto-cropped featured_image"
 
 
 def load_toml_file(path: Path) -> dict:
@@ -414,19 +554,57 @@ def mark_short_code_as_membership(short_code: str):
     print(f"Marked {short_code} as membership in {path}")
 
 
+def resolve_publish_targets(hostdata, short_code):
+    if not NEWS_CHANNEL_ID:
+        raise RuntimeError("NEWS_CHANNEL_ID could not be resolved from env, server.json announcements, or template settings.")
+
+    targets = [NEWS_CHANNEL_ID]
+
+    thread_id = resolve_forum_thread_id(hostdata, short_code)
+
+    if thread_id is None:
+        print(f"ERROR: {short_code} is missing from the host's thread_id_map_url.")
+        print('Add it to that host repo thread_id_map.json, or use "N/A" if it has no thread.')
+        sys.exit(1)
+
+    thread_id = str(thread_id).strip()
+
+    if not thread_id:
+        print(f"ERROR: {short_code} has an empty thread ID in the host's thread_id_map_url.")
+        print('Use "N/A" if this novel should only post to your private/news server.')
+        sys.exit(1)
+
+    if thread_id.upper() == "N/A":
+        print(f"{short_code} has no forum thread. Posting only to private/news server.")
+
+    else:
+        thread_id = int(thread_id)
+
+        if thread_id not in targets:
+            targets.append(thread_id)
+
+    return targets
+
+
+def usage():
+    print("Usage: python tools/publish_membership_update.py <short_code> [banner_url] [mode]")
+    print("Modes: crop_preview, preview, publish")
+    print("banner_url is optional. Leave it empty to auto-crop the novel featured_image to 4:1.")
+
+
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: python tools/publish_membership_update.py <short_code> <banner_url>")
+    if len(sys.argv) < 2:
+        usage()
         sys.exit(1)
 
     short_code = sys.argv[1].upper().strip()
+    banner_url_arg = sys.argv[2].strip() if len(sys.argv) >= 3 else ""
+    mode = sys.argv[3].strip().lower() if len(sys.argv) >= 4 else "publish"
 
-    if not sys.argv[2].strip():
-        print("Error: banner_url is required.")
-        print("Usage: python tools/publish_membership_update.py <short_code> <banner_url>")
+    if mode not in VALID_MODES:
+        print(f"Error: unknown mode {mode!r}.")
+        usage()
         sys.exit(1)
-
-    banner_url = sys.argv[2].strip()
 
     host, hostdata, novel_title, novel = find_novel_by_short_code(short_code)
 
@@ -434,35 +612,44 @@ def main():
         print(f"Unknown short_code: {short_code}")
         sys.exit(1)
 
+    banner_url, banner_file, banner_source = prepare_banner_image(
+        novel=novel,
+        manual_banner_url=banner_url_arg,
+        mode=mode,
+    )
+
+    print(f"Membership update mode: {mode}")
+    print(f"Novel: {novel_title}")
+    print(f"Banner source: {banner_source}")
+
+    if banner_file:
+        print(f"Banner file: {banner_file}")
+
+    if mode == "crop_preview":
+        print("Crop/image preview only. No Discord message sent and no TOML edited.")
+        return
+
+    require_discord_token()
+
     novel_role_mention = resolve_novel_role_mention(short_code)
 
-    targets = [NEWS_CHANNEL_ID]
-    
-    thread_id = resolve_forum_thread_id(hostdata, short_code)
-    
-    if thread_id is None:
-        print(f"ERROR: {short_code} is missing from {host}'s thread_id_map_url.")
-        print('Add it to that host repo thread_id_map.json, or use "N/A" if it has no thread.')
-        sys.exit(1)
-    
-    thread_id = str(thread_id).strip()
-    
-    if not thread_id:
-        print(f"ERROR: {short_code} has an empty thread ID in {host}'s thread_id_map_url.")
-        print('Use "N/A" if this novel should only post to your private/news server.')
-        sys.exit(1)
-    
-    if thread_id.upper() == "N/A":
-        print(f"{short_code} has no forum thread. Posting only to private/news server.")
-    
+    if mode == "preview":
+        if not PREVIEW_CHANNEL_ID:
+            raise RuntimeError(
+                "Preview channel could not be resolved. "
+                "Check discord-webhook/config/server.json has channels.mod, "
+                "or set MEMBERSHIP_PREVIEW_CHANNEL_ID / DISCORD_MOD_CHANNEL_ID."
+            )
+
+        targets = [PREVIEW_CHANNEL_ID]
+        suppress_mentions = True
+        print(f"Preview target: mod channel {PREVIEW_CHANNEL_ID}")
+
     else:
-        thread_id = int(thread_id)
-    
-        if thread_id not in targets:
-            targets.append(thread_id)
-    
-    print(f"Publishing membership update for: {novel_title}")
-    print(f"Targets: {targets}")
+        targets = resolve_publish_targets(hostdata, short_code)
+        suppress_mentions = False
+        print(f"Publishing membership update for: {novel_title}")
+        print(f"Targets: {targets}")
 
     for channel_id in targets:
         channel_data = fetch_channel(channel_id)
@@ -476,12 +663,16 @@ def main():
             channel_id=channel_id,
             guild_id=guild_id,
             novel_role_mention=novel_role_mention,
+            suppress_mentions=suppress_mentions,
         )
 
-        msg = post_message(channel_id, payload)
+        msg = post_message(channel_id, payload, banner_file=banner_file)
         print(f"Posted membership update to {channel_id}: message {msg.get('id')}")
 
-    mark_short_code_as_membership(short_code)
+    if mode == "publish":
+        mark_short_code_as_membership(short_code)
+    else:
+        print("Preview only. No TOML edited.")
 
 
 if __name__ == "__main__":

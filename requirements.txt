@@ -3,3 +3,4 @@ PyRSS2Gen
 aiohttp
 beautifulsoup4
 requests
+Pillow
