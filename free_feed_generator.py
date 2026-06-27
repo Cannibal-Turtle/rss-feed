@@ -65,9 +65,8 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
         writer.write(indent + "    <volume>%s</volume>" % escape(self.volume) + newl)
         writer.write(indent + "    <chapter>%s</chapter>" % escape(self.chapter) + newl)
 
-        # Add *** around chaptername if it exists
-        formatted_chaptername = f"***{self.chaptername}***" if self.chaptername.strip() else ""
-        writer.write(indent + "    <chaptername>%s</chaptername>" % escape(formatted_chaptername) + newl)
+        chaptername = self.chaptername.strip()
+        writer.write(indent + "    <chaptername>%s</chaptername>" % escape(chaptername) + newl)
 
         writer.write(indent + "    <link>%s</link>" % escape(self.link) + newl)
 

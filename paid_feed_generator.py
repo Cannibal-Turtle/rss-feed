@@ -130,7 +130,7 @@ def build_paid_item(host, novel_title, chap):
     raw_chaptername = chap["chaptername"].strip()
 
     chapter = raw_chapter
-    chaptername = f"***{raw_chaptername}***" if raw_chaptername else ""
+    chaptername = raw_chaptername
     volume = chap.get("volume", "")
 
     pub_date = chap["pubDate"]
