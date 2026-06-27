@@ -11,6 +11,7 @@ from xml.sax.saxutils import escape
 from host_utils import get_host_utils
 from feed_common import (
     chapter_source_mode,
+    entry_matches_chapter_type,
     has_nsfw_marker,
     host_level_feed_url,
     load_completion_state,
@@ -239,6 +240,8 @@ def process_host_paid_feed(host, feed_url):
     items = []
 
     for entry in parsed_feed.entries:
+        if not entry_matches_chapter_type(utils, entry, "paid"):
+            continue
         append_paid_feed_entry_item(items, host, utils, entry)
 
     return items
@@ -250,6 +253,43 @@ def process_novel_paid_feed(host, novel_title, details, feed_url):
     items = []
 
     for entry in parsed_feed.entries:
+        if not entry_matches_chapter_type(utils, entry, "paid"):
+            continue
+        append_paid_feed_entry_item(
+            items,
+            host,
+            utils,
+            entry,
+            forced_title=novel_title,
+            forced_details=details,
+        )
+
+    return items
+
+
+async def fetch_paid_feed_async(session, feed_url):
+    async with semaphore:
+        try:
+            async with session.get(feed_url, timeout=30) as resp:
+                if resp.status >= 400:
+                    print(f"Paid feed fetch failed: {feed_url} → HTTP {resp.status}")
+                    return feedparser.parse("")
+                text = await resp.text()
+        except Exception as exc:
+            print(f"Paid feed fetch failed: {feed_url} → {exc}")
+            return feedparser.parse("")
+
+    return feedparser.parse(text)
+
+
+async def process_novel_paid_feed_async(session, host, novel_title, details, feed_url):
+    utils = get_host_utils(host)
+    parsed_feed = await fetch_paid_feed_async(session, feed_url)
+    items = []
+
+    for entry in parsed_feed.entries:
+        if not entry_matches_chapter_type(utils, entry, "paid"):
+            continue
         append_paid_feed_entry_item(
             items,
             host,
@@ -401,7 +441,11 @@ async def main_async():
                         print(f"Skipping {novel_title}: paid_completion already exists.")
                         continue
 
-                    scraped.extend(process_novel_paid_feed(host, novel_title, details, feed_url))
+                    tasks.append(
+                        asyncio.create_task(
+                            process_novel_paid_feed_async(session, host, novel_title, details, feed_url)
+                        )
+                    )
 
                 if not any_novel_feed:
                     print(f"No paid feed source defined for host: {host}")

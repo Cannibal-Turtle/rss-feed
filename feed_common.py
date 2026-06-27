@@ -57,6 +57,41 @@ def normalize_title_key(title: str) -> str:
     return re.sub(r"\s+", " ", str(title or "")).strip().casefold()
 
 
+def entry_matches_chapter_type(utils: dict[str, Any], entry: Any, chapter_type: str) -> bool:
+    """Return whether one source entry belongs in this generated feed.
+
+    Default is True to preserve old behavior. Hosts with mixed free/paid RSS
+    feeds can expose one of these hooks in their utils dict:
+      - entry_matches_chapter_type(entry, "free"/"paid")
+      - is_free_entry(entry) / is_paid_entry(entry)
+      - entry_is_free(entry) / entry_is_paid(entry)
+    """
+
+    chapter_type = str(chapter_type or "").strip().casefold()
+    utils = utils or {}
+
+    checker = utils.get("entry_matches_chapter_type")
+    if callable(checker):
+        try:
+            return bool(checker(entry, chapter_type))
+        except TypeError:
+            return bool(checker(entry))
+        except Exception as exc:
+            print(f"Warning: entry_matches_chapter_type failed for {chapter_type}: {exc}")
+            return True
+
+    for name in (f"is_{chapter_type}_entry", f"entry_is_{chapter_type}"):
+        checker = utils.get(name)
+        if callable(checker):
+            try:
+                return bool(checker(entry))
+            except Exception as exc:
+                print(f"Warning: {name} failed: {exc}")
+                return True
+
+    return True
+
+
 # ---------------- Source Scope Helpers ----------------
 
 def host_data_for(host: str) -> dict[str, Any]:

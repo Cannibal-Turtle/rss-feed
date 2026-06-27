@@ -1,4 +1,8 @@
 import datetime
+import asyncio
+import os
+
+import aiohttp
 import feedparser
 import PyRSS2Gen
 import xml.dom.minidom
@@ -8,6 +12,7 @@ from xml.sax.saxutils import escape
 from host_utils import get_host_utils
 from feed_common import (
     chapter_source_mode,
+    entry_matches_chapter_type,
     has_nsfw_marker,
     host_level_feed_url,
     load_completion_state,
@@ -206,67 +211,136 @@ def append_free_entry_item(rss_items, host, utils, entry, *, forced_title="", fo
     rss_items.append(item)
 
 
-def main():
+def _free_fetch_concurrency() -> int:
+    raw = os.getenv("FREE_FETCH_CONCURRENCY") or os.getenv("CHAPTER_FETCH_CONCURRENCY") or "6"
+    try:
+        value = int(str(raw).strip())
+    except Exception:
+        value = 6
+    return max(1, value)
+
+
+free_fetch_semaphore = asyncio.Semaphore(_free_fetch_concurrency())
+
+
+async def fetch_feed_async(session, feed_url):
+    async with free_fetch_semaphore:
+        try:
+            async with session.get(feed_url, timeout=30) as resp:
+                if resp.status >= 400:
+                    print(f"Feed fetch failed: {feed_url} → HTTP {resp.status}")
+                    return feedparser.parse("")
+                text = await resp.text()
+        except Exception as exc:
+            print(f"Feed fetch failed: {feed_url} → {exc}")
+            return feedparser.parse("")
+
+    return feedparser.parse(text)
+
+
+async def process_host_free_feed(session, host, feed_url):
+    utils = get_host_utils(host)
+    parsed_feed = await fetch_feed_async(session, feed_url)
+    items = []
+
+    for entry in parsed_feed.entries:
+        if not entry_matches_chapter_type(utils, entry, "free"):
+            continue
+        append_free_entry_item(items, host, utils, entry)
+
+    return items
+
+
+async def process_novel_free_feed(session, host, novel_title, details, feed_url):
+    utils = get_host_utils(host)
+    parsed_feed = await fetch_feed_async(session, feed_url)
+    items = []
+
+    for entry in parsed_feed.entries:
+        if not entry_matches_chapter_type(utils, entry, "free"):
+            continue
+        append_free_entry_item(
+            items,
+            host,
+            utils,
+            entry,
+            forced_title=novel_title,
+            forced_details=details,
+        )
+
+    return items
+
+
+async def main_async():
     rss_items = []
 
     # Loaded only if we actually hit a novel-scoped source.
     completion_state = None
 
-    # Loop over each host defined in the mapping.
-    for host, data in HOSTING_SITE_DATA.items():
-        utils = get_host_utils(host)
-        mode = chapter_source_mode(host, "free")
+    connector = aiohttp.TCPConnector(limit=_free_fetch_concurrency())
+    async with aiohttp.ClientSession(connector=connector) as session:
+        tasks = []
 
-        # API source. Mistmint currently exposes this as load_feed(host), but
-        # internally it loops novels and applies the completion gate before API fetch.
-        if mode == "api":
-            load_feed = utils.get("load_feed")
-            if not load_feed:
-                print(f"No free API loader defined for host: {host}")
+        # Loop over each host defined in the mapping.
+        for host, data in HOSTING_SITE_DATA.items():
+            utils = get_host_utils(host)
+            mode = chapter_source_mode(host, "free")
+
+            # API source. If the host has an async loader, use it. If not,
+            # fall back to the old sync loader in a worker thread.
+            if mode == "api":
+                load_feed_async = utils.get("load_feed_async")
+                load_feed = utils.get("load_feed")
+
+                if load_feed_async:
+                    parsed_feed = await load_feed_async(session, host)
+                elif load_feed:
+                    parsed_feed = await asyncio.to_thread(load_feed, host)
+                else:
+                    print(f"No free API loader defined for host: {host}")
+                    continue
+
+                for entry in parsed_feed.entries:
+                    if not entry_matches_chapter_type(utils, entry, "free"):
+                        continue
+                    append_free_entry_item(rss_items, host, utils, entry)
                 continue
 
-            parsed_feed = load_feed(host)
-            for entry in parsed_feed.entries:
-                append_free_entry_item(rss_items, host, utils, entry)
-            continue
-
-        # Feed source, host/global scope: fetch once, match title after.
-        # No completion gate here; the feed itself is the source of current entries.
-        host_feed_url = host_level_feed_url(host, "free")
-        if host_feed_url and not needs_novel_value(host_feed_url):
-            parsed_feed = feedparser.parse(host_feed_url)
-            for entry in parsed_feed.entries:
-                append_free_entry_item(rss_items, host, utils, entry)
-            continue
-
-        # Feed source, novel scope: loop novels and gate before fetching.
-        any_novel_feed = False
-        for novel_title, details in data.get("novels", {}).items():
-            feed_url = resolved_novel_feed_url(host, novel_title, details, "free")
-            if not feed_url:
+            # Feed source, host/global scope: fetch once, match title after.
+            # No completion gate here; the feed itself is the source of current entries.
+            host_feed_url = host_level_feed_url(host, "free")
+            if host_feed_url and not needs_novel_value(host_feed_url):
+                rss_items.extend(await process_host_free_feed(session, host, host_feed_url))
                 continue
 
-            any_novel_feed = True
-            if completion_state is None:
-                completion_state = load_completion_state()
+            # Feed source, novel scope: queue one async fetch per novel.
+            any_novel_feed = False
+            for novel_title, details in data.get("novels", {}).items():
+                feed_url = resolved_novel_feed_url(host, novel_title, details, "free")
+                if not feed_url:
+                    continue
 
-            if should_skip_completed(novel_title, "free", details, state=completion_state):
-                print(f"Skipping {novel_title}: free completion already exists.")
-                continue
+                any_novel_feed = True
+                if completion_state is None:
+                    completion_state = load_completion_state()
 
-            parsed_feed = feedparser.parse(feed_url)
-            for entry in parsed_feed.entries:
-                append_free_entry_item(
-                    rss_items,
-                    host,
-                    utils,
-                    entry,
-                    forced_title=novel_title,
-                    forced_details=details,
+                if should_skip_completed(novel_title, "free", details, state=completion_state):
+                    print(f"Skipping {novel_title}: free completion already exists.")
+                    continue
+
+                tasks.append(
+                    asyncio.create_task(
+                        process_novel_free_feed(session, host, novel_title, details, feed_url)
+                    )
                 )
 
-        if not any_novel_feed:
-            print(f"No free feed source defined for host: {host}")
+            if not any_novel_feed:
+                print(f"No free feed source defined for host: {host}")
+
+        if tasks:
+            results = await asyncio.gather(*tasks)
+            for items in results:
+                rss_items.extend(items)
 
     # Sort all items newest-first.
     # Tie-breaker: host/title alphabetical, then chapter number.
@@ -312,4 +386,4 @@ def main():
     print("Output written to", output_file)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main_async())
