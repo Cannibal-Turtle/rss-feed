@@ -1,0 +1,75 @@
+mode = "components_v2"
+flags = 32768
+
+[[components]]
+type = 17
+accent_color = "{accent_color}"
+spoiler = false
+
+[[components.components]]
+type = 10
+content = "{global_mention}"
+
+[[components.components]]
+type = 10
+content = "## <a:sweetpianoskip:1368137573364531210> {announcement_title}"
+
+[[components.components]]
+type = 10
+content = "### <a:blackcatbracket_1:1517457481532440576>{novel_title}<a:blackcatbracket_2:1517457479380766751>"
+
+[[components.components]]
+type = 14
+spacing = 1
+divider = false
+
+[[components.components]]
+type = 12
+
+[[components.components.items]]
+description = "Announcement banner"
+spoiler = false
+
+[components.components.items.media]
+url = "{banner_url}"
+
+[[components.components]]
+type = 14
+spacing = 1
+divider = false
+
+[[components.components]]
+type = 10
+content = "{announcement_message}"
+
+[[components.components]]
+type = 14
+spacing = 1
+divider = true
+
+[[components.components]]
+type = 9
+
+[[components.components.components]]
+type = 10
+content = "-# {host_emoji} **{host}** • {discord_time}"
+
+[components.components.accessory]
+type = 2
+style = 5
+label = "<a:bunnywave:1520505893601411274>{button_label}"
+url = "{button_url}"
+
+[settings]
+announcement_title = "Special Release Unlocked!"
+
+announcement_message = '''
+A special bonus arc from **The Villain Is Too Pampered and Alluring** has been released!
+
+***The Esports Rookie Is a Girl*** was originally a removed/deleted arc, but I’ve decided to share it as a special release for readers who want more from the story.
+
+Please treat it as an extra arc outside the main flow and enjoy it <a:hearts:1365567693645942834>
+'''
+
+button_label = "Read Arc"
+button_url = "https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring/deleted-arc-the-esports-rookie-is-a-girl-chapter-s1"
