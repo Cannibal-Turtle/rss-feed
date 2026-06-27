@@ -10,8 +10,10 @@ import os
 from xml.sax.saxutils import escape
 from host_utils import get_host_utils
 from feed_common import (
+    chapter_fetch_concurrency,
     chapter_source_mode,
     entry_matches_chapter_type,
+    fetch_parsed_feed_async,
     has_nsfw_marker,
     host_level_feed_url,
     load_completion_state,
@@ -95,14 +97,12 @@ def _paid_api_concurrency() -> int:
     default = _paid_feed_int("api_concurrency_default", 100)
     max_value = _paid_feed_int("api_concurrency_max", 100)
 
-    raw = os.getenv("PAID_API_CONCURRENCY") or str(default)
-
-    try:
-        value = int(str(raw).strip())
-    except Exception:
-        value = default
-
-    return max(1, min(value, max_value))
+    return chapter_fetch_concurrency(
+        "paid",
+        default=default,
+        max_value=max_value,
+        legacy_env=("PAID_API_CONCURRENCY",),
+    )
 
 def item_to_dict(item: PyRSS2Gen.RSSItem):
     return {
@@ -267,24 +267,14 @@ def process_novel_paid_feed(host, novel_title, details, feed_url):
     return items
 
 
-async def fetch_paid_feed_async(session, feed_url):
-    async with semaphore:
-        try:
-            async with session.get(feed_url, timeout=30) as resp:
-                if resp.status >= 400:
-                    print(f"Paid feed fetch failed: {feed_url} → HTTP {resp.status}")
-                    return feedparser.parse("")
-                text = await resp.text()
-        except Exception as exc:
-            print(f"Paid feed fetch failed: {feed_url} → {exc}")
-            return feedparser.parse("")
-
-    return feedparser.parse(text)
-
-
 async def process_novel_paid_feed_async(session, host, novel_title, details, feed_url):
     utils = get_host_utils(host)
-    parsed_feed = await fetch_paid_feed_async(session, feed_url)
+    parsed_feed = await fetch_parsed_feed_async(
+        session,
+        feed_url,
+        semaphore=semaphore,
+        label="Paid feed",
+    )
     items = []
 
     for entry in parsed_feed.entries:

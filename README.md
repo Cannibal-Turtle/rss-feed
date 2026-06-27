@@ -590,6 +590,43 @@ A URL template like this is stored at host level but fetched per novel because i
 chapters_api_url = "https://api.mistminthaven.com/api/novels/slug/{slug}/chapters"
 ```
 
+### Feed/API Fetch Behavior
+
+Simple rule:
+
+```text
+global feed URL = sync single fetch
+slugged / per-novel feed URL = async concurrent fetches
+paid / free API source = async concurrent scraping
+```
+
+Examples:
+
+```toml
+free_feed_url = "https://www.mysite.com/feed/"
+paid_feed_url = "https://www.mysite.com/feed/premium/"
+```
+
+These are global feeds, so each one is fetched once with sync `feedparser.parse()`.
+
+```toml
+free_feed_url = "https://www.mysite.com/feed/{novel_slug}/"
+paid_feed_url = "https://www.mysite.com/feed/premium/{novel_slug}/"
+```
+
+These are per-novel feeds, so the generator creates async tasks per novel and fetches them concurrently.
+
+For shared free + paid feeds:
+
+```toml
+free_feed_url = "https://www.mysite.com/feed/{novel_slug}/"
+paid_feed_url = "https://www.mysite.com/feed/{novel_slug}/"
+```
+
+The generator fetches the same feed for free and paid, but `host_utils` must know how to separate free entries from paid entries. Host-specific free/paid detection belongs in `host_utils/<host_name>/`.
+
+Shared generator helpers belong in `feed_common.py`.
+
 ### `free_feed_generator.py`
 
 Builds:
@@ -640,9 +677,8 @@ manual/state fallback when a host uses it
 Paid-only behavior stays inside this generator, including:
 
 ```text
-paid_history.json
+paid_history.json + paid GUID handling (for manual entry only)
 coin/price fields
-paid GUID handling
 paid-specific item formatting
 ```
 

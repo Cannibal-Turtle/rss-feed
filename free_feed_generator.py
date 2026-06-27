@@ -1,7 +1,5 @@
 import datetime
 import asyncio
-import os
-
 import aiohttp
 import feedparser
 import PyRSS2Gen
@@ -11,8 +9,10 @@ from xml.sax.saxutils import escape
 
 from host_utils import get_host_utils
 from feed_common import (
+    chapter_fetch_concurrency,
     chapter_source_mode,
     entry_matches_chapter_type,
+    fetch_parsed_feed_async,
     has_nsfw_marker,
     host_level_feed_url,
     load_completion_state,
@@ -211,36 +211,79 @@ def append_free_entry_item(rss_items, host, utils, entry, *, forced_title="", fo
     rss_items.append(item)
 
 
+def build_free_item(host, novel_title, details, chap):
+    """Convert one API chapter dict into the existing free RSS item shape.
+
+    Feed entries are handled by append_free_entry_item(). API chapters should not
+    need to pretend to be feedparser entries.
+    """
+
+    details = details or get_novel_details(host, novel_title) or {}
+
+    raw_chapter = str(chap.get("chapter", "") or "").strip()
+    raw_chaptername = str(chap.get("chaptername", "") or "").strip()
+    volume = str(chap.get("volume", "") or "").strip()
+
+    description = str(
+        chap.get("description")
+        or details.get("custom_description")
+        or ""
+    )
+
+    pub_date = chap.get("pubDate") or chap.get("published") or chap.get("updated")
+    if isinstance(pub_date, str):
+        try:
+            pub_date = datetime.datetime.fromisoformat(pub_date.replace("Z", "+00:00"))
+        except Exception:
+            pub_date = None
+    if not isinstance(pub_date, datetime.datetime):
+        pub_date = datetime.datetime.now(datetime.timezone.utc)
+    if pub_date.tzinfo is None:
+        pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
+
+    link = str(chap.get("link", "") or "").strip()
+    guid = str(chap.get("guid") or chap.get("id") or link or f"{host}:{novel_title}:{raw_chapter}:{raw_chaptername}")
+
+    is_nsfw = bool(chap.get("is_nsfw")) or has_nsfw_marker(
+        raw_chapter,
+        raw_chaptername,
+        description,
+        volume,
+    )
+
+    return MyRSSItem(
+        title=novel_title,
+        link=link,
+        description=description,
+        guid=PyRSS2Gen.Guid(guid, isPermaLink=False),
+        pubDate=pub_date,
+        volume=volume,
+        chapter=raw_chapter,
+        chaptername=raw_chaptername,
+        host=host,
+        is_nsfw=is_nsfw,
+    )
+
+
 def _free_fetch_concurrency() -> int:
-    raw = os.getenv("FREE_FETCH_CONCURRENCY") or os.getenv("CHAPTER_FETCH_CONCURRENCY") or "6"
-    try:
-        value = int(str(raw).strip())
-    except Exception:
-        value = 6
-    return max(1, value)
+    return chapter_fetch_concurrency("free", default=6)
 
 
 free_fetch_semaphore = asyncio.Semaphore(_free_fetch_concurrency())
 
 
 async def fetch_feed_async(session, feed_url):
-    async with free_fetch_semaphore:
-        try:
-            async with session.get(feed_url, timeout=30) as resp:
-                if resp.status >= 400:
-                    print(f"Feed fetch failed: {feed_url} → HTTP {resp.status}")
-                    return feedparser.parse("")
-                text = await resp.text()
-        except Exception as exc:
-            print(f"Feed fetch failed: {feed_url} → {exc}")
-            return feedparser.parse("")
-
-    return feedparser.parse(text)
+    return await fetch_parsed_feed_async(
+        session,
+        feed_url,
+        semaphore=free_fetch_semaphore,
+        label="Free feed",
+    )
 
 
-async def process_host_free_feed(session, host, feed_url):
+def process_host_free_feed(host, feed_url):
     utils = get_host_utils(host)
-    parsed_feed = await fetch_feed_async(session, feed_url)
+    parsed_feed = feedparser.parse(feed_url)
     items = []
 
     for entry in parsed_feed.entries:
@@ -271,6 +314,24 @@ async def process_novel_free_feed(session, host, novel_title, details, feed_url)
     return items
 
 
+async def process_free_api_novel(session, host, novel_title, details):
+    """Fetch one novel's free chapters through a real API scraper hook."""
+
+    utils = get_host_utils(host)
+    scraper = utils.get("scrape_free_chapters_async")
+    if not scraper:
+        return []
+
+    async with free_fetch_semaphore:
+        try:
+            chapters = await scraper(session, host, novel_title, details)
+        except Exception as exc:
+            print(f"Free API scrape failed for {host} / {novel_title}: {exc}")
+            return []
+
+    return [build_free_item(host, novel_title, details, chap) for chap in (chapters or [])]
+
+
 async def main_async():
     rss_items = []
 
@@ -286,31 +347,41 @@ async def main_async():
             utils = get_host_utils(host)
             mode = chapter_source_mode(host, "free")
 
-            # API source. If the host has an async loader, use it. If not,
-            # fall back to the old sync loader in a worker thread.
+            # API source, preferred path: generator controls one async task per novel.
+            # Host utils only provides the host-specific scraper for ONE novel.
             if mode == "api":
-                load_feed_async = utils.get("load_feed_async")
-                load_feed = utils.get("load_feed")
+                scrape_free_chapters_async = utils.get("scrape_free_chapters_async")
 
-                if load_feed_async:
-                    parsed_feed = await load_feed_async(session, host)
-                elif load_feed:
-                    parsed_feed = await asyncio.to_thread(load_feed, host)
-                else:
-                    print(f"No free API loader defined for host: {host}")
+                if scrape_free_chapters_async:
+                    if completion_state is None:
+                        completion_state = load_completion_state()
+
+                    any_api_novel = False
+                    for novel_title, details in data.get("novels", {}).items():
+                        any_api_novel = True
+
+                        if should_skip_completed(novel_title, "free", details, state=completion_state):
+                            print(f"Skipping {novel_title}: free completion already exists.")
+                            continue
+
+                        tasks.append(
+                            asyncio.create_task(
+                                process_free_api_novel(session, host, novel_title, details)
+                            )
+                        )
+
+                    if not any_api_novel:
+                        print(f"No free API novels defined for host: {host}")
                     continue
 
-                for entry in parsed_feed.entries:
-                    if not entry_matches_chapter_type(utils, entry, "free"):
-                        continue
-                    append_free_entry_item(rss_items, host, utils, entry)
+                print(f"No scrape_free_chapters_async defined for host: {host}")
                 continue
 
             # Feed source, host/global scope: fetch once, match title after.
             # No completion gate here; the feed itself is the source of current entries.
             host_feed_url = host_level_feed_url(host, "free")
             if host_feed_url and not needs_novel_value(host_feed_url):
-                rss_items.extend(await process_host_free_feed(session, host, host_feed_url))
+                rss_items.extend(process_host_free_feed(host, host_feed_url))
                 continue
 
             # Feed source, novel scope: queue one async fetch per novel.

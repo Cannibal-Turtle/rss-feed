@@ -10,7 +10,7 @@ from .common import (
     pick_comment_html_default,
 )
 from .client import resolve_chapters_api_url
-from .free_chapters import load_feed_mistmint_via_api, load_feed_mistmint_via_api_async
+from .free_chapters import scrape_free_chapters_mistmint_async
 from .paid_chapters import (
     scrape_paid_chapters_mistmint_async,
     novel_has_paid_update_mistmint_async,
@@ -27,8 +27,7 @@ MISTMINT_UTILS = {
     # Free/public feed
     "split_title": split_title_mistmint,
     "extract_volume": extract_volume_mistmint,
-    "load_feed": load_feed_mistmint_via_api if _use_api_feed() else None,
-    "load_feed_async": load_feed_mistmint_via_api_async if _use_api_feed() else None,
+    "scrape_free_chapters_async": scrape_free_chapters_mistmint_async if _use_api_feed() else None,
     "resolve_chapters_api_url": resolve_chapters_api_url,
 
     # Paid feed (synthetic)

@@ -16,6 +16,8 @@ import datetime
 import json
 import os
 import re
+
+import feedparser
 from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
@@ -90,6 +92,71 @@ def entry_matches_chapter_type(utils: dict[str, Any], entry: Any, chapter_type: 
                 return True
 
     return True
+
+
+# ---------------- Fetch/Concurrency Helpers ----------------
+
+def chapter_fetch_concurrency(
+    chapter_type: str = "",
+    default: int = 6,
+    *,
+    max_value: int | None = None,
+    legacy_env: tuple[str, ...] = (),
+) -> int:
+    """Return the concurrency limit for novel-scoped chapter fetches.
+
+    Env priority:
+      FREE_FETCH_CONCURRENCY / PAID_FETCH_CONCURRENCY
+      CHAPTER_FETCH_CONCURRENCY
+      any legacy env names passed by the caller
+      default
+    """
+
+    chapter_type = str(chapter_type or "").strip().upper()
+    keys: list[str] = []
+
+    if chapter_type:
+        keys.append(f"{chapter_type}_FETCH_CONCURRENCY")
+
+    keys.append("CHAPTER_FETCH_CONCURRENCY")
+    keys.extend(legacy_env or ())
+
+    raw = ""
+    for key in keys:
+        raw = str(os.getenv(key, "") or "").strip()
+        if raw:
+            break
+
+    if not raw:
+        raw = str(default)
+
+    try:
+        value = int(raw)
+    except Exception:
+        value = default
+
+    value = max(1, value)
+    if max_value is not None:
+        value = min(value, max(1, int(max_value)))
+
+    return value
+
+
+async def fetch_parsed_feed_async(session: Any, feed_url: str, *, semaphore: Any, label: str = "Feed"):
+    """Fetch one RSS/Atom feed with aiohttp and return a feedparser result."""
+
+    async with semaphore:
+        try:
+            async with session.get(feed_url, timeout=30) as resp:
+                if resp.status >= 400:
+                    print(f"{label} fetch failed: {feed_url} → HTTP {resp.status}")
+                    return feedparser.parse("")
+                text = await resp.text()
+        except Exception as exc:
+            print(f"{label} fetch failed: {feed_url} → {exc}")
+            return feedparser.parse("")
+
+    return feedparser.parse(text)
 
 
 # ---------------- Source Scope Helpers ----------------
