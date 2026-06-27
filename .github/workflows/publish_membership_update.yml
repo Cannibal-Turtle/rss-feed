@@ -14,10 +14,10 @@ on:
       mode:
         description: "What do you want to do?"
         required: true
-        default: crop_preview
+        default: crop preview
         type: choice
         options:
-          - crop_preview
+          - crop preview
           - preview
           - publish
 
