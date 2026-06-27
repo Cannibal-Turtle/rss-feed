@@ -33,7 +33,6 @@ from novel_mappings import (
     get_host_logo,
     get_novel_short_code,
     get_nsfw_novels,
-    get_coin_emoji,
     get_novel_details
 )
 
@@ -326,8 +325,7 @@ class MyRSSItem(PyRSS2Gen.RSSItem):
 
         writer.write(indent + '    <featuredImage url="%s"/>' % escape(get_featured_image(self.title, self.host)) + newl)
         if self.coin:
-            emoji = get_coin_emoji(self.host)
-            writer.write(indent + "    <coin>%s %s</coin>" % (escape(emoji), escape(self.coin)) + newl)
+            writer.write(indent + "    <coin>%s</coin>" % escape(str(self.coin)) + newl)
 
         writer.write(indent + "    <pubDate>%s</pubDate>" %
                      self.pubDate.strftime("%a, %d %b %Y %H:%M:%S +0000") + newl)
