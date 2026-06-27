@@ -173,7 +173,7 @@ def append_free_entry_item(rss_items, host, utils, entry, *, forced_title="", fo
         print("Skipping item (novel not found in mapping):", main_title)
         return
 
-    # volume (Dragonholic = from URL fallback, Mistmint = from title pre ", Chapter")
+    # volume
     volume = utils.get("extract_volume", lambda _t, _l: "")(entry.title, entry.link)
 
     # description (prefer custom, else cleaned RSS)
@@ -417,7 +417,6 @@ async def main_async():
     # Tie-breaker: host/title alphabetical, then chapter number.
     sort_feed_items(rss_items)
 
-    # --- Mimic paid feed behavior for Mistmint API ---
     now_utc = datetime.datetime.now(datetime.timezone.utc)
 
     seven_days_ago = now_utc - datetime.timedelta(days=7)
