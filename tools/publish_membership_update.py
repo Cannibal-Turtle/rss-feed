@@ -7,7 +7,7 @@ import re
 import requests
 from pathlib import Path
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageDraw
 
 try:
     import tomllib
@@ -116,6 +116,7 @@ BANNER_SIZE = (1600, 400)
 BANNER_RATIO = BANNER_SIZE[0] / BANNER_SIZE[1]
 VALID_MODES = {"crop preview", "preview", "publish"}
 VALID_CROP_POSITIONS = {"top", "upper", "center", "lower", "bottom"}
+CROP_PREVIEW_POSITIONS = ["top", "upper", "center", "lower", "bottom"]
 
 
 def require_discord_token():
@@ -485,6 +486,64 @@ def save_banner_preview_from_url(url: str, path: Path, *, crop: bool, crop_posit
     return path
 
 
+def banner_preview_path_for_position(base_path: Path, crop_position: str) -> Path:
+    return base_path.with_name(f"{base_path.stem}_{crop_position}{base_path.suffix}")
+
+
+def contact_sheet_path_for_banner(base_path: Path) -> Path:
+    return base_path.with_name(f"{base_path.stem}_contact_sheet{base_path.suffix}")
+
+
+def save_crop_preview_set_from_url(url: str, base_path: Path, *, selected_crop_position: str):
+    """
+    For crop preview mode, create:
+    - membership_banner.png = the selected crop_position
+    - membership_banner_top.png
+    - membership_banner_upper.png
+    - membership_banner_center.png
+    - membership_banner_lower.png
+    - membership_banner_bottom.png
+    - membership_banner_contact_sheet.png
+    """
+    source_image = download_image(url)
+    preview_images = []
+
+    for crop_position in CROP_PREVIEW_POSITIONS:
+        cropped = crop_to_ratio(source_image.copy(), BANNER_RATIO, crop_position=crop_position)
+        cropped = cropped.resize(BANNER_SIZE, Image.Resampling.LANCZOS)
+
+        position_path = banner_preview_path_for_position(base_path, crop_position)
+        save_image_as_png(cropped, position_path)
+        preview_images.append((crop_position, cropped.copy(), position_path))
+
+        if crop_position == selected_crop_position:
+            save_image_as_png(cropped, base_path)
+
+    contact_sheet_path = contact_sheet_path_for_banner(base_path)
+    save_contact_sheet(preview_images, contact_sheet_path)
+
+    return [base_path] + [path for _, _, path in preview_images] + [contact_sheet_path]
+
+
+def save_contact_sheet(preview_images, path: Path):
+    label_height = 48
+    sheet_width = BANNER_SIZE[0]
+    sheet_height = (BANNER_SIZE[1] + label_height) * len(preview_images)
+
+    sheet = Image.new("RGB", (sheet_width, sheet_height), "white")
+    draw = ImageDraw.Draw(sheet)
+
+    for index, (crop_position, image, _) in enumerate(preview_images):
+        y = index * (BANNER_SIZE[1] + label_height)
+        label = f"{crop_position.upper()} crop"
+        draw.rectangle((0, y, sheet_width, y + label_height), fill=(240, 240, 240))
+        draw.text((24, y + 16), label, fill=(0, 0, 0))
+        sheet.paste(image.convert("RGB"), (0, y + label_height))
+
+    save_image_as_png(sheet, path)
+    return path
+
+
 def prepare_banner_image(*, novel: dict, manual_banner_url: str, mode: str, crop_position: str):
     """
     Returns (banner_url_for_discord, optional_local_file, banner_source_label).
@@ -493,7 +552,7 @@ def prepare_banner_image(*, novel: dict, manual_banner_url: str, mode: str, crop
       so the announcement does not depend on the external image URL staying alive.
     - manual_banner_url empty: use novel featured_image, crop it to 4:1 using crop_position,
       and send it to Discord as an attachment.
-    - crop preview: always writes membership_banner.png for GitHub artifact upload.
+    - crop preview + banner_url empty: writes all crop positions plus a contact sheet.
     """
     manual_banner_url = (manual_banner_url or "").strip()
 
@@ -506,7 +565,15 @@ def prepare_banner_image(*, novel: dict, manual_banner_url: str, mode: str, crop
     if not featured_image:
         raise RuntimeError("banner_url was empty and this novel has no featured_image to auto-crop.")
 
-    save_banner_preview_from_url(featured_image, BANNER_OUTPUT_PATH, crop=True, crop_position=crop_position)
+    if mode == "crop preview":
+        save_crop_preview_set_from_url(
+            featured_image,
+            BANNER_OUTPUT_PATH,
+            selected_crop_position=crop_position,
+        )
+    else:
+        save_banner_preview_from_url(featured_image, BANNER_OUTPUT_PATH, crop=True, crop_position=crop_position)
+
     return f"attachment://{BANNER_FILENAME}", BANNER_OUTPUT_PATH, f"auto-cropped featured_image ({crop_position})"
 
 
@@ -649,6 +716,11 @@ def main():
         print("Crop/image preview only. No Discord message sent and no TOML edited.")
         if banner_url_arg:
             print("Note: crop_position is ignored when banner_url is provided.")
+            print("Manual banner_url preview creates one image only because it is treated as an already-made banner.")
+        else:
+            print("Created crop preview files:")
+            for preview_path in sorted(BANNER_OUTPUT_PATH.parent.glob(f"{BANNER_OUTPUT_PATH.stem}*.png")):
+                print(f"- {preview_path.name}")
         return
 
     require_discord_token()
