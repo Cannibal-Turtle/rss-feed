@@ -12,7 +12,7 @@ content = "{global_mention}"
 
 [[components.components]]
 type = 10
-content = "## <a:sweetpianoskip:1368137573364531210>{announcement_title}<a:SparklesPink:1365568637938962492><a:SparklesPink:1365568637938962492>"
+content = "## <a:sweetpianoskip:1368137573364531210>{announcement_title}<a:SparklesPink:1365568637938962492>"
 
 [[components.components]]
 type = 10
@@ -76,6 +76,10 @@ A special bonus arc from **[{novel_title}]({novel_url})** has been released!
 Please treat it as an extra arc outside the main flow and enjoy it <a:hearts:1365567693645942834>
 '''
 
-button_label = "Read Arc"
+button_label = "Read S1"
 button_url = "https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring/deleted-arc-the-esports-rookie-is-a-girl-chapter-s1"
 time_format = ":D"
+
+# Blank = use selected novel's assigned discord_color.
+# Fill with hex to override for this announcement, e.g. "#f8d8c9"
+accent_color = ""

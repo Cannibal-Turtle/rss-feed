@@ -561,7 +561,7 @@ def build_special_payload(
     )
 
     ctx = {
-        "accent_color": novel.get("discord_color") or hostdata.get("discord_color") or "#C9D3FF",
+        "accent_color": setting_str(_TEMPLATE_SETTINGS, "accent_color") or novel.get("discord_color") or hostdata.get("discord_color") or "#C9D3FF",
         "announcement_title": announcement_title,
         "announcement_message": announcement_message,
         "banner_url": banner_url,
