@@ -53,6 +53,16 @@ def load_integrations_config() -> dict[str, Any]:
     return load_json_config("integrations.json")
 
 
+def load_runtime_config() -> dict[str, Any]:
+    return load_json_config("runtime.json")
+
+
+def get_runtime_fetch_config() -> dict[str, Any]:
+    cfg = load_runtime_config()
+    fetch = cfg.get("fetch", {})
+    return fetch if isinstance(fetch, dict) else {}
+
+
 def get_downstream_repos() -> list[str]:
     cfg = load_integrations_config()
     repos = cfg.get("downstream_dispatch", {}).get("repos", [])

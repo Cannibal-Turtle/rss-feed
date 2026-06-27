@@ -42,9 +42,5 @@
       "fetch_concurrency_max": 10,
       "fetch_timeout_seconds": 20
     }
-  },
-  "paid_feed": {
-    "api_concurrency_default": 100,
-    "api_concurrency_max": 100
   }
 }

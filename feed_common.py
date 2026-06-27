@@ -23,7 +23,10 @@ from typing import Any
 from urllib.request import Request, urlopen
 
 from novel_mappings import HOSTING_SITE_DATA
-from config_loader import get_completion_state_url as get_config_completion_state_url
+from config_loader import (
+    get_completion_state_url as get_config_completion_state_url,
+    get_runtime_fetch_config,
+)
 
 NSFW_PAREN_RE = re.compile(r"\([^)]*\b(?:nsfw|r-?18|18\+|h{1,3})\b[^)]*\)", re.I)
 
@@ -96,48 +99,83 @@ def entry_matches_chapter_type(utils: dict[str, Any], entry: Any, chapter_type: 
 
 # ---------------- Fetch/Concurrency Helpers ----------------
 
+def _safe_int(value: Any, default: int | None = None) -> int | None:
+    try:
+        return int(str(value).strip())
+    except Exception:
+        return default
+
+
+def _first_runtime_int(fetch_cfg: dict[str, Any], keys: tuple[str, ...]) -> int | None:
+    for key in keys:
+        if key in fetch_cfg and str(fetch_cfg.get(key, "")).strip() != "":
+            value = _safe_int(fetch_cfg.get(key))
+            if value is not None:
+                return value
+    return None
+
+
 def chapter_fetch_concurrency(
     chapter_type: str = "",
     default: int = 6,
     *,
     max_value: int | None = None,
-    legacy_env: tuple[str, ...] = (),
 ) -> int:
     """Return the concurrency limit for novel-scoped chapter fetches.
 
-    Env priority:
-      FREE_FETCH_CONCURRENCY / PAID_FETCH_CONCURRENCY
-      CHAPTER_FETCH_CONCURRENCY
-      any legacy env names passed by the caller
-      default
+    Priority:
+      1. FREE_FETCH_CONCURRENCY / PAID_FETCH_CONCURRENCY env
+      2. CHAPTER_FETCH_CONCURRENCY env
+      3. config/runtime.json free_fetch_concurrency / paid_fetch_concurrency
+      4. config/runtime.json chapter_fetch_concurrency
+      5. default
     """
 
-    chapter_type = str(chapter_type or "").strip().upper()
-    keys: list[str] = []
+    chapter_type_upper = str(chapter_type or "").strip().upper()
+    chapter_type_lower = str(chapter_type or "").strip().casefold()
 
-    if chapter_type:
-        keys.append(f"{chapter_type}_FETCH_CONCURRENCY")
+    env_keys: list[str] = []
+    if chapter_type_upper:
+        env_keys.append(f"{chapter_type_upper}_FETCH_CONCURRENCY")
+    env_keys.append("CHAPTER_FETCH_CONCURRENCY")
 
-    keys.append("CHAPTER_FETCH_CONCURRENCY")
-    keys.extend(legacy_env or ())
-
-    raw = ""
-    for key in keys:
+    value: int | None = None
+    for key in env_keys:
         raw = str(os.getenv(key, "") or "").strip()
         if raw:
-            break
+            value = _safe_int(raw)
+            if value is not None:
+                break
 
-    if not raw:
-        raw = str(default)
+    fetch_cfg = get_runtime_fetch_config()
 
-    try:
-        value = int(raw)
-    except Exception:
+    if value is None:
+        config_keys: list[str] = []
+        if chapter_type_lower:
+            config_keys.append(f"{chapter_type_lower}_fetch_concurrency")
+        config_keys.append("chapter_fetch_concurrency")
+        value = _first_runtime_int(fetch_cfg, tuple(config_keys))
+
+    if value is None:
         value = default
 
-    value = max(1, value)
-    if max_value is not None:
-        value = min(value, max(1, int(max_value)))
+    value = max(1, int(value))
+
+    config_max = _first_runtime_int(
+        fetch_cfg,
+        tuple(
+            key
+            for key in (
+                f"max_{chapter_type_lower}_fetch_concurrency" if chapter_type_lower else "",
+                "max_chapter_fetch_concurrency",
+            )
+            if key
+        ),
+    )
+
+    limits = [candidate for candidate in (max_value, config_max) if candidate is not None]
+    if limits:
+        value = min(value, max(1, min(int(candidate) for candidate in limits)))
 
     return value
 

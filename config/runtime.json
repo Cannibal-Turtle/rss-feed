@@ -1,0 +1,8 @@
+{
+  "fetch": {
+    "chapter_fetch_concurrency": 6,
+    "free_fetch_concurrency": 6,
+    "paid_fetch_concurrency": 6,
+    "max_chapter_fetch_concurrency": 10
+  }
+}
