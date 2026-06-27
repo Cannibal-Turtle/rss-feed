@@ -115,8 +115,8 @@ BANNER_FILENAME = BANNER_OUTPUT_PATH.name
 BANNER_SIZE = (1600, 400)
 BANNER_RATIO = BANNER_SIZE[0] / BANNER_SIZE[1]
 VALID_MODES = {"crop preview", "preview", "publish"}
-VALID_CROP_POSITIONS = {"top", "upper", "center", "lower", "bottom"}
-CROP_PREVIEW_POSITIONS = ["top", "upper", "center", "lower", "bottom"]
+VALID_CROP_POSITIONS = {"top", "upper", "upper center", "center", "lower center", "lower", "bottom"}
+CROP_PREVIEW_POSITIONS = ["top", "upper", "upper center", "center", "lower center", "lower", "bottom"]
 
 
 def require_discord_token():
@@ -451,11 +451,13 @@ def crop_to_ratio(image: Image.Image, ratio: float, crop_position: str = "upper"
         excess = max(height - new_height, 0)
 
         vertical_positions = {
-            "top": 0.0,
-            "upper": 0.25,
-            "center": 0.5,
-            "lower": 0.75,
-            "bottom": 1.0,
+            "top": 0.00,
+            "upper": 0.20,
+            "upper center": 0.35,
+            "center": 0.50,
+            "lower center": 0.65,
+            "lower": 0.80,
+            "bottom": 1.00,
         }
         factor = vertical_positions.get((crop_position or "upper").strip().lower(), 0.25)
         top = int(round(excess * factor))
@@ -487,7 +489,8 @@ def save_banner_preview_from_url(url: str, path: Path, *, crop: bool, crop_posit
 
 
 def banner_preview_path_for_position(base_path: Path, crop_position: str) -> Path:
-    return base_path.with_name(f"{base_path.stem}_{crop_position}{base_path.suffix}")
+    safe_crop_position = crop_position.replace(" ", "_")
+    return base_path.with_name(f"{base_path.stem}_{safe_crop_position}{base_path.suffix}")
 
 
 def contact_sheet_path_for_banner(base_path: Path) -> Path:
@@ -667,7 +670,7 @@ def resolve_publish_targets(hostdata, short_code):
 def usage():
     print("Usage: python tools/publish_membership_update.py <short_code> [banner_url] [mode] [crop_position]")
     print("Modes: crop preview, preview, publish")
-    print("Crop positions: top, upper, center, lower, bottom")
+    print("Crop positions: top, upper, upper center, center, lower center, lower, bottom")
     print("banner_url is optional. Leave it empty to auto-crop the novel featured_image to 4:1.")
 
 
@@ -679,7 +682,7 @@ def main():
     short_code = sys.argv[1].upper().strip()
     banner_url_arg = sys.argv[2].strip() if len(sys.argv) >= 3 else ""
     mode = sys.argv[3].strip().lower() if len(sys.argv) >= 4 else "publish"
-    crop_position = sys.argv[4].strip().lower() if len(sys.argv) >= 5 else "upper"
+    crop_position = sys.argv[4].strip().lower() if len(sys.argv) >= 5 else "upper center"
 
     if mode not in VALID_MODES:
         print(f"Error: unknown mode {mode!r}.")

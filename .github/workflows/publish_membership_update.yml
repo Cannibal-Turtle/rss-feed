@@ -12,14 +12,16 @@ on:
         required: false
         type: string
       crop_position:
-        description: "Crop position used only when banner_url is empty."
+        description: "Crop position used only when banner_url is empty. Default is upper center."
         required: true
-        default: upper
+        default: upper center
         type: choice
         options:
           - top
           - upper
+          - upper center
           - center
+          - lower center
           - lower
           - bottom
       mode:
@@ -73,7 +75,7 @@ jobs:
 
       - name: Upload cropped banner preview
         if: ${{ env.MODE == 'crop preview' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: membership-banner-preview-${{ env.SHORT_CODE }}
           path: |
