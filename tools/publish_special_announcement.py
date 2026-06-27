@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from novel_mappings import HOSTING_SITE_DATA
-from message_renderer import load_template_settings, render_message, to_discord_api_payload
+from message_renderer import load_template_settings, render_message, render_text, to_discord_api_payload
 from message_settings import setting_str
 
 try:
@@ -573,7 +573,13 @@ def build_special_payload(
         "host_emoji": hostdata.get("host_emoji", ""),
         "novel_title": novel_title,
         "novel_url": novel.get("novel_url", ""),
+        "short_code": (novel.get("short_code") or "").upper(),
     }
+
+    # Let editable [settings] text use the same placeholders as the template.
+    # Example: announcement_message can contain {novel_title} or {novel_url}.
+    for key in ("announcement_title", "announcement_message", "button_label", "button_url"):
+        ctx[key] = render_text(ctx.get(key, ""), ctx)
 
     payload = to_discord_api_payload(render_message("special_announcement", ctx))
     payload["allowed_mentions"] = {"parse": []} if suppress_mentions else allowed_mentions

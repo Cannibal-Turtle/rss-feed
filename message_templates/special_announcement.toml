@@ -12,7 +12,7 @@ content = "{global_mention}"
 
 [[components.components]]
 type = 10
-content = "## <a:sweetpianoskip:1368137573364531210> {announcement_title} <a:SparklesPink:1365568637938962492>"
+content = "## <a:sweetpianoskip:1368137573364531210>{announcement_title}<a:SparklesPink:1365568637938962492><a:SparklesPink:1365568637938962492>"
 
 [[components.components]]
 type = 10
@@ -78,4 +78,4 @@ Please treat it as an extra arc outside the main flow and enjoy it <a:hearts:136
 
 button_label = "Read Arc"
 button_url = "https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring/deleted-arc-the-esports-rookie-is-a-girl-chapter-s1"
-time_format = ":d"
+time_format = ":D"
