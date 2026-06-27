@@ -12,7 +12,7 @@ content = "{global_mention}"
 
 [[components.components]]
 type = 10
-content = "## <a:sweetpianoskip:1368137573364531210> {announcement_title}"
+content = "## <a:sweetpianoskip:1368137573364531210> {announcement_title} <a:SparklesPink:1365568637938962492>"
 
 [[components.components]]
 type = 10
@@ -69,7 +69,7 @@ animated = true
 announcement_title = "Special Release Unlocked!"
 
 announcement_message = '''
-A special bonus arc from **The Villain Is Too Pampered and Alluring** has been released!
+A special bonus arc from **[{novel_title}]({novel_url})** has been released!
 
 ***The Esports Rookie Is a Girl*** was originally a removed/deleted arc, but I’ve decided to share it as a special release for readers who want more from the story.
 
