@@ -614,6 +614,7 @@ def build_toml_text(
     chapter_count: str,
     last_chapter: str,
     discord_color: str,
+    translator_url: str,
     tags: list[str],
     site_genres: list[str],
     history_file: str,
@@ -640,6 +641,8 @@ def build_toml_text(
     lines.append("is_membership = false")
     lines.append("")
     lines.append(f"discord_color = {quote_toml(discord_color)}")
+    if translator_url:
+        lines.append(f"translator_url = {quote_toml(translator_url)}")
     lines.append("")
     tag_items = ", ".join(quote_toml(tag) for tag in tags)
     lines.append(f"tags = [{tag_items}]")
@@ -683,6 +686,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--chapter-count", default="", help='Optional display text, e.g. "93 Chapters"')
     p.add_argument("--last-chapter", default="", help='Optional target text, e.g. "Chapter 93"')
     p.add_argument("--discord-color", default="", help='Optional hex color, e.g. "#c90016"')
+    p.add_argument("--translator-url", default="", help="Optional translator profile/library URL for this novel.")
     p.add_argument("--quick-transmigration", default="false", help="true/false. Adds quick transmigration to tags.")
     p.add_argument("--infinite-flow", default="false", help="true/false. Adds infinite flow to tags.")
     p.add_argument(
@@ -766,6 +770,7 @@ def main(argv: list[str]) -> int:
         chapter_count=args.chapter_count,
         last_chapter=args.last_chapter,
         discord_color=args.discord_color,
+        translator_url=str_clean(args.translator_url),
         tags=tags,
         site_genres=site_genres,
         history_file=history_file,

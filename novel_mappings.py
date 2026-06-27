@@ -144,6 +144,10 @@ def get_translator(host, novel_title=""):
     return get_mapping_value(host, novel_title, "translator", "")
 
 
+def get_translator_url(host, novel_title=""):
+    return get_mapping_value(host, novel_title, "translator_url", "")
+
+
 def get_free_feed_url(host, novel_title=""):
     return get_mapping_value(host, novel_title, "free_feed_url", "")
 

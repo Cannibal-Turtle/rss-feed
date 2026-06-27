@@ -28,6 +28,10 @@ on:
         description: "Discord color optional, e.g. #c90016. Leave blank to write an empty string."
         required: false
         type: string
+      translator_url:
+        description: "Translator profile/library URL optional. Leave blank to inherit host default or omit."
+        required: false
+        type: string
       quick_transmigration:
         description: "World-hopping: quick transmigration"
         required: false
@@ -100,6 +104,7 @@ jobs:
             --chapter-count "${{ github.event.inputs.chapter_count }}"
             --last-chapter "${{ github.event.inputs.last_chapter }}"
             --discord-color "${{ github.event.inputs.discord_color }}"
+            --translator-url "${{ github.event.inputs.translator_url }}"
             --quick-transmigration "${{ github.event.inputs.quick_transmigration }}"
             --infinite-flow "${{ github.event.inputs.infinite_flow }}"
             --has-arcs "${{ github.event.inputs.has_arcs }}"
