@@ -6,7 +6,7 @@ revenue/report.py
 Monthly revenue report runner.
 
 What this file does:
-- imports revenue host adapters
+- discovers revenue host adapters from revenue/hosts/
 - collects current lifetime totals
 - compares them with revenue/state.json
 - builds one Discord embed announcement
@@ -16,12 +16,13 @@ What this file does:
 Important behavior:
 - only has_paid/is_paid novels show in Discord
 - old novels that later become all-free are preserved in state as inactive
-- bottom embed total only shows overall coins, not tickets
+- bottom embed total shows tickets only when tickets were sold
 """
 from __future__ import annotations
 
 import argparse
 import datetime as dt
+import importlib
 import json
 import os
 import re
@@ -42,7 +43,6 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from revenue.hosts.mistmint_haven import collect_revenue_rows as collect_mistmint_rows
 
 from message_renderer import (
     load_template_settings,
@@ -85,6 +85,10 @@ EMBED_COLOR = setting_color_int(
 )
 
 GLOBAL_MENTION = global_mention_from_settings(_TEMPLATE_SETTINGS)
+DEFAULT_REPORT_HOST_LABEL = "Revenue"
+MULTI_HOST_REPORT_LABEL = "Multi-host"
+FALLBACK_TOTAL_EMOJI = "<:kawaiiaccents:1435916448890617948>"
+HOSTS_DIR = ROOT / "revenue" / "hosts"
 
 NOVEL_DISCORD_MAP_URL = (
     os.environ.get("NOVEL_DISCORD_MAP_URL", "").strip()
@@ -247,10 +251,10 @@ def previous_item(
     Finds previous saved novel state.
 
     Supports old state:
-      items["mistmint_haven:AMLWC"]
+      items["host_key:SHORT_CODE"]
 
     Supports new state:
-      hosts["Mistmint Haven"]["novels"]["AMLWC"]
+      hosts["Host Name"]["novels"]["SHORT_CODE"]
     """
     old_items = state.get("items", {})
     if isinstance(old_items, Mapping):
@@ -444,8 +448,8 @@ def preserve_old_unseen_novels(
     Preserves old novels that are no longer returned/selected.
 
     This protects history when a novel moves from paid to all-free.
-    The short-code guard also prevents duplicate migration from old host keys like
-    "mistmint_haven" to display host keys like "Mistmint Haven".
+    The short-code guard also prevents duplicate migration from old internal
+    host keys to display host names.
     """
     hosts = previous_state_data.get("hosts", {})
     if not isinstance(hosts, Mapping):
@@ -699,13 +703,57 @@ def monthly_totals(rows: Iterable[Mapping[str, Any]], state: Mapping[str, Any]) 
     return total_coins, total_tickets
 
 
-def format_monthly_totals(rows: List[Mapping[str, Any]], state: Mapping[str, Any]) -> str:
-    total_coins, _total_tickets = monthly_totals(rows, state)
+def host_names_from_rows(rows: Iterable[Mapping[str, Any]]) -> List[str]:
+    return sorted({str(row.get("host_name") or "").strip() for row in rows if row.get("host_name")})
 
-    return render_template_text(
-        "monthly_total",
-        {"monthly_coins_text": fmt_month_total(total_coins, "coin")},
-    )
+
+def first_row_value(rows: Iterable[Mapping[str, Any]], key: str) -> str:
+    for row in rows:
+        value = str(row.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def monthly_total_emojis(rows: List[Mapping[str, Any]]) -> Tuple[str, str]:
+    """Return the monthly summary emojis.
+
+    A single-host report may use that host adapter's own coin/ticket emojis.
+    A combined multi-host report uses the generic kawaii accent emoji so the
+    overall totals do not look like they belong to one specific host.
+    """
+    host_names = host_names_from_rows(rows)
+
+    if len(host_names) == 1:
+        coin_emoji = first_row_value(rows, "coin_emoji") or FALLBACK_TOTAL_EMOJI
+        ticket_emoji = first_row_value(rows, "ticket_emoji") or FALLBACK_TOTAL_EMOJI
+        return coin_emoji, ticket_emoji
+
+    return FALLBACK_TOTAL_EMOJI, FALLBACK_TOTAL_EMOJI
+
+
+def report_host_label(rows: Iterable[Mapping[str, Any]]) -> str:
+    host_names = host_names_from_rows(rows)
+    if len(host_names) == 1:
+        return host_names[0]
+    if len(host_names) > 1:
+        return MULTI_HOST_REPORT_LABEL
+    return DEFAULT_REPORT_HOST_LABEL
+
+
+def format_monthly_totals(rows: List[Mapping[str, Any]], state: Mapping[str, Any]) -> str:
+    total_coins, total_tickets = monthly_totals(rows, state)
+    coin_emoji, ticket_emoji = monthly_total_emojis(rows)
+
+    ctx = {
+        "monthly_coins_text": fmt_month_total(total_coins, "coin"),
+        "monthly_tickets_text": fmt_month_total(total_tickets, "ticket"),
+        "coin_emoji": coin_emoji,
+        "ticket_emoji": ticket_emoji,
+    }
+
+    variant = "monthly_total_with_tickets" if total_tickets > 0 and ticket_emoji else "monthly_total"
+    return render_template_text(variant, ctx)
 
 
 def chunk_description(
@@ -859,7 +907,7 @@ def send_discord_embeds(
         return None
 
 
-def send_error_to_discord(message: str) -> None:
+def send_error_to_discord(message: str, *, host: str = DEFAULT_REPORT_HOST_LABEL) -> None:
     token = os.getenv("DISCORD_BOT_TOKEN", "").strip()
     channel_id = os.getenv("DISCORD_MOD_CHANNEL_ID", "").strip()
 
@@ -870,7 +918,7 @@ def send_error_to_discord(message: str) -> None:
     payload = to_discord_api_payload(
         render_message(
             "revenue_report",
-            {"safe_message": safe},
+            {"host": host, "safe_message": safe},
             variant="error",
         )
     )
@@ -892,9 +940,111 @@ def send_error_to_discord(message: str) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
+def normalize_adapter_name(adapter: str) -> str:
+    adapter = str(adapter or "").strip()
+    if not adapter:
+        return ""
+    if not re.fullmatch(r"[A-Za-z0-9_]+", adapter):
+        raise RuntimeError(f"Invalid revenue host adapter name: {adapter!r}")
+    return adapter
+
+
+def discovered_revenue_adapters() -> List[str]:
+    """Find revenue host adapters.
+
+    By default, every normal .py file in revenue/hosts/ is treated as an
+    enabled revenue adapter. For manual testing, REVENUE_HOST_ADAPTERS or
+    REVENUE_HOSTS can be set to a comma-separated subset.
+    """
+    env_value = (
+        os.getenv("REVENUE_HOST_ADAPTERS", "").strip()
+        or os.getenv("REVENUE_HOSTS", "").strip()
+    )
+
+    if env_value:
+        candidates = [part.strip() for part in env_value.split(",")]
+    else:
+        if not HOSTS_DIR.exists():
+            candidates = []
+        else:
+            candidates = [
+                path.stem
+                for path in sorted(HOSTS_DIR.glob("*.py"))
+                if path.stem != "__init__" and not path.stem.startswith("_")
+            ]
+
+    adapters: List[str] = []
+    for candidate in candidates:
+        adapter = normalize_adapter_name(candidate)
+        if adapter and adapter not in adapters:
+            adapters.append(adapter)
+
+    if not adapters:
+        raise RuntimeError(
+            "No revenue host adapters found in revenue/hosts/. "
+            "Add a host adapter file such as revenue/hosts/mistmint_haven.py."
+        )
+
+    return adapters
+
+
+def import_revenue_adapter(adapter: str) -> Any:
+    return importlib.import_module(f"revenue.hosts.{adapter}")
+
+
+def adapter_display_label(adapter: str) -> str:
+    try:
+        module = import_revenue_adapter(adapter)
+    except Exception:
+        return adapter.replace("_", " ").title()
+
+    label = str(getattr(module, "HOST_NAME", "") or "").strip()
+    return label or adapter.replace("_", " ").title()
+
+
+def discovered_report_host_label() -> str:
+    try:
+        labels = sorted({adapter_display_label(adapter) for adapter in discovered_revenue_adapters()})
+    except Exception:
+        return DEFAULT_REPORT_HOST_LABEL
+
+    if len(labels) == 1:
+        return labels[0]
+    if len(labels) > 1:
+        return MULTI_HOST_REPORT_LABEL
+    return DEFAULT_REPORT_HOST_LABEL
+
+
+def collect_rows_from_adapter(adapter: str) -> List[Dict[str, Any]]:
+    module = import_revenue_adapter(adapter)
+
+    collector = (
+        getattr(module, "collect_revenue_rows", None)
+        or getattr(module, "collect", None)
+        or getattr(module, "get_revenue_rows", None)
+    )
+    if not callable(collector):
+        raise RuntimeError(
+            f"Revenue adapter revenue.hosts.{adapter} has no "
+            "collect_revenue_rows(), collect(), or get_revenue_rows() function."
+        )
+
+    raw_rows = collector()
+    if raw_rows is None:
+        return []
+
+    rows: List[Dict[str, Any]] = []
+    for row in raw_rows:
+        if isinstance(row, Mapping):
+            rows.append(dict(row))
+    return rows
+
+
 def collect_all_rows() -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
-    rows.extend(collect_mistmint_rows())
+    for adapter in discovered_revenue_adapters():
+        rows.extend(collect_rows_from_adapter(adapter))
+
     rows.sort(
         key=lambda r: (
             str(r.get("host_name") or ""),
@@ -914,6 +1064,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     state_path = Path(args.state)
+
+    rows: List[Dict[str, Any]] = []
 
     try:
         rows = collect_all_rows()
@@ -975,7 +1127,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     except Exception as exc:
         msg = str(exc)
         print(f"[error] {msg}", file=sys.stderr)
-        send_error_to_discord(msg)
+        error_host = report_host_label(rows) if rows else discovered_report_host_label()
+        send_error_to_discord(msg, host=error_host)
         return 1
 
 

@@ -15,7 +15,13 @@ text = "## {month_label_upper}"
 
 [monthly_total]
 text = '''**Total earned coins this month:**
-### <:kawaiiaccents:1435916448890617948> ̟ !! ***{monthly_coins_text}***'''
+### {coin_emoji} ̟ !! ***{monthly_coins_text}***'''
+
+[monthly_total_with_tickets]
+text = '''**Total earned coins this month:**
+### {coin_emoji} ̟ !! ***{monthly_coins_text}***
+**Total tickets sold this month:**
+### {ticket_emoji} ̟ !! ***{monthly_tickets_text}***'''
 
 [empty_report]
 text = "_No revenue rows found._"
@@ -35,7 +41,7 @@ allowed_mentions = { parse = ["roles"] }
 
 [error]
 mode = "classic"
-content = '''⚠️ Mistmint revenue report failed:
+content = '''⚠️ {host} revenue report failed:
 ```text
 {safe_message}
 ```'''
