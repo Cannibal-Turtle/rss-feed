@@ -115,6 +115,7 @@ BANNER_FILENAME = BANNER_OUTPUT_PATH.name
 BANNER_SIZE = (1600, 400)
 BANNER_RATIO = BANNER_SIZE[0] / BANNER_SIZE[1]
 VALID_MODES = {"crop preview", "preview", "publish"}
+VALID_CROP_POSITIONS = {"top", "upper", "center", "lower", "bottom"}
 
 
 def require_discord_token():
@@ -431,7 +432,7 @@ def download_image(url: str) -> Image.Image:
     return ImageOps.exif_transpose(image)
 
 
-def center_crop_to_ratio(image: Image.Image, ratio: float) -> Image.Image:
+def crop_to_ratio(image: Image.Image, ratio: float, crop_position: str = "upper") -> Image.Image:
     width, height = image.size
 
     if width <= 0 or height <= 0:
@@ -446,7 +447,19 @@ def center_crop_to_ratio(image: Image.Image, ratio: float) -> Image.Image:
 
     if current_ratio < ratio:
         new_height = int(width / ratio)
-        top = max((height - new_height) // 2, 0)
+        excess = max(height - new_height, 0)
+
+        vertical_positions = {
+            "top": 0.0,
+            "upper": 0.25,
+            "center": 0.5,
+            "lower": 0.75,
+            "bottom": 1.0,
+        }
+        factor = vertical_positions.get((crop_position or "upper").strip().lower(), 0.25)
+        top = int(round(excess * factor))
+        top = max(0, min(top, excess))
+
         return image.crop((0, top, width, top + new_height))
 
     return image
@@ -461,42 +474,40 @@ def save_image_as_png(image: Image.Image, path: Path):
     image.save(path, "PNG", optimize=True)
 
 
-def save_banner_preview_from_url(url: str, path: Path, *, crop: bool):
+def save_banner_preview_from_url(url: str, path: Path, *, crop: bool, crop_position: str = "upper"):
     image = download_image(url)
 
     if crop:
-        image = center_crop_to_ratio(image, BANNER_RATIO)
+        image = crop_to_ratio(image, BANNER_RATIO, crop_position=crop_position)
         image = image.resize(BANNER_SIZE, Image.Resampling.LANCZOS)
 
     save_image_as_png(image, path)
     return path
 
 
-def prepare_banner_image(*, novel: dict, manual_banner_url: str, mode: str):
+def prepare_banner_image(*, novel: dict, manual_banner_url: str, mode: str, crop_position: str):
     """
     Returns (banner_url_for_discord, optional_local_file, banner_source_label).
 
-    - manual_banner_url filled: publish/preview uses the URL exactly as before.
-    - manual_banner_url empty: use novel featured_image, center-crop to 4:1,
+    - manual_banner_url filled: download it and upload it to Discord as an attachment,
+      so the announcement does not depend on the external image URL staying alive.
+    - manual_banner_url empty: use novel featured_image, crop it to 4:1 using crop_position,
       and send it to Discord as an attachment.
     - crop preview: always writes membership_banner.png for GitHub artifact upload.
     """
     manual_banner_url = (manual_banner_url or "").strip()
 
     if manual_banner_url:
-        if mode == "crop preview":
-            save_banner_preview_from_url(manual_banner_url, BANNER_OUTPUT_PATH, crop=False)
-            return manual_banner_url, BANNER_OUTPUT_PATH, "provided banner_url"
-
-        return manual_banner_url, None, "provided banner_url"
+        save_banner_preview_from_url(manual_banner_url, BANNER_OUTPUT_PATH, crop=False)
+        return f"attachment://{BANNER_FILENAME}", BANNER_OUTPUT_PATH, "provided banner_url (downloaded and re-uploaded as Discord attachment)"
 
     featured_image = (novel.get("featured_image") or "").strip()
 
     if not featured_image:
         raise RuntimeError("banner_url was empty and this novel has no featured_image to auto-crop.")
 
-    save_banner_preview_from_url(featured_image, BANNER_OUTPUT_PATH, crop=True)
-    return f"attachment://{BANNER_FILENAME}", BANNER_OUTPUT_PATH, "auto-cropped featured_image"
+    save_banner_preview_from_url(featured_image, BANNER_OUTPUT_PATH, crop=True, crop_position=crop_position)
+    return f"attachment://{BANNER_FILENAME}", BANNER_OUTPUT_PATH, f"auto-cropped featured_image ({crop_position})"
 
 
 def load_toml_file(path: Path) -> dict:
@@ -587,8 +598,9 @@ def resolve_publish_targets(hostdata, short_code):
 
 
 def usage():
-    print("Usage: python tools/publish_membership_update.py <short_code> [banner_url] [mode]")
+    print("Usage: python tools/publish_membership_update.py <short_code> [banner_url] [mode] [crop_position]")
     print("Modes: crop preview, preview, publish")
+    print("Crop positions: top, upper, center, lower, bottom")
     print("banner_url is optional. Leave it empty to auto-crop the novel featured_image to 4:1.")
 
 
@@ -600,9 +612,15 @@ def main():
     short_code = sys.argv[1].upper().strip()
     banner_url_arg = sys.argv[2].strip() if len(sys.argv) >= 3 else ""
     mode = sys.argv[3].strip().lower() if len(sys.argv) >= 4 else "publish"
+    crop_position = sys.argv[4].strip().lower() if len(sys.argv) >= 5 else "upper"
 
     if mode not in VALID_MODES:
         print(f"Error: unknown mode {mode!r}.")
+        usage()
+        sys.exit(1)
+
+    if crop_position not in VALID_CROP_POSITIONS:
+        print(f"Error: unknown crop_position {crop_position!r}.")
         usage()
         sys.exit(1)
 
@@ -616,9 +634,11 @@ def main():
         novel=novel,
         manual_banner_url=banner_url_arg,
         mode=mode,
+        crop_position=crop_position,
     )
 
     print(f"Membership update mode: {mode}")
+    print(f"Crop position: {crop_position}")
     print(f"Novel: {novel_title}")
     print(f"Banner source: {banner_source}")
 
@@ -627,9 +647,16 @@ def main():
 
     if mode == "crop preview":
         print("Crop/image preview only. No Discord message sent and no TOML edited.")
+        if banner_url_arg:
+            print("Note: crop_position is ignored when banner_url is provided.")
         return
 
     require_discord_token()
+
+    if banner_url_arg:
+        print("Manual banner_url provided: it will be downloaded and re-uploaded to Discord as an attachment.")
+    else:
+        print("banner_url empty: using featured_image auto-crop.")
 
     novel_role_mention = resolve_novel_role_mention(short_code)
 

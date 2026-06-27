@@ -11,6 +11,17 @@ on:
         description: "Optional banner image URL. Leave empty to auto-crop the novel featured_image to 4:1."
         required: false
         type: string
+      crop_position:
+        description: "Crop position used only when banner_url is empty."
+        required: true
+        default: upper
+        type: choice
+        options:
+          - top
+          - upper
+          - center
+          - lower
+          - bottom
       mode:
         description: "What do you want to do?"
         required: true
@@ -50,6 +61,7 @@ jobs:
         run: |
           echo "SHORT_CODE=${{ github.event.inputs.short_code }}" >> $GITHUB_ENV
           echo "BANNER_URL=${{ github.event.inputs.banner_url }}" >> $GITHUB_ENV
+          echo "CROP_POSITION=${{ github.event.inputs.crop_position }}" >> $GITHUB_ENV
           echo "MODE=${{ github.event.inputs.mode }}" >> $GITHUB_ENV
           echo "MEMBERSHIP_BANNER_OUTPUT=membership_banner.png" >> $GITHUB_ENV
 
@@ -57,19 +69,20 @@ jobs:
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         run: |
-          python tools/publish_membership_update.py "$SHORT_CODE" "$BANNER_URL" "$MODE"
+          python tools/publish_membership_update.py "$SHORT_CODE" "$BANNER_URL" "$MODE" "$CROP_POSITION"
 
       - name: Upload cropped banner preview
-        if: ${{ github.event.inputs.mode == 'crop preview' }}
+        if: ${{ env.MODE == 'crop preview' }}
         uses: actions/upload-artifact@v4
         with:
-          name: membership-banner-preview-${{ github.event.inputs.short_code }}
-          path: membership_banner.png
+          name: membership-banner-preview-${{ env.SHORT_CODE }}
+          path: |
+            membership_banner.png
           if-no-files-found: error
           retention-days: 1
 
       - name: Commit updated novel TOML
-        if: ${{ github.event.inputs.mode == 'publish' }}
+        if: ${{ env.MODE == 'publish' }}
         run: |
           git pull --rebase --autostash
           git add mappings/novels/*.toml
