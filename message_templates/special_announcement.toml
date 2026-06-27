@@ -57,8 +57,13 @@ content = "-# {host_emoji} **{host}** • {discord_time}"
 [components.components.accessory]
 type = 2
 style = 5
-label = "<a:bunnywave:1520505893601411274>{button_label}"
+label = "{button_label}"
 url = "{button_url}"
+
+[components.components.accessory.emoji]
+name = "bunnywave"
+id = "1520505893601411274"
+animated = true
 
 [settings]
 announcement_title = "Special Release Unlocked!"
@@ -73,3 +78,4 @@ Please treat it as an extra arc outside the main flow and enjoy it <a:hearts:136
 
 button_label = "Read Arc"
 button_url = "https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring/deleted-arc-the-esports-rookie-is-a-girl-chapter-s1"
+time_format = ":d"
