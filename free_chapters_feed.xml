@@ -4,14 +4,14 @@
     <title>Aggregated Free Chapters Feed</title>
     <link>https://github.com/cannibal-turtle/</link>
     <description>Aggregated RSS feed for free chapters across all hosting sites.</description>
-    <lastBuildDate>Sat, 27 Jun 2026 14:46:58 +0000</lastBuildDate>
+    <lastBuildDate>Sat, 27 Jun 2026 21:24:45 +0000</lastBuildDate>
     <docs>http://blogs.law.harvard.edu/tech/rss</docs>
     <generator>PyRSS2Gen-1.1.0</generator>
     <item>
       <title>After the Male Leads Went Crazy, They All Turned into Male Ghosts</title>
       <volume>Arc 1: The Charming Landlord Is Too Hard to Handle</volume>
       <chapter>Chapter 3</chapter>
-      <chaptername>***1.3***</chaptername>
+      <chaptername>1.3</chaptername>
       <link>https://www.mistminthaven.com/novels/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts/arc-1-the-charming-landlord-is-too-hard-to-handle-chapter-3</link>
       <description><![CDATA[Shao Lang was once again hard at work being villainous, ready to “die” ten thousand deaths for the job without complaint.
 But lately, things had gotten kind of haunted.
@@ -64,29 +64,6 @@ Guide:
       <host>Mistmint Haven</host>
       <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
       <guid isPermaLink="false">4e15f71a-2340-48df-9fcc-f736bf2f18e7</guid>
-    </item>
-    <item>
-      <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
-      <volume>Arc 15: The Imprisoned Evil Queen</volume>
-      <chapter>Chapter 595</chapter>
-      <chaptername>***15.8***</chaptername>
-      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring/arc-15-the-imprisoned-evil-queen-chapter-595</link>
-      <description><![CDATA[To survive, Sheng Nuan must traverse different worlds, playing the role of self-destructive cannon fodder while saving the darkest villains. These villains are cold-blooded, obsessive, and ruthless—capable of annihilating millions with a smile and destroying the world with a wave of their hand. Holding the cannon fodder’s script, Sheng Nuan is terrified…
-Later:
-A paranoid young man with a gloomy expression: “Nuan Nuan, you’re not allowed to go anywhere except by my side…”
-The cold-blooded emperor whose face was stained with blood: “Nuan Nuan, for you, what does it matter if the empire falls?”
-The demonized immortal with snow-white hair: “Nuan Nuan, you are my inner demon.”
-The zombie king of the apocalypse with an unwavering gaze: “Nuan Nuan, it’s your choice—kill me, or save me.”
-Sheng Nuan became even more panicked…
-]]></description>
-      <category>SFW</category>
-      <translator>CannibalTurtle</translator>
-      <short_code>TVITPA</short_code>
-      <featuredImage url="https://i.imgur.com/5sxtfVf.jpeg"/>
-      <pubDate>Sat, 27 Jun 2026 05:00:00 +0000</pubDate>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <guid isPermaLink="false">652447cc-f9b1-4bb2-b118-af0a013aa1a4</guid>
     </item>
   </channel>
 </rss>
