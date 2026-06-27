@@ -73,7 +73,7 @@ jobs:
 
       - name: Upload cropped banner preview
         if: ${{ env.MODE == 'crop preview' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: membership-banner-preview-${{ env.SHORT_CODE }}
           path: |
