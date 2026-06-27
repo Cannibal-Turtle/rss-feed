@@ -186,6 +186,7 @@ Example structure:
 host = "Mistmint Haven"
 
 translator = "Cannibal Turtle"
+translator_url = "https://example.com/account/@CannibalTurtle"
 host_logo = "https://example.com/logo.png"
 coin_emoji = "🪙"
 ticket_emoji = "🎟️"
@@ -215,6 +216,7 @@ Examples:
 
 - `host`
 - `translator`
+- `translator_url` optional translator/profile/library URL; stored in mappings and not emitted into RSS unless the feed generators are changed later
 - `host_logo`
 - `coin_emoji`
 - `ticket_emoji`
@@ -997,6 +999,7 @@ Purpose:
 - fetch an existing dashboard novel from a configured host API
 - create `mappings/novels/<short_code>.toml`
 - fill host-provided fields automatically, including title, slug URL, novel ID, description, start date, NSFW flag, and Mistmint cover image
+- optionally write a per-novel `translator_url` override when provided
 - guess the Novel Updates URL from the title
 - keep only Discord-supported mention tags from `discord-webhook/config/tag_roles.json` in `tags`
 - preserve the full Mistmint Haven API genre list in `site_genres`
@@ -1018,6 +1021,7 @@ Workflow inputs:
 | `short_code` | Yes | New short code, e.g. `AMLWC` |
 | `chapter_count` | No | Optional display text, e.g. `93 Chapters`; blank writes `""` |
 | `last_chapter` | No | Optional target text, e.g. `Chapter 93`; blank writes `""` |
+| `translator_url` | No | Optional translator/profile URL override; blank omits the key from the novel TOML |
 | `discord_color` | No | Optional hex color, e.g. `#c90016`; blank writes `""` |
 | `quick_transmigration` | No | Checkbox. Tick this only when the novel is quick transmigration; adds `quick transmigration` to `tags`. |
 | `infinite_flow` | No | Checkbox. Tick this only when the novel is infinite flow; adds `infinite flow` to `tags`. |
@@ -1209,6 +1213,7 @@ public_global_mention = "||@everyone||"
 | `short_code` | Novel short code, e.g. `AMLWC` |
 | `chapter_count` | Optional chapter count text |
 | `last_chapter` | Optional last-chapter text |
+| `translator_url` | Optional translator/profile URL override; blank omits the key from the novel TOML |
 | `discord_color` | Optional novel embed color |
 | `quick_transmigration` | Whether to add `quick transmigration` to `tags` |
 | `infinite_flow` | Whether to add `infinite flow` to `tags` |
