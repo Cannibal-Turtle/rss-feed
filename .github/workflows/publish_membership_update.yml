@@ -60,7 +60,7 @@ jobs:
           python tools/publish_membership_update.py "$SHORT_CODE" "$BANNER_URL" "$MODE"
 
       - name: Upload cropped banner preview
-        if: ${{ github.event.inputs.mode == 'crop_preview' }}
+        if: ${{ github.event.inputs.mode == 'crop preview' }}
         uses: actions/upload-artifact@v4
         with:
           name: membership-banner-preview-${{ github.event.inputs.short_code }}
