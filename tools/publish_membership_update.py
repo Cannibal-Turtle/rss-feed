@@ -114,7 +114,7 @@ BANNER_OUTPUT_PATH = Path(os.environ.get("MEMBERSHIP_BANNER_OUTPUT", "membership
 BANNER_FILENAME = BANNER_OUTPUT_PATH.name
 BANNER_SIZE = (1600, 400)
 BANNER_RATIO = BANNER_SIZE[0] / BANNER_SIZE[1]
-VALID_MODES = {"crop_preview", "preview", "publish"}
+VALID_MODES = {"crop preview", "preview", "publish"}
 
 
 def require_discord_token():
@@ -479,12 +479,12 @@ def prepare_banner_image(*, novel: dict, manual_banner_url: str, mode: str):
     - manual_banner_url filled: publish/preview uses the URL exactly as before.
     - manual_banner_url empty: use novel featured_image, center-crop to 4:1,
       and send it to Discord as an attachment.
-    - crop_preview: always writes membership_banner.png for GitHub artifact upload.
+    - crop preview: always writes membership_banner.png for GitHub artifact upload.
     """
     manual_banner_url = (manual_banner_url or "").strip()
 
     if manual_banner_url:
-        if mode == "crop_preview":
+        if mode == "crop preview":
             save_banner_preview_from_url(manual_banner_url, BANNER_OUTPUT_PATH, crop=False)
             return manual_banner_url, BANNER_OUTPUT_PATH, "provided banner_url"
 
@@ -588,7 +588,7 @@ def resolve_publish_targets(hostdata, short_code):
 
 def usage():
     print("Usage: python tools/publish_membership_update.py <short_code> [banner_url] [mode]")
-    print("Modes: crop_preview, preview, publish")
+    print("Modes: crop preview, preview, publish")
     print("banner_url is optional. Leave it empty to auto-crop the novel featured_image to 4:1.")
 
 
@@ -625,7 +625,7 @@ def main():
     if banner_file:
         print(f"Banner file: {banner_file}")
 
-    if mode == "crop_preview":
+    if mode == "crop preview":
         print("Crop/image preview only. No Discord message sent and no TOML edited.")
         return
 
