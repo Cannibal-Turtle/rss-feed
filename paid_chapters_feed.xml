@@ -4,9 +4,35 @@
     <title>Aggregated Paid Chapters Feed</title>
     <link>https://github.com/cannibal-turtle/</link>
     <description>Aggregated RSS feed for paid chapters across mapped novels.</description>
-    <lastBuildDate>Sun, 28 Jun 2026 16:01:19 +0000</lastBuildDate>
+    <lastBuildDate>Sun, 28 Jun 2026 16:03:19 +0000</lastBuildDate>
     <docs>http://blogs.law.harvard.edu/tech/rss</docs>
     <generator>PyRSS2Gen-1.1.0</generator>
+    <item>
+      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
+      <volume>Arc 18: Cold CEO Gong × Honest Married Wife Shou</volume>
+      <chapter>Chapter 652</chapter>
+      <chaptername>18.24</chaptername>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-18-cold-ceo-gong-honest-married-wife-shou-chapter-652</link>
+      <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
+Dark room, forced confinement, obsessive pampering.
+Shen Yu is bound to a system. His task is to enter various mission worlds and stop anomalous data from causing the worlds' collapse.
+He’s been completing the missions beautifully, except… the process seems a bit off—
+A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
+A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
+The sound of metal chains clatters—
+The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
+It’s 1v1. Sweet, sweet, sweet.
+]]></description>
+      <category>SFW</category>
+      <translator>CannibalTurtle</translator>
+      <short_code>TDLBKGC</short_code>
+      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
+      <coin>5</coin>
+      <pubDate>Sun, 28 Jun 2026 16:02:01 +0000</pubDate>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <guid isPermaLink="false">8481d9db-9ee0-45fb-bf25-d1e7540b6bce</guid>
+    </item>
     <item>
       <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
       <volume>Arc 18: Cold CEO Gong × Honest Married Wife Shou</volume>
@@ -1749,32 +1775,6 @@ It’s 1v1. Sweet, sweet, sweet.
       <host>Mistmint Haven</host>
       <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
       <guid isPermaLink="false">3cdb7e7f-7630-467a-8c88-e5e24011ea03</guid>
-    </item>
-    <item>
-      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
-      <volume>Arc 17: Supreme AI Gong × Frail Synthetic Human Shou</volume>
-      <chapter>Chapter 617</chapter>
-      <chaptername>7.23</chaptername>
-      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-17-supreme-ai-gong-frail-synthetic-human-shou-chapter-617</link>
-      <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
-Dark room, forced confinement, obsessive pampering.
-Shen Yu is bound to a system. His task is to enter various mission worlds and stop anomalous data from causing the worlds' collapse.
-He’s been completing the missions beautifully, except… the process seems a bit off—
-A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
-A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
-The sound of metal chains clatters—
-The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
-It’s 1v1. Sweet, sweet, sweet.
-]]></description>
-      <category>SFW</category>
-      <translator>CannibalTurtle</translator>
-      <short_code>TDLBKGC</short_code>
-      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
-      <coin>5</coin>
-      <pubDate>Sun, 21 Jun 2026 16:03:15 +0000</pubDate>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <guid isPermaLink="false">6337ae6a-ea7b-46ca-991d-c91695cc12a0</guid>
     </item>
   </channel>
 </rss>
