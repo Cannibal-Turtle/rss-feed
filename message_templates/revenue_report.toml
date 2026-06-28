@@ -56,6 +56,6 @@ timestamp = "{timestamp}"
 footer = { text = "Data retrieved" }
 
 [settings]
-embed_color = "C9D3FF"
+embed_color = "9DA148"
 global_mention_role = "admin"
 hide_global_mention = true
