@@ -4,7 +4,7 @@
     <title>Aggregated Paid Chapters Feed</title>
     <link>https://github.com/cannibal-turtle/</link>
     <description>Aggregated RSS feed for paid chapters across mapped novels.</description>
-    <lastBuildDate>Sun, 28 Jun 2026 16:05:16 +0000</lastBuildDate>
+    <lastBuildDate>Sun, 28 Jun 2026 16:07:17 +0000</lastBuildDate>
     <docs>http://blogs.law.harvard.edu/tech/rss</docs>
     <generator>PyRSS2Gen-1.1.0</generator>
     <item>
@@ -1775,58 +1775,6 @@ Damn dog:
       <host>Mistmint Haven</host>
       <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
       <guid isPermaLink="false">a405ff9c-5cc2-4fb2-9013-ae29ccf846a4</guid>
-    </item>
-    <item>
-      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
-      <volume>Arc 17: Supreme AI Gong × Frail Synthetic Human Shou</volume>
-      <chapter>Chapter 620</chapter>
-      <chaptername>7.26</chaptername>
-      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-17-supreme-ai-gong-frail-synthetic-human-shou-chapter-620</link>
-      <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
-Dark room, forced confinement, obsessive pampering.
-Shen Yu is bound to a system. His task is to enter various mission worlds and stop anomalous data from causing the worlds' collapse.
-He’s been completing the missions beautifully, except… the process seems a bit off—
-A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
-A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
-The sound of metal chains clatters—
-The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
-It’s 1v1. Sweet, sweet, sweet.
-]]></description>
-      <category>SFW</category>
-      <translator>CannibalTurtle</translator>
-      <short_code>TDLBKGC</short_code>
-      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
-      <coin>5</coin>
-      <pubDate>Sun, 21 Jun 2026 16:07:16 +0000</pubDate>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <guid isPermaLink="false">a0493233-a448-4d03-96ab-009a4fad1559</guid>
-    </item>
-    <item>
-      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
-      <volume>Arc 17: Supreme AI Gong × Frail Synthetic Human Shou</volume>
-      <chapter>Chapter 619</chapter>
-      <chaptername>7.25</chaptername>
-      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-17-supreme-ai-gong-frail-synthetic-human-shou-chapter-619</link>
-      <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
-Dark room, forced confinement, obsessive pampering.
-Shen Yu is bound to a system. His task is to enter various mission worlds and stop anomalous data from causing the worlds' collapse.
-He’s been completing the missions beautifully, except… the process seems a bit off—
-A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
-A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
-The sound of metal chains clatters—
-The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
-It’s 1v1. Sweet, sweet, sweet.
-]]></description>
-      <category>SFW</category>
-      <translator>CannibalTurtle</translator>
-      <short_code>TDLBKGC</short_code>
-      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
-      <coin>5</coin>
-      <pubDate>Sun, 21 Jun 2026 16:05:38 +0000</pubDate>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <guid isPermaLink="false">d6709a83-a8f1-4660-b689-c2d19ede238a</guid>
     </item>
   </channel>
 </rss>
