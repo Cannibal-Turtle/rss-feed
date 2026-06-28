@@ -23,16 +23,42 @@ from message_renderer import load_template_settings, render_message, to_discord_
 from message_settings import setting_str
 
 try:
-    from config_loader import get_integration_channel_id, get_integration_raw_url
+    from config_loader import (
+        get_host_discord_target,
+        get_integration_channel_id,
+        get_integration_raw_url,
+        get_primary_discord_integration,
+    )
 except Exception:
+    def get_host_discord_target(host_key: str):
+        return {}
+
     def get_integration_channel_id(name: str, key: str, default: str = "") -> str:
         return default
 
     def get_integration_raw_url(name: str, key: str, default_path: str = "", default: str = "") -> str:
         return default
 
-DISCORD_INTEGRATION = os.getenv("DISCORD_INTEGRATION", "discord_webhook").strip() or "discord_webhook"
-THREAD_INTEGRATION = os.getenv("THREAD_INTEGRATION", "mistmint_discord").strip() or "mistmint_discord"
+    def get_primary_discord_integration(default: str = "discord_webhook") -> str:
+        return default
+
+DISCORD_INTEGRATION = (
+    os.getenv("PRIMARY_DISCORD_INTEGRATION", "").strip()
+    or os.getenv("DISCORD_INTEGRATION", "").strip()
+    or get_primary_discord_integration("discord_webhook")
+    or "discord_webhook"
+)
+
+# Optional override for manual/testing runs.
+# If unset, the script chooses the host-specific Discord target from
+# config/integrations.json -> host_discord_targets.<host>.
+THREAD_INTEGRATION_OVERRIDE = os.getenv("THREAD_INTEGRATION", "").strip()
+THREAD_MAP_URL_OVERRIDE = os.getenv("THREAD_ID_MAP_URL", "").strip()
+THREAD_MAP_KEY_OVERRIDE = os.getenv("THREAD_MAP_KEY", "thread_id_map").strip() or "thread_id_map"
+THREAD_MAP_DEFAULT_PATH_OVERRIDE = (
+    os.getenv("THREAD_MAP_DEFAULT_PATH", "config/thread_id_map.json").strip()
+    or "config/thread_id_map.json"
+)
 
 try:
     import tomllib
@@ -87,6 +113,71 @@ def normalize_role_id(value):
     m = re.search(r"\d{5,}", str(value or ""))
     return m.group(0) if m else ""
 
+
+def host_config_key(host: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", str(host or "").strip().casefold()).strip("_")
+
+
+def route_for_single_novel(target_cfg: dict) -> dict:
+    """
+    Return the host Discord route used for the optional per-novel Discord link.
+
+    Preferred route keys, in order:
+      - publish_single_novel
+      - novel_card
+      - default
+
+    If the host has a Discord target but no route for this tool yet, default to
+    thread_map so existing Mistmint-style thread maps keep working without adding
+    another route entry.
+    """
+    routes = target_cfg.get("routes", {})
+
+    if isinstance(routes, dict):
+        for key in ("publish_single_novel", "novel_card", "default"):
+            route = routes.get(key)
+            if isinstance(route, dict):
+                return route
+
+    route = target_cfg.get("route", {})
+    if isinstance(route, dict) and route:
+        return route
+
+    return {
+        "type": "thread_map",
+        "map_key": "thread_id_map",
+        "default_path": "config/thread_id_map.json",
+    }
+
+
+def resolve_single_novel_thread_route(host: str):
+    """
+    Resolve which host-specific Discord integration/thread map should be used
+    for this novel card's optional Forum Post link.
+
+    The primary/private Discord archive post is still controlled by
+    DISCORD_INTEGRATION. This only controls the host-specific forum/thread link.
+    """
+    if THREAD_INTEGRATION_OVERRIDE or THREAD_MAP_URL_OVERRIDE:
+        return THREAD_INTEGRATION_OVERRIDE or "thread_id_map_url_override", {
+            "type": "thread_map",
+            "map_key": THREAD_MAP_KEY_OVERRIDE,
+            "default_path": THREAD_MAP_DEFAULT_PATH_OVERRIDE,
+        }
+
+    host_key = host_config_key(host)
+    target_cfg = get_host_discord_target(host_key)
+
+    if not target_cfg:
+        return "", {}
+
+    integration = str(target_cfg.get("integration") or "").strip()
+    if not integration:
+        return "", {}
+
+    return integration, route_for_single_novel(target_cfg)
+
+
 def fetch_novel_role_id_map():
     """
     Fetches discord-webhook/config/novel_discord_map.toml
@@ -129,9 +220,9 @@ def resolve_novel_role_mention(short_code):
     role_id = role_map.get(short_code.upper())
     return f"<@&{role_id}>" if role_id else ""
     
-def fetch_thread_id_map(hostdata):
+def fetch_thread_id_map(integration: str, route: dict):
     """
-    Fetches the Mistmint Discord thread ID map from config/integrations.json.
+    Fetches a host-specific Discord thread ID map from config/integrations.json.
 
     Expected JSON format:
     {
@@ -139,7 +230,12 @@ def fetch_thread_id_map(hostdata):
       "TDLBKGC": "1438462596381413417"
     }
     """
-    url = get_integration_raw_url(THREAD_INTEGRATION, "thread_id_map", "config/thread_id_map.json")
+    if THREAD_MAP_URL_OVERRIDE:
+        url = THREAD_MAP_URL_OVERRIDE
+    else:
+        map_key = str(route.get("map_key") or "thread_id_map").strip()
+        default_path = str(route.get("default_path") or "config/thread_id_map.json").strip()
+        url = get_integration_raw_url(integration, map_key, default_path)
 
     if not url:
         return {}
@@ -163,11 +259,35 @@ def fetch_thread_id_map(hostdata):
     _THREAD_ID_MAP_CACHE[url] = normalized
     return normalized
 
-def resolve_forum_post_id(hostdata, short_code):
+def resolve_forum_post_id(host, short_code):
     """
-    Gets the forum/thread ID for this novel from the configured thread ID map.
+    Gets the host-specific forum/thread ID for this novel.
+
+    If this host has no configured host-specific Discord target, or its route is
+    channel-only, the private archive card is still posted; the Forum Post link
+    is simply omitted.
     """
-    thread_map = fetch_thread_id_map(hostdata)
+    integration, route = resolve_single_novel_thread_route(host)
+
+    if not integration:
+        print(f"No host-specific Discord target configured for {host_config_key(host)}; no Forum Post link will be added.")
+        return None
+
+    route_type = str(route.get("type") or "thread_map").strip().lower()
+
+    if route_type == "none":
+        print(f"Host-specific Discord route for {host_config_key(host)}/publish_single_novel is disabled.")
+        return None
+
+    if route_type == "channel":
+        print(f"Host-specific Discord route for {host_config_key(host)}/publish_single_novel is channel-only; no per-novel Forum Post link will be added.")
+        return None
+
+    if route_type != "thread_map":
+        print(f"Unknown host Discord route type {route_type!r} for {host_config_key(host)}/publish_single_novel; no Forum Post link will be added.")
+        return None
+
+    thread_map = fetch_thread_id_map(integration, route)
     return thread_map.get(short_code.upper())
 
 def normalize_api(api):
@@ -372,8 +492,9 @@ if len(sys.argv) < 2:
 
 SHORT_CODE = sys.argv[1].upper()
 
-# If a second channel/thread ID is provided, post there instead of auto-posting to mapped forum thread.
-# It will still always post to the archive channel too.
+# If a second channel/thread ID is provided, post there too.
+# It will still always post to the archive channel.
+# The host-specific thread map is used only for the Forum Post link.
 EXTRA_CHANNEL_ID = None
 
 if len(sys.argv) >= 3 and sys.argv[2].strip():
@@ -457,11 +578,11 @@ async def on_ready():
                 novel.get("last_chapter"),
             )
 
-            # Get the forum/thread ID from the configured thread ID map
-            forum_post_id = resolve_forum_post_id(hostdata, SHORT_CODE)
+            # Get the forum/thread ID from this host's configured Discord target, if any.
+            forum_post_id = resolve_forum_post_id(host, SHORT_CODE)
 
             if not forum_post_id:
-                print(f"Warning: no forum/thread ID found for {SHORT_CODE} in the configured thread ID map.")
+                print(f"Warning: no forum/thread ID found for {SHORT_CODE} in this host's configured Discord target.")
 
             forum_post_url = await build_forum_post_url(forum_post_id)
 

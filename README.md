@@ -110,6 +110,169 @@ The RSS files are the bridge between scraping/API logic and Discord announcement
 
 ---
 
+## Discord Integrations, Routes, and Mentions
+
+External Discord repos are configured in:
+
+```text
+config/integrations.json
+```
+
+The important split is:
+
+```text
+primary_discord
+→ your private/master Discord target; normally discord-webhook; receives announcements for all novels
+
+host_discord_targets
+→ optional extra host/server-specific targets, such as mistmint-discord or a future host Discord
+```
+
+A host-specific Discord target is an **extra destination**, not a replacement for `primary_discord`. If a novel's host has no entry in `host_discord_targets`, the direct announcement tools still post to the primary Discord only.
+
+Example thread-based host target:
+
+```json
+{
+  "mistmint_discord": {
+    "raw_base": "https://raw.githubusercontent.com/Cannibal-Turtle/mistmint-discord/main",
+    "paths": {
+      "server_json": "config/server.json",
+      "thread_id_map": "config/thread_id_map.json"
+    }
+  },
+  "host_discord_targets": {
+    "mistmint_haven": {
+      "integration": "mistmint_discord",
+      "routes": {
+        "membership_update": {
+          "type": "thread_map",
+          "map_key": "thread_id_map",
+          "default_path": "config/thread_id_map.json"
+        },
+        "special_announcement": {
+          "type": "thread_map",
+          "map_key": "thread_id_map",
+          "default_path": "config/thread_id_map.json"
+        }
+      }
+    }
+  }
+}
+```
+
+Example channel-based host target:
+
+```json
+{
+  "wuxiaworld_discord": {
+    "raw_base": "https://raw.githubusercontent.com/Cannibal-Turtle/wuxiaworld-discord/main",
+    "paths": {
+      "server_json": "config/server.json",
+      "roles_json": "config/roles.json",
+      "novel_discord_map": "config/novel_discord_map.toml",
+      "state": "state.json"
+    }
+  },
+  "host_discord_targets": {
+    "wuxiaworld": {
+      "integration": "wuxiaworld_discord",
+      "routes": {
+        "membership_update": {
+          "type": "channel",
+          "channel_key": "membership_updates"
+        },
+        "special_announcement": {
+          "type": "channel",
+          "channel_key": "announcements"
+        }
+      }
+    }
+  }
+}
+```
+
+For channel routes, `channel_key` points to a key in that Discord repo's `config/server.json`. New Discord repos may use either flat channel IDs:
+
+```json
+{
+  "guild_id": "123456789012345678",
+  "global_mention": "<@&444444444444444444>",
+  "announcements": "222222222222222222",
+  "membership_updates": "333333333333333333"
+}
+```
+
+or nested channel IDs:
+
+```json
+{
+  "guild_id": "123456789012345678",
+  "global_mention": "<@&444444444444444444>",
+  "channels": {
+    "announcements": "222222222222222222",
+    "membership_updates": "333333333333333333"
+  }
+}
+```
+
+For thread routes, `map_key` points to a path entry in that integration's `paths`, usually `thread_id_map`, and the tool looks up the novel `short_code` in that JSON file. Missing host-specific thread/channel targets should mean “no extra host post,” not “skip the primary Discord post.”
+
+### Mention Resolution
+
+For each target Discord integration, mention data is loaded from that target repo, not from the novel host mapping:
+
+```text
+load config/server.json
+→ global_mention
+
+load config/roles.json
+→ complete / ongoing / nsfw / membership / special_announcement / etc.
+
+load config/novel_discord_map.toml
+→ per-novel role / emoji / role URL
+
+then the event decides which pieces to include
+```
+
+Recommended ownership:
+
+| File in target Discord repo | Owns |
+| --- | --- |
+| `config/server.json` | `guild_id`, channel IDs, raw `global_mention` such as `@everyone`, `@here`, `<@USER_ID>`, or `<@&ROLE_ID>` |
+| `config/roles.json` | named role IDs such as `complete`, `ongoing`, `nsfw`, `membership`, `membership_update`, `special`, `special_announcement` |
+| `config/novel_discord_map.toml` | per-novel Discord role/emoji/role URL keyed by novel short code |
+| `state.json` | completion state used to choose complete vs ongoing status role |
+
+Event examples:
+
+```text
+membership_update
+→ global_mention + membership/membership_update role + maybe novel role + status/nsfw if configured by the tool
+
+special_announcement
+→ global_mention + special/special_announcement role + maybe novel role + status/nsfw if configured by the tool
+
+completed_novel
+→ novel role + complete role + maybe global_mention
+
+regular chapter
+→ novel role + nsfw role if needed + maybe global_mention
+```
+
+In this repo, direct manual announcement mention strings are assembled by:
+
+| Script | Responsible functions |
+| --- | --- |
+| `tools/publish_membership_update.py` | `resolve_global_mention()`, `resolve_event_role_mention()`, `resolve_novel_role_mention()`, `resolve_status_role_id()`, `build_global_mention()`, `allowed_mentions_for_mention()` |
+| `tools/publish_special_announcement.py` | same pattern as membership: it resolves global/event/novel/status roles, builds the mention string, and sets `allowed_mentions` |
+
+`config_loader.py` only loads generic integration data. It should not grow new host-specific helpers for every future server.
+
+Regular chapter announcements and completed-novel announcements are mostly assembled inside the downstream Discord repos that consume the RSS feeds, such as `discord-webhook` and `mistmint-discord`.
+
+---
+
 ## Mapping Files
 
 ### `novel_mappings.py`
@@ -1184,21 +1347,20 @@ banner_url: "https://..."
 What it does:
 
 - resolves a novel by short code
-- posts a membership announcement
+- posts a membership announcement to the primary Discord target
+- optionally posts an extra host-specific copy to a configured host Discord channel/thread
 - uses Components V2 payloads
 - can write membership state back to the novel TOML
-- uses Discord role/news settings from template `[settings]`
+- resolves mentions from the target Discord integration's `server.json`, `roles.json`, `novel_discord_map.toml`, and `state.json` when those files are configured
 
-Template settings include:
+Template settings can still include a fallback public mention:
 
 ```toml
 [settings]
-novel_discord_map_url = "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/config/novel_discord_map.toml"
-news_channel_id = "1330049962129489930"
-private_guild_id = "1329384099609051136"
-membership_role_id = "1329502951764525187"
 public_global_mention = "||@everyone||"
 ```
+
+That setting is the last fallback. Preferred global/public pings should live in the target Discord repo's `config/server.json` as `global_mention`.
 
 ---
 
@@ -1343,17 +1505,19 @@ Manual fallback:
    {}
    ```
 
-4. Add Discord role/emoji/role URL data in the Discord repo:
+4. Add Discord role/emoji/role URL data in the Discord repo that owns the announcement role map, usually:
 
    ```text
    discord-webhook/config/novel_discord_map.toml
    ```
 
-5. If Mistmint thread posting is needed, add the thread ID in:
+5. If the novel's host has an extra host-specific Discord target, add the required channel/thread mapping in that host Discord repo. For a thread target, that usually means:
 
    ```text
-   mistmint-discord/config/thread_id_map.json
+   <host-discord-repo>/config/thread_id_map.json
    ```
+
+   Channel IDs belong in that Discord repo's `config/server.json`; `config/integrations.json` only stores which `channel_key` to read.
 
 6. Run the relevant feed workflow.
 
@@ -1418,7 +1582,11 @@ Manual fallback:
 
 7. Add any required token/cookie secret name in the host TOML.
 
-8. Add Discord-side config in the Discord repos only if that host needs announcements.
+8. Add Discord-side config only where needed:
+
+   - `discord-webhook` is the primary/private Discord target and can hold all-novel role data.
+   - A host-specific Discord repo is optional. Add one under `host_discord_targets` only if that host needs an extra channel/thread post.
+   - If the host has no extra Discord target, direct announcement tools still post to the primary Discord.
 
 ---
 
