@@ -4,7 +4,7 @@ flags = 32768
 [[components]]
 type = 17
 accent_color = "{accent_color}"
-spoiler = true
+spoiler = false
 
 [[components.components]]
 type = 10
@@ -29,7 +29,7 @@ type = 12
 [[components.components.items]]
 when = "banner_spoiler"
 description = "Announcement banner"
-spoiler = false
+spoiler = true
 
 [components.components.items.media]
 url = "{banner_url}"
