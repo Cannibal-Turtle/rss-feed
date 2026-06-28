@@ -52,7 +52,7 @@ type = 9
 
 [[components.components.components]]
 type = 10
-content = "-# {host_emoji} **{host}** • {discord_time}"
+content = "-# {host_emoji} {host} • {discord_time}"
 
 [components.components.accessory]
 type = 2
