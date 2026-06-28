@@ -118,11 +118,14 @@ jobs:
           PY
           )
 
+          RSS_FEED_REF=$(git rev-parse HEAD)
+
           echo "NEW_ITEMS=$NEW_ITEMS"
           echo "FORCE_DOWNSTREAM=$FORCE_DOWNSTREAM"
           echo "MANUAL_FORCE_DOWNSTREAM=$MANUAL_FORCE_DOWNSTREAM"
           echo "DOWNSTREAM_REPOS=$DOWNSTREAM_REPOS"
           echo "DISPATCH_EVENT=$DISPATCH_EVENT"
+          echo "RSS_FEED_REF=$RSS_FEED_REF"
 
           if [ "$NEW_ITEMS" != "true" ] && [ "$FORCE_DOWNSTREAM" != "true" ] && [ "$MANUAL_FORCE_DOWNSTREAM" != "true" ]; then
             echo "No new free feed GUIDs and downstream force is false. Skipping downstream trigger."
@@ -140,7 +143,7 @@ jobs:
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer $PAT_GITHUB" \
               "https://api.github.com/repos/$REPO/dispatches" \
-              -d "{\"event_type\":\"$DISPATCH_EVENT\",\"client_payload\":{\"feed\":\"free\"}}"
+              -d "{\"event_type\":\"$DISPATCH_EVENT\",\"client_payload\":{\"feed\":\"free\",\"rss_repo\":\"${{ github.repository }}\",\"rss_ref\":\"$RSS_FEED_REF\"}}"
             echo
           done
 

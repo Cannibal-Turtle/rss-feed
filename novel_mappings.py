@@ -20,7 +20,9 @@ Dependent scripts can still import:
 from __future__ import annotations
 
 from importlib import resources
+import os
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 try:
     import tomllib
@@ -29,6 +31,48 @@ except ModuleNotFoundError:
 
 
 MAPPINGS_PACKAGE = "mappings"
+
+
+def _raw_github_url_pinned_to_env_ref(url: Any) -> Any:
+    """
+    Pin rss-feed raw URLs to the exact commit that triggered a downstream repo.
+
+    Downstream workflows set RSS_FEED_REF from repository_dispatch.client_payload.rss_ref.
+    Without this, raw.githubusercontent.com/.../main/... can briefly serve the old XML
+    right after rss-feed pushes a new feed commit, making a downstream bot think
+    there are no new chapters.
+    """
+    if not isinstance(url, str):
+        return url
+
+    ref = os.getenv("RSS_FEED_REF", "").strip()
+    if not ref:
+        return url
+
+    repo = os.getenv("RSS_FEED_REPO", "Cannibal-Turtle/rss-feed").strip().strip("/")
+
+    try:
+        parsed = urlsplit(url)
+    except Exception:
+        return url
+
+    if parsed.netloc.lower() != "raw.githubusercontent.com":
+        return url
+
+    parts = parsed.path.lstrip("/").split("/")
+    if len(parts) < 4:
+        return url
+
+    owner, name = parts[0], parts[1]
+    if f"{owner}/{name}".lower() != repo.lower():
+        return url
+
+    parts[2] = ref
+    return urlunsplit((parsed.scheme, parsed.netloc, "/" + "/".join(parts), parsed.query, parsed.fragment))
+
+
+def _pin_output_feed_urls(feeds: dict[str, Any]) -> dict[str, Any]:
+    return {key: _raw_github_url_pinned_to_env_ref(value) for key, value in feeds.items()}
 
 
 def _read_toml_text(text: str) -> dict[str, Any]:
@@ -58,7 +102,7 @@ def _load_output_feeds() -> dict[str, Any]:
     except FileNotFoundError:
         return {}
 
-    return data if isinstance(data, dict) else {}
+    return _pin_output_feed_urls(data) if isinstance(data, dict) else {}
 
 
 OUTPUT_FEEDS = _load_output_feeds()
