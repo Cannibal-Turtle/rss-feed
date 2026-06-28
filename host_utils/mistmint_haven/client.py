@@ -115,48 +115,6 @@ def _mistmint_auth_values() -> Tuple[str, str]:
     return token, cookie
 
 
-def _mistmint_auth_status() -> Dict[str, bool]:
-    token, cookie = _mistmint_auth_values()
-    return {"has_token": bool(token), "has_cookie": bool(cookie)}
-
-
-def _mistmint_auth_header_attempts(
-    *,
-    include_cookie_from_token: bool = False,
-    include_anonymous: bool = False,
-) -> list[tuple[str, Dict[str, str]]]:
-    """
-    Return ordered Mistmint auth header attempts.
-
-    The trans comments endpoint has historically accepted either a bearer token,
-    a Nuxt-style auth cookie made from that token, or a raw cookie. Keeping the
-    order here lets comments reuse the shared auth lookup without losing those
-    fallbacks.
-    """
-    token, cookie = _mistmint_auth_values()
-    attempts: list[tuple[str, Dict[str, str]]] = []
-
-    if token:
-        h = _mistmint_base_headers()
-        h["Authorization"] = f"Bearer {token}"
-        attempts.append(("bearer", h))
-
-        if include_cookie_from_token:
-            h = _mistmint_base_headers()
-            h["Cookie"] = f"auth._token.local=Bearer%20{token}; auth.strategy=local"
-            attempts.append(("cookie-from-token", h))
-
-    if cookie:
-        h = _mistmint_base_headers()
-        h["Cookie"] = cookie
-        attempts.append(("cookie-secret", h))
-
-    if include_anonymous:
-        attempts.append(("anonymous", _mistmint_base_headers()))
-
-    return attempts
-
-
 def _mistmint_headers():
     token, cookie = _mistmint_auth_values()
     h = _mistmint_base_headers()
@@ -340,8 +298,6 @@ __all__ = [
     "resolve_chapter_id",
     "_mistmint_base_headers",
     "_mistmint_auth_values",
-    "_mistmint_auth_status",
-    "_mistmint_auth_header_attempts",
     "_mistmint_headers",
     "_http_get_json",
 ]
