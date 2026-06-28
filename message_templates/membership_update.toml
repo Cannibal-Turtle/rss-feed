@@ -23,6 +23,15 @@ divider = false
 type = 12
 
 [[components.components.items]]
+when = "banner_spoiler"
+description = "Membership banner"
+spoiler = true
+
+[components.components.items.media]
+url = "{banner_url}"
+
+[[components.components.items]]
+when = "banner_not_spoiler"
 description = "Membership banner"
 spoiler = false
 

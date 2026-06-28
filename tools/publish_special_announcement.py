@@ -765,11 +765,15 @@ def build_special_payload(
         private_channel_id=private_channel_id,
     )
 
+    banner_spoiler = bool(novel.get("is_nsfw", False))
+
     ctx = {
         "accent_color": setting_str(_TEMPLATE_SETTINGS, "accent_color") or novel.get("discord_color") or hostdata.get("discord_color") or "#C9D3FF",
         "announcement_title": announcement_title,
         "announcement_message": announcement_message,
         "banner_url": banner_url,
+        "banner_spoiler": banner_spoiler,
+        "banner_not_spoiler": not banner_spoiler,
         "button_label": button_label,
         "button_url": button_url or novel.get("novel_url", ""),
         "discord_time": discord_timestamp_now(),

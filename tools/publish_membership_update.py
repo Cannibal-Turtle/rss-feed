@@ -507,11 +507,15 @@ def build_membership_payload(*, host, novel_title, novel, banner_url, channel_id
         private_channel_id=private_channel_id,
     )
 
+    banner_spoiler = bool(novel.get("is_nsfw", False))
+
     ctx = {
         "host": host,
         "novel_title": novel_title,
         "novel_url": novel_url,
         "banner_url": banner_url,
+        "banner_spoiler": banner_spoiler,
+        "banner_not_spoiler": not banner_spoiler,
         "global_mention": global_mention,
     }
 
