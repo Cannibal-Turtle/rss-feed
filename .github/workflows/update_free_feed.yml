@@ -65,15 +65,38 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
           git add free_chapters_feed.xml || true
-          git commit -m "ci: update free feed XML" || echo "No changes to commit"
 
-          # Use tokenized remote and rebase onto the latest main
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "ci: update free feed XML"
+
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
-          git fetch origin main
-          git rebase origin/main || git pull --rebase origin main
 
-          # Safe force so bot overwrites only its own last commit
-          git push --force-with-lease origin HEAD:main
+          for attempt in 1 2 3; do
+            echo "Push attempt $attempt..."
+
+            git fetch origin main:refs/remotes/origin/main
+
+            if ! git rebase origin/main; then
+              echo "Rebase failed. Aborting."
+              git rebase --abort || true
+              exit 1
+            fi
+
+            if git push origin HEAD:main; then
+              echo "Push succeeded."
+              exit 0
+            fi
+
+            echo "Push failed, probably because main moved. Retrying..."
+            sleep 3
+          done
+
+          echo "Push failed after 3 attempts."
+          exit 1
 
       - name: Trigger Discord Webhook Workflow if needed
         env:

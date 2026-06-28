@@ -49,8 +49,6 @@ jobs:
         run: python feed_guid_gate.py snapshot paid_chapters_feed.xml /tmp/paid_guids_before.txt
 
       - name: Run Paid Feed Generator
-        env:
-          MISTMINT_COOKIE: ${{ secrets.MISTMINT_COOKIE }}
         run: python paid_feed_generator.py
 
       - name: Detect new paid feed items
@@ -65,30 +63,39 @@ jobs:
           git config --global user.name  "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      
-          # One-time cleanup in case old root paths were tracked before (harmless if absent)
-          git rm --cached mistmint_state.json paid_history.json 2>/dev/null || true
-      
-          # Always stage the generated feed
+
           git add paid_chapters_feed.xml
-      
-          # Only stage manual state/history when STATE mode is ON
-          if [ "${MISTMINT_FORCE_STATE:-0}" = "1" ]; then
-            [ -f manual_scripts/mistmint_state.json ] && git add manual_scripts/mistmint_state.json || true
-            [ -f manual_scripts/paid_history.json ]   && git add manual_scripts/paid_history.json   || true
-          fi
-      
-          # Commit only if something is staged
-          if git diff --quiet --staged; then
+
+          if git diff --cached --quiet; then
             echo "No changes to commit."
             exit 0
           fi
-      
+
           git commit -m "ci: update paid feed"
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git
-          git fetch origin main
-          git rebase origin/main || git pull --rebase origin main
-          git push --force-with-lease origin HEAD:main
+
+          for attempt in 1 2 3; do
+            echo "Push attempt $attempt..."
+
+            git fetch origin main:refs/remotes/origin/main
+
+            if ! git rebase origin/main; then
+              echo "Rebase failed. Aborting."
+              git rebase --abort || true
+              exit 1
+            fi
+
+            if git push origin HEAD:main; then
+              echo "Push succeeded."
+              exit 0
+            fi
+
+            echo "Push failed, probably because main moved. Retrying..."
+            sleep 3
+          done
+
+          echo "Push failed after 3 attempts."
+          exit 1
 
       - name: Trigger Discord Webhook Workflow if needed
         env:
