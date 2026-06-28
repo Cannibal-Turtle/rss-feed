@@ -981,13 +981,50 @@ Template-specific user settings live in:
 global_mention = "||<@&1329392448798982214>||"
 ```
 
-Mistmint token alerts are skipped only when comments are intentionally public-only:
+Token alert checks are host-agnostic. Any host file can opt in by defining a token secret:
 
 ```toml
-comments_source = "public"
+token_secret = "HOST_COOKIE_OR_TOKEN_SECRET"
 ```
 
-In `comments_source = "auto"`, token alerts still run, but comment generation can fall back to public comments instead of fully failing when the token expires.
+Optional host setting:
+
+```toml
+token_alerts = "auto"
+```
+
+Supported values:
+
+| Value | Meaning |
+|---|---|
+| `"auto"` or omitted | Alert for hosts with `token_secret`, except when `comments_source = "public"` |
+| `true` | Always alert when `token_secret` is present |
+| `false` | Never send token alerts for this host |
+
+Examples:
+
+```toml
+# Token is needed for private/API comment fetching. Alerts run.
+token_secret = "MISTMINT_COOKIE"
+comments_source = "auto"
+token_alerts = "auto"
+```
+
+```toml
+# Comments are intentionally public-only. Alerts are skipped in auto mode.
+token_secret = "SOME_OPTIONAL_COOKIE"
+comments_source = "public"
+token_alerts = "auto"
+```
+
+```toml
+# Token is used by another script even if comments are public. Alerts still run.
+token_secret = "HOST_API_TOKEN"
+comments_source = "public"
+token_alerts = true
+```
+
+`token-expiring` alerts only work for JWT-style tokens/cookies with an `exp` field. `token-invalid` alerts are sent when a host comments loader raises an `AUTH_ERROR`, and follow the same `token_alerts` host policy.
 
 The workflow:
 

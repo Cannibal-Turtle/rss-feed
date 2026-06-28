@@ -49,6 +49,54 @@ def _jwt_expiry_unix(token: str):
     except Exception:
         return None
 
+
+
+def _boolish(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return None
+
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "y", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "off"}:
+        return False
+    return None
+
+
+def _token_alerts_enabled_for_host(host: str, data: dict) -> tuple[bool, str]:
+    """Return whether token alerts should run for this host.
+
+    Host TOML may set:
+      token_alerts = true   # always alert when token_secret is present
+      token_alerts = false  # never alert
+      token_alerts = "auto" # default; skip public-only comments sources
+
+    Auto mode keeps token alerts generic: any host with token_secret is checked,
+    unless that host says its comments are intentionally public-only.
+    """
+    token_secret = str(data.get("token_secret") or "").strip()
+    if not token_secret:
+        return False, "no token_secret"
+
+    raw = data.get("token_alerts", data.get("token_alerts_enabled", "auto"))
+    explicit = _boolish(raw)
+    if explicit is True:
+        return True, "token_alerts=true"
+    if explicit is False:
+        return False, "token_alerts=false"
+
+    mode = str(raw or "auto").strip().lower()
+    if mode not in {"", "auto", "default"}:
+        print(f"[token-alert] {host}: unknown token_alerts={raw!r}; treating as auto")
+
+    comments_source = str(data.get("comments_source") or "").strip().lower()
+    if comments_source == "public":
+        return False, "comments_source=public"
+
+    return True, "auto"
+
 def maybe_dispatch_token_alerts(threshold_days: int = 1):
     """Alert once per (host, token_secret, exp) when a JWT is ≤ threshold from expiry."""
     repo = os.getenv("GITHUB_REPOSITORY", "")
@@ -66,9 +114,12 @@ def maybe_dispatch_token_alerts(threshold_days: int = 1):
     }
 
     for host, data in HOSTING_SITE_DATA.items():
-        token_secret = data.get("token_secret")
-        if not token_secret:
+        enabled, reason = _token_alerts_enabled_for_host(host, data)
+        if not enabled:
+            print(f"[token-alert] skipped {host}: {reason}")
             continue
+
+        token_secret = str(data.get("token_secret") or "").strip()
         token = os.getenv(token_secret, "").strip()
         if not token:
             continue
@@ -222,15 +273,9 @@ class CustomCommentRSS2(PyRSS2Gen.RSS2):
         writer.write("</rss>" + newl)
 
 def main():
-    # Fire repo_dispatch if any host JWT is within 1 day of expiry (throttled) unless it's public sources comments.
-    mistmint_comments_source = str(
-        HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("comments_source", "trans")
-    ).strip().lower()
-
-    if mistmint_comments_source != "public":
-        maybe_dispatch_token_alerts(threshold_days=1)
-    else:
-        print("[token-alert] skipped because Mistmint comments_source=public")
+    # Fire repo_dispatch if any host JWT is within 1 day of expiry (throttled).
+    # Per-host token alert policy is controlled by host TOML, not by host name.
+    maybe_dispatch_token_alerts(threshold_days=1)
 
     all_rss_items = []
     # Loop over all hosts in your mappings.
@@ -351,7 +396,12 @@ def main():
                             repo = os.getenv("GITHUB_REPOSITORY", "")
                             github_token = os.getenv("PAT_GITHUB") or os.getenv("GITHUB_TOKEN")
 
-                            token_secret = data.get("token_secret", "SECRET")
+                            enabled, reason = _token_alerts_enabled_for_host(host, data)
+                            if not enabled:
+                                print(f"[alert] token-invalid skipped for {host}: {reason}")
+                                continue
+
+                            token_secret = str(data.get("token_secret") or "").strip()
                             site_token = os.getenv(token_secret, "").strip()
 
                             # Make a safe fingerprint of the cookie/token.
