@@ -25,10 +25,14 @@ from message_settings import setting_str
 try:
     from config_loader import (
         get_discord_webhook_channel_id,
+        get_mistmint_discord_thread_id_map_url,
         get_novel_discord_map_url,
     )
 except Exception:
     def get_discord_webhook_channel_id(key: str, default: str = "") -> str:
+        return default
+
+    def get_mistmint_discord_thread_id_map_url(default: str = "") -> str:
         return default
 
     def get_novel_discord_map_url(default: str = "") -> str:
@@ -131,7 +135,7 @@ def resolve_novel_role_mention(short_code):
     
 def fetch_thread_id_map(hostdata):
     """
-    Fetches the host's thread_id_map_url from novel_mappings.py.
+    Fetches the Mistmint Discord thread ID map from config/integrations.json.
 
     Expected JSON format:
     {
@@ -139,7 +143,7 @@ def fetch_thread_id_map(hostdata):
       "TDLBKGC": "1438462596381413417"
     }
     """
-    url = (hostdata.get("thread_id_map_url") or "").strip()
+    url = (get_mistmint_discord_thread_id_map_url(hostdata.get("thread_id_map_url") or "") or "").strip()
 
     if not url:
         return {}
@@ -152,7 +156,7 @@ def fetch_thread_id_map(hostdata):
     data = r.json()
 
     if not isinstance(data, dict):
-        raise RuntimeError(f"thread_id_map_url did not return a JSON object: {url}")
+        raise RuntimeError(f"thread ID map URL did not return a JSON object: {url}")
 
     normalized = {
         str(k).upper(): str(v).strip()
@@ -165,7 +169,7 @@ def fetch_thread_id_map(hostdata):
 
 def resolve_forum_post_id(hostdata, short_code):
     """
-    Gets the forum/thread ID for this novel from the host's thread_id_map_url.
+    Gets the forum/thread ID for this novel from the configured thread ID map.
     """
     thread_map = fetch_thread_id_map(hostdata)
     return thread_map.get(short_code.upper())
@@ -396,7 +400,7 @@ async def build_forum_post_url(forum_post_id):
     """
     Builds the Forum Post link using the correct server ID.
 
-    forum_post_id now comes from the host's thread_id_map_url.
+    forum_post_id now comes from the configured thread ID map.
     The bot fetches the channel/thread and reads the guild/server ID automatically.
     """
     forum_post_id = str(forum_post_id or "").strip()
@@ -457,11 +461,11 @@ async def on_ready():
                 novel.get("last_chapter"),
             )
 
-            # Get the forum/thread ID from the host's thread_id_map_url
+            # Get the forum/thread ID from the configured thread ID map
             forum_post_id = resolve_forum_post_id(hostdata, SHORT_CODE)
 
             if not forum_post_id:
-                print(f"Warning: no forum/thread ID found for {SHORT_CODE} in {host}'s thread_id_map_url.")
+                print(f"Warning: no forum/thread ID found for {SHORT_CODE} in the configured thread ID map.")
 
             forum_post_url = await build_forum_post_url(forum_post_id)
 

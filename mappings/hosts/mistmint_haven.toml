@@ -10,7 +10,6 @@ host_emoji = "<:mascot_mistmint:1517514042930106559>"
 coin_emoji = "<:mistmint_currency:1433046707121422487>"
 ticket_emoji = "<:mistmint_ticket:1517453566632001597>"
 token_secret = "MISTMINT_COOKIE"
-thread_id_map_url = "https://raw.githubusercontent.com/Cannibal-Turtle/mistmint-discord/main/config/thread_id_map.json"
 
 free_chapters_source = "feed"
 paid_chapters_source = "api"

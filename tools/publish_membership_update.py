@@ -26,6 +26,7 @@ try:
         get_completion_state_url,
         get_discord_webhook_channel_id,
         get_discord_webhook_guild_id,
+        get_mistmint_discord_thread_id_map_url,
         get_novel_discord_map_url,
         get_roles_json_url,
     )
@@ -37,6 +38,9 @@ except Exception:
         return default
 
     def get_discord_webhook_guild_id(default: str = "") -> str:
+        return default
+
+    def get_mistmint_discord_thread_id_map_url(default: str = "") -> str:
         return default
 
     def get_novel_discord_map_url(default: str = "") -> str:
@@ -196,7 +200,7 @@ _THREAD_ID_MAP_CACHE = {}
 
 def fetch_thread_id_map(hostdata):
     """
-    Fetches the host's thread_id_map_url from novel_mappings.py.
+    Fetches the Mistmint Discord thread ID map from config/integrations.json.
 
     Expected JSON format:
     {
@@ -205,7 +209,7 @@ def fetch_thread_id_map(hostdata):
       "BOE": "N/A"
     }
     """
-    url = (hostdata.get("thread_id_map_url") or "").strip()
+    url = (get_mistmint_discord_thread_id_map_url(hostdata.get("thread_id_map_url") or "") or "").strip()
 
     if not url:
         return {}
@@ -218,7 +222,7 @@ def fetch_thread_id_map(hostdata):
     data = r.json()
 
     if not isinstance(data, dict):
-        raise RuntimeError(f"thread_id_map_url did not return a JSON object: {url}")
+        raise RuntimeError(f"thread ID map URL did not return a JSON object: {url}")
 
     normalized = {
         str(k).upper(): str(v).strip()
@@ -232,7 +236,7 @@ def fetch_thread_id_map(hostdata):
 
 def resolve_forum_thread_id(hostdata, short_code):
     """
-    Gets the forum/thread ID for this novel from the host's thread_id_map_url.
+    Gets the forum/thread ID for this novel from the configured thread ID map.
     """
     thread_map = fetch_thread_id_map(hostdata)
     return thread_map.get(short_code.upper())
@@ -644,14 +648,14 @@ def resolve_publish_targets(hostdata, short_code):
     thread_id = resolve_forum_thread_id(hostdata, short_code)
 
     if thread_id is None:
-        print(f"ERROR: {short_code} is missing from the host's thread_id_map_url.")
+        print(f"ERROR: {short_code} is missing from the configured thread ID map.")
         print('Add it to that host repo thread_id_map.json, or use "N/A" if it has no thread.')
         sys.exit(1)
 
     thread_id = str(thread_id).strip()
 
     if not thread_id:
-        print(f"ERROR: {short_code} has an empty thread ID in the host's thread_id_map_url.")
+        print(f"ERROR: {short_code} has an empty thread ID in the configured thread ID map.")
         print('Use "N/A" if this novel should only post to your private/news server.')
         sys.exit(1)
 

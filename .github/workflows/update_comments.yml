@@ -93,7 +93,7 @@ jobs:
           for attempt in 1 2 3; do
             echo "Push attempt $attempt..."
 
-            git fetch origin main
+            git fetch origin main:refs/remotes/origin/main
 
             if ! git rebase origin/main; then
               echo "Rebase failed. Aborting."

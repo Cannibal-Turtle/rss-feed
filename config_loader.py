@@ -185,6 +185,43 @@ def get_discord_webhook_role_id(key: str, default: str = "") -> str:
     return str(value or "").strip()
 
 
+def get_mistmint_discord_config() -> dict[str, Any]:
+    cfg = load_integrations_config()
+    section = cfg.get("mistmint_discord", {})
+    return section if isinstance(section, dict) else {}
+
+
+def get_mistmint_discord_raw_base(default: str = "") -> str:
+    cfg = get_mistmint_discord_config()
+    return str(cfg.get("raw_base") or default).strip().rstrip("/")
+
+
+def get_mistmint_discord_path(key: str, default: str = "") -> str:
+    cfg = get_mistmint_discord_config()
+    paths = cfg.get("paths", {})
+    if not isinstance(paths, dict):
+        paths = {}
+    return str(paths.get(key) or default).strip().lstrip("/")
+
+
+def get_mistmint_discord_raw_url(key: str, default_path: str = "", default: str = "") -> str:
+    base = get_mistmint_discord_raw_base()
+    path = get_mistmint_discord_path(key, default_path)
+
+    if base and path:
+        return f"{base}/{path}"
+
+    return default
+
+
+def get_mistmint_discord_thread_id_map_url(default: str = "") -> str:
+    return get_mistmint_discord_raw_url(
+        "thread_id_map",
+        "config/thread_id_map.json",
+        default,
+    )
+
+
 def get_mistmint_comments_config() -> dict[str, Any]:
     cfg = load_integrations_config()
     comments = (
