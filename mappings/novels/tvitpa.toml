@@ -12,7 +12,7 @@ last_chapter = "Extra 8"
 start_date = "31/8/2024"
 has_free = true
 has_paid = true
-is_nsfw = true
+is_nsfw = false
 is_membership = false
 
 discord_color = "#f8d8c9"
