@@ -4,7 +4,7 @@ flags = 32768
 [[components]]
 type = 17
 accent_color = "{accent_color}"
-spoiler = false
+spoiler = true
 
 [[components.components]]
 type = 10
@@ -37,7 +37,7 @@ url = "{banner_url}"
 [[components.components.items]]
 when = "banner_not_spoiler"
 description = "Announcement banner"
-spoiler = false
+spoiler = true
 
 [components.components.items.media]
 url = "{banner_url}"
@@ -92,3 +92,5 @@ time_format = ":D"
 # Blank = use selected novel's assigned discord_color.
 # Fill with hex to override for this announcement, e.g. "#f8d8c9"
 accent_color = ""
+
+#banner auto

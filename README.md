@@ -522,7 +522,7 @@ Membership status is controlled in the novel TOML:
 is_membership = true
 ```
 
-The manual membership tool can update this automatically when a novel is announced as membership-available.
+The manual membership tool can update this automatically when a novel is announced as membership-available. Banners for membership are automatically blurred if novel is nsfw.
 
 ---
 
