@@ -140,6 +140,40 @@ def get_integration_channel_id(
     return str(value or "").strip()
 
 
+def get_integration_server_config(
+    name: str,
+    *,
+    server_key: str = "server_json",
+    default_path: str = "config/server.json",
+    timeout: int = 15,
+) -> dict[str, Any]:
+    return load_integration_json(name, server_key, default_path, timeout=timeout)
+
+
+def get_integration_server_value(
+    name: str,
+    key: str,
+    default: str = "",
+    *,
+    server_key: str = "server_json",
+    default_path: str = "config/server.json",
+) -> str:
+    server = get_integration_server_config(
+        name,
+        server_key=server_key,
+        default_path=default_path,
+    )
+
+    # Supports both flat server.json and nested {"mentions": {...}} for mention strings.
+    mentions = _as_dict(server.get("mentions", {}))
+    value = server.get(key) or mentions.get(key) or default
+    return str(value or "").strip()
+
+
+def get_integration_global_mention(name: str, default: str = "") -> str:
+    return get_integration_server_value(name, "global_mention", default)
+
+
 def get_integration_guild_id(
     name: str,
     default: str = "",
@@ -147,7 +181,11 @@ def get_integration_guild_id(
     server_key: str = "server_json",
     default_path: str = "config/server.json",
 ) -> str:
-    server = load_integration_json(name, server_key, default_path)
+    server = get_integration_server_config(
+        name,
+        server_key=server_key,
+        default_path=default_path,
+    )
 
     # Supports both flat server.json and a nested {"guild": {"id": "..."}} shape.
     guild = _as_dict(server.get("guild", {}))

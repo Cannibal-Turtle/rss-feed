@@ -26,6 +26,7 @@
   "mistmint_discord": {
     "raw_base": "https://raw.githubusercontent.com/Cannibal-Turtle/mistmint-discord/main",
     "paths": {
+      "server_json": "config/server.json",
       "thread_id_map": "config/thread_id_map.json"
     }
   },

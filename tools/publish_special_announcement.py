@@ -28,6 +28,7 @@ try:
     from config_loader import (
         get_host_discord_target,
         get_integration_channel_id,
+        get_integration_global_mention,
         get_integration_guild_id,
         get_integration_raw_url,
         get_primary_discord_integration,
@@ -37,6 +38,9 @@ except Exception:
         return {}
 
     def get_integration_channel_id(name: str, key: str, default: str = "") -> str:
+        return default
+
+    def get_integration_global_mention(name: str, default: str = "") -> str:
         return default
 
     def get_integration_guild_id(name: str, default: str = "") -> str:
@@ -231,15 +235,32 @@ def role_ids_from_text(text: str) -> list[str]:
     return re.findall(r"<@&(\d+)>", text or "")
 
 
+def user_ids_from_text(text: str) -> list[str]:
+    return re.findall(r"<@!?(\d+)>", text or "")
+
+
+def normalize_mention_value(value, *, digits_as_role: bool = True) -> str:
+    text = str(value or "").strip()
+
+    if not text:
+        return ""
+
+    if re.fullmatch(r"\d{5,}", text):
+        return f"<@&{text}>" if digits_as_role else f"<@{text}>"
+
+    return text
+
+
+def role_mention_from_id(value) -> str:
+    role_id = normalize_role_id(value)
+    return f"<@&{role_id}>" if role_id else ""
+
+
 def novel_discord_map_url_for_integration(integration: str) -> str:
     if integration == PRIMARY_DISCORD_INTEGRATION:
         return NOVEL_DISCORD_MAP_URL
 
-    return get_integration_raw_url(
-        integration,
-        "novel_discord_map",
-        "config/novel_discord_map.toml",
-    )
+    return get_integration_raw_url(integration, "novel_discord_map")
 
 
 def fetch_novel_role_id_map(integration: str = PRIMARY_DISCORD_INTEGRATION) -> dict[str, str]:
@@ -252,12 +273,17 @@ def fetch_novel_role_id_map(integration: str = PRIMARY_DISCORD_INTEGRATION) -> d
     if url in _NOVEL_ROLE_ID_MAP_CACHE:
         return _NOVEL_ROLE_ID_MAP_CACHE[url]
 
-    r = requests.get(url, timeout=15)
-    r.raise_for_status()
-    data = tomllib.loads(r.text)
+    try:
+        r = requests.get(url, timeout=15)
+        r.raise_for_status()
+        data = tomllib.loads(r.text)
+    except Exception as exc:
+        print(f"Warning: could not load novel role map for {integration} from {url}: {exc}")
+        data = {}
 
     if not isinstance(data, dict):
-        raise RuntimeError(f"novel_discord_map_url did not return a TOML table: {url}")
+        print(f"Warning: novel_discord_map_url did not return a TOML table: {url}")
+        data = {}
 
     normalized = {}
     for short_code, value in data.items():
@@ -272,7 +298,6 @@ def fetch_novel_role_id_map(integration: str = PRIMARY_DISCORD_INTEGRATION) -> d
     _NOVEL_ROLE_ID_MAP_CACHE[url] = normalized
     return normalized
 
-
 def resolve_novel_role_mention(short_code: str, integration: str = PRIMARY_DISCORD_INTEGRATION) -> str:
     role_id = fetch_novel_role_id_map(integration).get(short_code.upper())
     return f"<@&{role_id}>" if role_id else ""
@@ -282,14 +307,14 @@ def roles_json_url_for_integration(integration: str) -> str:
     if integration == PRIMARY_DISCORD_INTEGRATION:
         return ROLES_JSON_URL
 
-    return get_integration_raw_url(integration, "roles_json", "config/roles.json")
+    return get_integration_raw_url(integration, "roles_json")
 
 
 def completion_state_url_for_integration(integration: str) -> str:
     if integration == PRIMARY_DISCORD_INTEGRATION:
         return COMPLETION_STATE_URL
 
-    return get_integration_raw_url(integration, "state", "state.json")
+    return get_integration_raw_url(integration, "state")
 
 
 def guild_id_for_integration(integration: str) -> str:
@@ -299,7 +324,7 @@ def guild_id_for_integration(integration: str) -> str:
     return get_integration_guild_id(integration)
 
 
-def fetch_roles_json(integration: str = PRIMARY_DISCORD_INTEGRATION) -> dict:
+def fetch_roles_json(integration: str = PRIMARY_DISCORD_INTEGRATION):
     url = roles_json_url_for_integration(integration)
 
     if not url:
@@ -308,18 +333,22 @@ def fetch_roles_json(integration: str = PRIMARY_DISCORD_INTEGRATION) -> dict:
     if url in _ROLES_JSON_CACHE:
         return _ROLES_JSON_CACHE[url]
 
-    r = requests.get(url, timeout=15)
-    r.raise_for_status()
-    data = r.json()
+    try:
+        r = requests.get(url, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+    except Exception as exc:
+        print(f"Warning: could not load roles_json for {integration} from {url}: {exc}")
+        data = {}
 
     if not isinstance(data, dict):
-        raise RuntimeError(f"roles_json_url did not return a JSON object: {url}")
+        print(f"Warning: roles_json_url did not return a JSON object: {url}")
+        data = {}
 
     _ROLES_JSON_CACHE[url] = data
     return _ROLES_JSON_CACHE[url]
 
-
-def fetch_completion_state(integration: str = PRIMARY_DISCORD_INTEGRATION) -> dict:
+def fetch_completion_state(integration: str = PRIMARY_DISCORD_INTEGRATION):
     url = completion_state_url_for_integration(integration)
 
     if not url:
@@ -328,16 +357,20 @@ def fetch_completion_state(integration: str = PRIMARY_DISCORD_INTEGRATION) -> di
     if url in _COMPLETION_STATE_CACHE:
         return _COMPLETION_STATE_CACHE[url]
 
-    r = requests.get(url, timeout=15)
-    r.raise_for_status()
-    data = r.json()
+    try:
+        r = requests.get(url, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+    except Exception as exc:
+        print(f"Warning: could not load completion state for {integration} from {url}: {exc}")
+        data = {}
 
     if not isinstance(data, dict):
-        raise RuntimeError(f"completion_state_url did not return a JSON object: {url}")
+        print(f"Warning: completion_state_url did not return a JSON object: {url}")
+        data = {}
 
     _COMPLETION_STATE_CACHE[url] = data
     return _COMPLETION_STATE_CACHE[url]
-
 
 def is_paid_completed_novel(novel_title: str, integration: str = PRIMARY_DISCORD_INTEGRATION) -> bool:
     state = fetch_completion_state(integration)
@@ -351,34 +384,70 @@ def resolve_status_role_id(novel_title: str, integration: str = PRIMARY_DISCORD_
     return normalize_role_id(roles.get(role_key, ""))
 
 
-def allowed_mentions_for_mention(mention: str) -> dict:
+def allowed_mentions_for_mention(mention: str):
     mention = str(mention or "")
     role_ids = role_ids_from_text(mention)
+    user_ids = user_ids_from_text(mention)
     parse = ["everyone"] if "@everyone" in mention or "@here" in mention else []
 
     allowed = {"parse": parse}
     if role_ids:
         allowed["roles"] = role_ids
+    if user_ids:
+        allowed["users"] = user_ids
 
     return allowed
 
 
-def build_global_mention(*, novel_title: str, novel_role_mention: str, channel_id: int, guild_id: str | None, integration: str, private_channel_id: int = 0):
-    integration_guild_id = guild_id_for_integration(integration)
+def resolve_global_mention(integration: str) -> str:
+    # Preferred: target Discord repo config/server.json -> global_mention.
+    mention = normalize_mention_value(get_integration_global_mention(integration))
+    if mention:
+        return mention
 
-    if (private_channel_id and int(channel_id) == int(private_channel_id)) or (integration_guild_id and str(guild_id or "") == str(integration_guild_id)):
-        status_role_id = resolve_status_role_id(novel_title, integration)
-        parts = [
-            novel_role_mention,
-            f"<@&{status_role_id}>" if status_role_id else "",
-        ]
-        mention = " | ".join(part for part in parts if part)
+    # Fallback: target Discord repo config/roles.json -> global_mention/global.
+    roles = fetch_roles_json(integration)
+    return normalize_mention_value(roles.get("global_mention") or roles.get("global") or "")
 
+
+def resolve_named_role_mention(integration: str, *keys: str) -> str:
+    roles = fetch_roles_json(integration)
+
+    for key in keys:
+        mention = role_mention_from_id(roles.get(key, ""))
         if mention:
-            return mention, allowed_mentions_for_mention(mention)
+            return mention
+
+    return ""
+
+
+def resolve_event_role_mention(integration: str, event_type: str) -> str:
+    if event_type == "membership_update":
+        return resolve_named_role_mention(integration, "membership_update", "membership")
+
+    if event_type == "special_announcement":
+        return resolve_named_role_mention(integration, "special_announcement", "special")
+
+    return resolve_named_role_mention(integration, event_type)
+
+
+def build_global_mention(*, novel_title, novel, novel_role_mention, channel_id, guild_id, integration, event_type: str, private_channel_id=0):
+    status_role_id = resolve_status_role_id(novel_title, integration)
+    nsfw_role = resolve_named_role_mention(integration, "nsfw") if bool(novel.get("is_nsfw", False)) else ""
+
+    mention_parts = [
+        resolve_global_mention(integration),
+        novel_role_mention,
+        resolve_event_role_mention(integration, event_type),
+        role_mention_from_id(status_role_id),
+        nsfw_role,
+    ]
+    mention = " | ".join(part for part in mention_parts if part)
+
+    if mention:
+        return mention, allowed_mentions_for_mention(mention)
 
     return PUBLIC_GLOBAL_MENTION, allowed_mentions_for_mention(PUBLIC_GLOBAL_MENTION)
-
 
 def fetch_thread_id_map(
     integration: str,
@@ -687,10 +756,12 @@ def build_special_payload(
 ) -> dict:
     global_mention, allowed_mentions = build_global_mention(
         novel_title=novel_title,
+        novel=novel,
         novel_role_mention=novel_role_mention,
         channel_id=channel_id,
         guild_id=guild_id,
         integration=target_integration,
+        event_type="special_announcement",
         private_channel_id=private_channel_id,
     )
 
