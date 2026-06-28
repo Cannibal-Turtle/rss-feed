@@ -849,7 +849,7 @@ def load_comments_mistmint_public(comments_api_url: str = ""):
 
 # --- Mistmint comments loader (JSON recent-comments endpoint) ---------------
 
-def load_comments_mistmint_trans(comments_api_url: str):
+def load_comments_mistmint_trans(comments_api_url: str, resolved_label: str = ""):
     """
     Returns list[dict] with keys:
       novel_title, chapter, author, description, reply_to, posted_at
@@ -936,6 +936,10 @@ def load_comments_mistmint_trans(comments_api_url: str):
         diag_fail("comments-empty-response", note="possible auth failure")
     
         raise RuntimeError("AUTH_ERROR: Mistmint returned empty (likely bad token)")
+
+    if resolved_label:
+        print(f"[mistmint] comments_source={resolved_label} resolved=trans")
+        diag_ok("comments-auto-resolved", resolved="trans", phase="fetched")
 
     def pick(d, *cands, default=""):
         for k in cands:
@@ -1142,9 +1146,7 @@ def load_comments_mistmint(comments_api_url: str):
     diag_ok("comments-source", source="auto", first_try="trans")
 
     try:
-        rows = load_comments_mistmint_trans(comments_api_url)
-        print("[mistmint] comments_source=auto resolved=trans")
-        diag_ok("comments-auto-resolved", resolved="trans")
+        rows = load_comments_mistmint_trans(comments_api_url, resolved_label="auto")
         return rows
     except RuntimeError as e:
         msg = str(e)
