@@ -23,10 +23,7 @@ from typing import Any
 from urllib.request import Request, urlopen
 
 from novel_mappings import HOSTING_SITE_DATA
-from config_loader import (
-    get_completion_state_url as get_config_completion_state_url,
-    get_runtime_fetch_config,
-)
+from config_loader import get_integration_raw_url, get_runtime_fetch_config
 
 NSFW_PAREN_RE = re.compile(r"\([^)]*\b(?:nsfw|r-?18|18\+|h{1,3})\b[^)]*\)", re.I)
 
@@ -363,16 +360,13 @@ def source_scope_for(host: str, novel_title: str, details: dict[str, Any], chapt
 # ---------------- Completion State Gate ----------------
 
 def completion_state_url() -> str:
-    env_url = str(
-        os.getenv("COMPLETION_STATE_URL")
-        or os.getenv("DISCORD_WEBHOOK_STATE_URL")
-        or ""
-    ).strip()
+    env_url = str(os.getenv("COMPLETION_STATE_URL") or "").strip()
 
     if env_url:
         return env_url
 
-    return get_config_completion_state_url()
+    integration = os.getenv("DISCORD_INTEGRATION", "discord_webhook").strip() or "discord_webhook"
+    return get_integration_raw_url(integration, "state", "state.json")
 
 
 def completion_state_path() -> str:

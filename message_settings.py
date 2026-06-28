@@ -6,9 +6,9 @@ from typing import Any, Mapping
 from message_renderer import format_role_mention, parse_color, truthy
 
 try:
-    from config_loader import get_discord_webhook_role_id
+    from config_loader import get_integration_role_id
 except Exception:
-    def get_discord_webhook_role_id(key: str, default: str = "") -> str:
+    def get_integration_role_id(name: str, key: str, default: str = "") -> str:
         return default
 
 
@@ -93,5 +93,6 @@ def global_mention_from_settings(
     if not role_key:
         return ""
 
-    role_id = get_discord_webhook_role_id(role_key)
+    integration = os.environ.get("DISCORD_INTEGRATION", "discord_webhook").strip() or "discord_webhook"
+    role_id = get_integration_role_id(integration, role_key)
     return format_role_mention(role_id, hidden=hidden)

@@ -23,20 +23,16 @@ from message_renderer import load_template_settings, render_message, to_discord_
 from message_settings import setting_str
 
 try:
-    from config_loader import (
-        get_discord_webhook_channel_id,
-        get_mistmint_discord_thread_id_map_url,
-        get_novel_discord_map_url,
-    )
+    from config_loader import get_integration_channel_id, get_integration_raw_url
 except Exception:
-    def get_discord_webhook_channel_id(key: str, default: str = "") -> str:
+    def get_integration_channel_id(name: str, key: str, default: str = "") -> str:
         return default
 
-    def get_mistmint_discord_thread_id_map_url(default: str = "") -> str:
+    def get_integration_raw_url(name: str, key: str, default_path: str = "", default: str = "") -> str:
         return default
 
-    def get_novel_discord_map_url(default: str = "") -> str:
-        return default
+DISCORD_INTEGRATION = os.getenv("DISCORD_INTEGRATION", "discord_webhook").strip() or "discord_webhook"
+THREAD_INTEGRATION = os.getenv("THREAD_INTEGRATION", "mistmint_discord").strip() or "mistmint_discord"
 
 try:
     import tomllib
@@ -50,13 +46,13 @@ _TEMPLATE_SETTINGS = load_template_settings("publish_single_novel")
 
 ARCHIVE_CHANNEL_ID = int(
     os.environ.get("ARCHIVE_CHANNEL_ID", "").strip()
-    or get_discord_webhook_channel_id("novel_cards_archive")
+    or get_integration_channel_id(DISCORD_INTEGRATION, "novel_cards_archive")
     or setting_str(_TEMPLATE_SETTINGS, "archive_channel_id", "1463476725253144751")
 )
 
 NOVEL_DISCORD_MAP_URL = (
     os.environ.get("NOVEL_DISCORD_MAP_URL", "").strip()
-    or get_novel_discord_map_url()
+    or get_integration_raw_url(DISCORD_INTEGRATION, "novel_discord_map", "config/novel_discord_map.toml")
 )
 # Reads role IDs from discord-webhook's rich novel Discord TOML map.
 # currently only supports single server role attachment
@@ -143,7 +139,7 @@ def fetch_thread_id_map(hostdata):
       "TDLBKGC": "1438462596381413417"
     }
     """
-    url = (get_mistmint_discord_thread_id_map_url(hostdata.get("thread_id_map_url") or "") or "").strip()
+    url = get_integration_raw_url(THREAD_INTEGRATION, "thread_id_map", "config/thread_id_map.json")
 
     if not url:
         return {}

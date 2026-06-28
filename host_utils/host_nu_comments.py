@@ -41,19 +41,21 @@ except Exception:
 
 try:
     from config_loader import (
-        get_novelupdates_comments_config,
-        get_novelupdates_comments_enabled,
-        get_novelupdates_host_config,
+        get_comments_config,
+        get_comments_enabled,
+        get_comments_host_config,
     )
 except Exception:
-    def get_novelupdates_comments_config():
+    def get_comments_config(source: str):
         return {}
 
-    def get_novelupdates_comments_enabled(default: bool = True) -> bool:
+    def get_comments_enabled(source: str, default: bool = True) -> bool:
         return default
 
-    def get_novelupdates_host_config():
+    def get_comments_host_config(source: str):
         return {}
+
+COMMENTS_SOURCE = "novelupdates"
 
 # ---------------------------- constants --------------------------------
 
@@ -72,7 +74,7 @@ _ROLE_RE = re.compile(r"^\s*(?:<@&)?(\d+)>?\s*$", re.ASCII)
 # ---------------------------- helpers ----------------------------------
 
 def _nu_comments_int(key: str, default: int) -> int:
-    cfg = get_novelupdates_comments_config()
+    cfg = get_comments_config(COMMENTS_SOURCE)
     try:
         return int(cfg.get(key, default))
     except Exception:
@@ -107,7 +109,7 @@ def _nu_fetch_timeout_seconds() -> int:
 
 
 def _nu_comments_str(key: str, default: str) -> str:
-    cfg = get_novelupdates_comments_config()
+    cfg = get_comments_config(COMMENTS_SOURCE)
     return str(cfg.get(key) or default).strip()
 
 
@@ -124,11 +126,11 @@ def _nu_comments_enabled() -> bool:
     if env_value is not None:
         return env_value
 
-    return get_novelupdates_comments_enabled(True)
+    return get_comments_enabled(COMMENTS_SOURCE, True)
 
 
 def _nu_host_str(key: str, default: str) -> str:
-    cfg = get_novelupdates_host_config()
+    cfg = get_comments_host_config(COMMENTS_SOURCE)
     return str(cfg.get(key) or default).strip()
 
 

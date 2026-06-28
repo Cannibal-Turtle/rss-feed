@@ -11,6 +11,11 @@ ROOT = Path(__file__).resolve().parent
 CONFIG_DIR = ROOT / "config"
 _REMOTE_JSON_CACHE: dict[str, dict[str, Any]] = {}
 
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 def load_json_config(filename: str) -> dict[str, Any]:
     path = CONFIG_DIR / filename
 
@@ -23,7 +28,7 @@ def load_json_config(filename: str) -> dict[str, Any]:
         print(f"⚠️ Could not load {path}: {exc}")
         return {}
 
-    return data if isinstance(data, dict) else {}
+    return _as_dict(data)
 
 
 def load_json_url(url: str, *, timeout: int = 15) -> dict[str, Any]:
@@ -42,9 +47,7 @@ def load_json_url(url: str, *, timeout: int = 15) -> dict[str, Any]:
         print(f"⚠️ Could not load remote JSON {url}: {exc}")
         data = {}
 
-    if not isinstance(data, dict):
-        data = {}
-
+    data = _as_dict(data)
     _REMOTE_JSON_CACHE[url] = data
     return data
 
@@ -58,208 +61,131 @@ def load_runtime_config() -> dict[str, Any]:
 
 
 def get_runtime_fetch_config() -> dict[str, Any]:
-    cfg = load_runtime_config()
-    fetch = cfg.get("fetch", {})
-    return fetch if isinstance(fetch, dict) else {}
+    return _as_dict(load_runtime_config().get("fetch", {}))
 
 
 def get_downstream_repos() -> list[str]:
     cfg = load_integrations_config()
-    repos = cfg.get("downstream_dispatch", {}).get("repos", [])
+    dispatch = _as_dict(cfg.get("downstream_dispatch", {}))
+    repos = dispatch.get("repos", [])
     return [str(repo).strip() for repo in repos if str(repo).strip()]
 
 
 def get_dispatch_event(kind: str, default: str = "") -> str:
     cfg = load_integrations_config()
-    event = (
-        cfg.get("downstream_dispatch", {})
-        .get("events", {})
-        .get(kind)
-    )
-    return str(event or default).strip()
+    dispatch = _as_dict(cfg.get("downstream_dispatch", {}))
+    events = _as_dict(dispatch.get("events", {}))
+    return str(events.get(kind) or default).strip()
 
 
-def get_discord_webhook_config() -> dict[str, Any]:
+# ---------------- Generic integration helpers ----------------
+
+def get_integration_config(name: str) -> dict[str, Any]:
     cfg = load_integrations_config()
-    section = cfg.get("discord_webhook", {})
-    return section if isinstance(section, dict) else {}
+    return _as_dict(cfg.get(str(name or "").strip(), {}))
 
 
-def get_discord_webhook_raw_base(default: str = "") -> str:
-    cfg = get_discord_webhook_config()
-    return str(cfg.get("raw_base") or default).strip().rstrip("/")
+def get_integration_raw_base(name: str, default: str = "") -> str:
+    section = get_integration_config(name)
+    return str(section.get("raw_base") or default).strip().rstrip("/")
 
 
-def get_discord_webhook_path(key: str, default: str = "") -> str:
-    cfg = get_discord_webhook_config()
-    paths = cfg.get("paths", {})
-    if not isinstance(paths, dict):
-        paths = {}
+def get_integration_path(name: str, key: str, default: str = "") -> str:
+    section = get_integration_config(name)
+    paths = _as_dict(section.get("paths", {}))
     return str(paths.get(key) or default).strip().lstrip("/")
 
 
-def get_discord_webhook_raw_url(key: str, default_path: str = "", default: str = "") -> str:
-    base = get_discord_webhook_raw_base()
-    path = get_discord_webhook_path(key, default_path)
+def get_integration_raw_url(
+    name: str,
+    key: str,
+    default_path: str = "",
+    default: str = "",
+) -> str:
+    base = get_integration_raw_base(name)
+    path = get_integration_path(name, key, default_path)
 
     if base and path:
         return f"{base}/{path}"
 
-    return default
+    return str(default or "").strip()
 
 
-def get_discord_webhook_server_url(default: str = "") -> str:
-    return get_discord_webhook_raw_url(
-        "server_json",
-        "config/server.json",
-        default,
+def load_integration_json(
+    name: str,
+    key: str,
+    default_path: str = "",
+    *,
+    timeout: int = 15,
+) -> dict[str, Any]:
+    return load_json_url(
+        get_integration_raw_url(name, key, default_path),
+        timeout=timeout,
     )
 
 
-def get_novel_discord_map_url(default: str = "") -> str:
-    return get_discord_webhook_raw_url(
-        "novel_discord_map",
-        "config/novel_discord_map.toml",
-        default,
-    )
+def get_integration_channel_id(
+    name: str,
+    key: str,
+    default: str = "",
+    *,
+    server_key: str = "server_json",
+    default_path: str = "config/server.json",
+) -> str:
+    server = load_integration_json(name, server_key, default_path)
 
-
-def get_roles_json_url(default: str = "") -> str:
-    return get_discord_webhook_raw_url(
-        "roles_json",
-        "config/roles.json",
-        default,
-    )
-
-
-def get_tag_roles_url(default: str = "") -> str:
-    return get_discord_webhook_raw_url(
-        "tag_roles",
-        "config/tag_roles.json",
-        default,
-    )
-
-
-def get_completion_state_url(default: str = "") -> str:
-    return get_discord_webhook_raw_url(
-        "state",
-        "state.json",
-        default,
-    )
-
-
-def get_discord_webhook_server_json() -> dict[str, Any]:
-    return load_json_url(get_discord_webhook_server_url())
-
-
-def get_discord_webhook_roles_json() -> dict[str, Any]:
-    return load_json_url(get_roles_json_url())
-
-
-def get_discord_webhook_channel_id(key: str, default: str = "") -> str:
-    server = get_discord_webhook_server_json()
-
-    # Supports both flat server.json and the earlier nested shape.
-    channels = server.get("channels", {})
-    if not isinstance(channels, dict):
-        channels = {}
-
+    # Supports both flat server.json and a nested {"channels": {...}} shape.
+    channels = _as_dict(server.get("channels", {}))
     value = server.get(key) or channels.get(key) or default
     return str(value or "").strip()
 
 
-def get_discord_webhook_guild_id(default: str = "") -> str:
-    server = get_discord_webhook_server_json()
+def get_integration_guild_id(
+    name: str,
+    default: str = "",
+    *,
+    server_key: str = "server_json",
+    default_path: str = "config/server.json",
+) -> str:
+    server = load_integration_json(name, server_key, default_path)
 
-    guild = server.get("guild", {})
-    if not isinstance(guild, dict):
-        guild = {}
-
+    # Supports both flat server.json and a nested {"guild": {"id": "..."}} shape.
+    guild = _as_dict(server.get("guild", {}))
     value = server.get("guild_id") or guild.get("id") or default
     return str(value or "").strip()
 
 
-def get_discord_webhook_role_id(key: str, default: str = "") -> str:
-    roles = get_discord_webhook_roles_json()
+def get_integration_role_id(
+    name: str,
+    key: str,
+    default: str = "",
+    *,
+    roles_key: str = "roles_json",
+    default_path: str = "config/roles.json",
+) -> str:
+    roles = load_integration_json(name, roles_key, default_path)
     value = roles.get(key) or default
     return str(value or "").strip()
 
 
-def get_mistmint_discord_config() -> dict[str, Any]:
+# ---------------- Generic comments helpers ----------------
+
+def get_comments_config(source: str) -> dict[str, Any]:
     cfg = load_integrations_config()
-    section = cfg.get("mistmint_discord", {})
-    return section if isinstance(section, dict) else {}
+    comments = _as_dict(cfg.get("comments", {}))
+    return _as_dict(comments.get(str(source or "").strip(), {}))
 
 
-def get_mistmint_discord_raw_base(default: str = "") -> str:
-    cfg = get_mistmint_discord_config()
-    return str(cfg.get("raw_base") or default).strip().rstrip("/")
+def get_comments_host_config(source: str) -> dict[str, Any]:
+    comments = get_comments_config(source)
+    return _as_dict(comments.get("host", {}))
 
 
-def get_mistmint_discord_path(key: str, default: str = "") -> str:
-    cfg = get_mistmint_discord_config()
-    paths = cfg.get("paths", {})
-    if not isinstance(paths, dict):
-        paths = {}
-    return str(paths.get(key) or default).strip().lstrip("/")
-
-
-def get_mistmint_discord_raw_url(key: str, default_path: str = "", default: str = "") -> str:
-    base = get_mistmint_discord_raw_base()
-    path = get_mistmint_discord_path(key, default_path)
-
-    if base and path:
-        return f"{base}/{path}"
-
-    return default
-
-
-def get_mistmint_discord_thread_id_map_url(default: str = "") -> str:
-    return get_mistmint_discord_raw_url(
-        "thread_id_map",
-        "config/thread_id_map.json",
-        default,
-    )
-
-
-def get_mistmint_comments_config() -> dict[str, Any]:
-    cfg = load_integrations_config()
-    comments = (
-        cfg.get("mistmint", {})
-        .get("comments", {})
-    )
-    return comments if isinstance(comments, dict) else {}
-
-
-def get_novelupdates_host_config() -> dict[str, Any]:
-    cfg = load_integrations_config()
-    host = (
-        cfg.get("novelupdates", {})
-        .get("host", {})
-    )
-    return host if isinstance(host, dict) else {}
-
-
-def get_novelupdates_comments_config() -> dict[str, Any]:
-    cfg = load_integrations_config()
-    comments = (
-        cfg.get("novelupdates", {})
-        .get("comments", {})
-    )
-    return comments if isinstance(comments, dict) else {}
-
-
-def get_novelupdates_comments_enabled(default: bool = True) -> bool:
-    comments = get_novelupdates_comments_config()
+def get_comments_enabled(source: str, default: bool = True) -> bool:
+    comments = get_comments_config(source)
     raw = comments.get("enabled", default)
 
     if isinstance(raw, bool):
         return raw
 
     return str(raw).strip().lower() in {"1", "true", "yes", "y", "on"}
-
-
-def get_paid_feed_config() -> dict[str, Any]:
-    cfg = load_integrations_config()
-    paid_feed = cfg.get("paid_feed", {})
-    return paid_feed if isinstance(paid_feed, dict) else {}

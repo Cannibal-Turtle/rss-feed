@@ -39,17 +39,15 @@ from message_settings import (
 )
 
 try:
-    from config_loader import (
-        get_discord_webhook_channel_id,
-        get_novel_discord_map_url,
-    )
+    from config_loader import get_integration_channel_id, get_integration_raw_url
 except Exception:
-    def get_discord_webhook_channel_id(key: str, default: str = "") -> str:
+    def get_integration_channel_id(name: str, key: str, default: str = "") -> str:
         return default
 
-    def get_novel_discord_map_url(default: str = "") -> str:
+    def get_integration_raw_url(name: str, key: str, default_path: str = "", default: str = "") -> str:
         return default
-    
+
+DISCORD_INTEGRATION = os.getenv("DISCORD_INTEGRATION", "discord_webhook").strip() or "discord_webhook"
 
 DISCORD_API_BASE = "https://discord.com/api/v10"
 
@@ -59,7 +57,7 @@ GLOBAL_MENTION = global_mention_from_settings(_TEMPLATE_SETTINGS)
 
 CHANNEL_DEFAULT = (
     os.environ.get("DISCORD_MOD_CHANNEL_ID", "").strip()
-    or get_discord_webhook_channel_id("mod")
+    or get_integration_channel_id(DISCORD_INTEGRATION, "mod")
 )
 
 EMBED_COLOR_HEX = setting_str(
@@ -72,7 +70,7 @@ EMBED_COLOR_HEX = setting_str(
 
 NOVEL_DISCORD_MAP_URL = (
     os.environ.get("NOVEL_DISCORD_MAP_URL", "").strip()
-    or get_novel_discord_map_url()
+    or get_integration_raw_url(DISCORD_INTEGRATION, "novel_discord_map", "config/novel_discord_map.toml")
     or setting_str(_TEMPLATE_SETTINGS, "novel_discord_map_url")
 )
 

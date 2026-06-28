@@ -30,23 +30,21 @@
     "repo": "Cannibal-Turtle/rss-feed",
     "event_type": "update-novel-status"
   },
-  "mistmint": {
-    "comments": {
-      "public_concurrency_default": 6,
-      "public_concurrency_max": 10,
-      "public_fetch_timeout_seconds": 20
-    }
-  },
-  "novelupdates": {
-    "host": {
-      "name": "Novel Updates",
-      "logo": "https://www.novelupdates.com/appicon.png"
-    },
-    "comments": {
+  "comments": {
+    "novelupdates": {
       "enabled": true,
+      "host": {
+        "name": "Novel Updates",
+        "logo": "https://www.novelupdates.com/appicon.png"
+      },
       "fetch_concurrency_default": 6,
       "fetch_concurrency_max": 10,
       "fetch_timeout_seconds": 20
+    },
+    "mistmint_haven": {
+      "public_concurrency_default": 6,
+      "public_concurrency_max": 10,
+      "public_fetch_timeout_seconds": 20
     }
   }
 }

@@ -23,22 +23,18 @@ from message_settings import global_mention_from_settings
 from novel_mappings import HOSTING_SITE_DATA
 
 try:
-    from config_loader import (
-        get_discord_webhook_channel_id,
-        get_discord_webhook_role_id,
-    )
+    from config_loader import get_integration_channel_id
 except Exception:
-    def get_discord_webhook_channel_id(key: str, default: str = "") -> str:
+    def get_integration_channel_id(name: str, key: str, default: str = "") -> str:
         return default
 
-    def get_discord_webhook_role_id(key: str, default: str = "") -> str:
-        return default
+DISCORD_INTEGRATION = os.getenv("DISCORD_INTEGRATION", "discord_webhook").strip() or "discord_webhook"
 
 DISCORD_TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 
 CHANNEL_ID = int(
     os.environ.get("DISCORD_MOD_CHANNEL_ID", "").strip()
-    or get_discord_webhook_channel_id("mod")
+    or get_integration_channel_id(DISCORD_INTEGRATION, "mod")
     or 0
 )
 

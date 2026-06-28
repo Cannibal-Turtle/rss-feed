@@ -55,20 +55,15 @@ from message_settings import (
 )
 
 try:
-    from config_loader import (
-        get_discord_webhook_channel_id,
-        get_discord_webhook_role_id,
-        get_novel_discord_map_url,
-    )
+    from config_loader import get_integration_channel_id, get_integration_raw_url
 except Exception:
-    def get_discord_webhook_channel_id(key: str, default: str = "") -> str:
+    def get_integration_channel_id(name: str, key: str, default: str = "") -> str:
         return default
 
-    def get_discord_webhook_role_id(key: str, default: str = "") -> str:
+    def get_integration_raw_url(name: str, key: str, default_path: str = "", default: str = "") -> str:
         return default
 
-    def get_novel_discord_map_url(default: str = "") -> str:
-        return default
+DISCORD_INTEGRATION = os.getenv("DISCORD_INTEGRATION", "discord_webhook").strip() or "discord_webhook"
 
 
 STATE_PATH = ROOT / "revenue" / "state.json"
@@ -92,7 +87,7 @@ HOSTS_DIR = ROOT / "revenue" / "hosts"
 
 NOVEL_DISCORD_MAP_URL = (
     os.environ.get("NOVEL_DISCORD_MAP_URL", "").strip()
-    or get_novel_discord_map_url()
+    or get_integration_raw_url(DISCORD_INTEGRATION, "novel_discord_map", "config/novel_discord_map.toml")
 )
 
 
@@ -1091,7 +1086,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             channel_id = (
                 args.channel
                 or os.getenv("DISCORD_MOD_CHANNEL_ID", "").strip()
-                or get_discord_webhook_channel_id("mod")
+                or get_integration_channel_id(DISCORD_INTEGRATION, "mod")
             )
             message_id = args.message or os.getenv("DISCORD_REVENUE_MESSAGE_ID", "").strip()
 

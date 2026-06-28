@@ -7,14 +7,16 @@ import aiohttp
 
 # --- Config-----------------------
 try:
-    from config_loader import get_mistmint_comments_config
+    from config_loader import get_comments_config
 except Exception:
-    def get_mistmint_comments_config():
+    def get_comments_config(source: str):
         return {}
+
+COMMENTS_SOURCE = "mistmint_haven"
 
 
 def _mistmint_comments_int(key: str, default: int) -> int:
-    cfg = get_mistmint_comments_config()
+    cfg = get_comments_config(COMMENTS_SOURCE)
     try:
         return int(cfg.get(key, default))
     except Exception:

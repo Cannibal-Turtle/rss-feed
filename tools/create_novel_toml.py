@@ -53,14 +53,19 @@ HOSTS_DIR = ROOT / "mappings" / "hosts"
 NOVELS_DIR = ROOT / "mappings" / "novels"
 
 try:
-    from config_loader import get_tag_roles_url
+    from config_loader import get_integration_raw_url
 except Exception:
-    def get_tag_roles_url(default: str = "") -> str:
+    def get_integration_raw_url(name: str, key: str, default_path: str = "", default: str = "") -> str:
         return default
 
 
-DEFAULT_TAG_ROLES_URL = get_tag_roles_url(
-    "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/config/tag_roles.json"
+DISCORD_INTEGRATION = os.getenv("DISCORD_INTEGRATION", "discord_webhook").strip() or "discord_webhook"
+
+DEFAULT_TAG_ROLES_URL = get_integration_raw_url(
+    DISCORD_INTEGRATION,
+    "tag_roles",
+    "config/tag_roles.json",
+    "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main/config/tag_roles.json",
 )
 
 # Fallback if GitHub/raw URL is unavailable. Keep keys only; role IDs are not needed here.

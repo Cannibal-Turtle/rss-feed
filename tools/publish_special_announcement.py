@@ -26,31 +26,22 @@ from message_settings import setting_str
 
 try:
     from config_loader import (
-        get_completion_state_url,
-        get_discord_webhook_channel_id,
-        get_discord_webhook_guild_id,
-        get_mistmint_discord_thread_id_map_url,
-        get_novel_discord_map_url,
-        get_roles_json_url,
+        get_integration_channel_id,
+        get_integration_guild_id,
+        get_integration_raw_url,
     )
 except Exception:
-    def get_completion_state_url(default: str = "") -> str:
+    def get_integration_channel_id(name: str, key: str, default: str = "") -> str:
         return default
 
-    def get_discord_webhook_channel_id(key: str, default: str = "") -> str:
+    def get_integration_guild_id(name: str, default: str = "") -> str:
         return default
 
-    def get_discord_webhook_guild_id(default: str = "") -> str:
+    def get_integration_raw_url(name: str, key: str, default_path: str = "", default: str = "") -> str:
         return default
 
-    def get_mistmint_discord_thread_id_map_url(default: str = "") -> str:
-        return default
-
-    def get_novel_discord_map_url(default: str = "") -> str:
-        return default
-
-    def get_roles_json_url(default: str = "") -> str:
-        return default
+DISCORD_INTEGRATION = os.getenv("DISCORD_INTEGRATION", "discord_webhook").strip() or "discord_webhook"
+THREAD_INTEGRATION = os.getenv("THREAD_INTEGRATION", "mistmint_discord").strip() or "mistmint_discord"
 
 
 TOKEN = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
@@ -60,13 +51,13 @@ _TEMPLATE_SETTINGS = load_template_settings("special_announcement")
 
 NOVEL_DISCORD_MAP_URL = (
     os.environ.get("NOVEL_DISCORD_MAP_URL", "").strip()
-    or get_novel_discord_map_url()
+    or get_integration_raw_url(DISCORD_INTEGRATION, "novel_discord_map", "config/novel_discord_map.toml")
     or setting_str(_TEMPLATE_SETTINGS, "novel_discord_map_url")
 )
 
 NEWS_CHANNEL_ID = int(
     os.environ.get("NEWS_CHANNEL_ID", "").strip()
-    or get_discord_webhook_channel_id("announcements")
+    or get_integration_channel_id(DISCORD_INTEGRATION, "announcements")
     or setting_str(_TEMPLATE_SETTINGS, "news_channel_id", "0")
     or 0
 )
@@ -74,26 +65,26 @@ NEWS_CHANNEL_ID = int(
 PREVIEW_CHANNEL_ID = int(
     os.environ.get("SPECIAL_ANNOUNCEMENT_PREVIEW_CHANNEL_ID", "").strip()
     or os.environ.get("DISCORD_MOD_CHANNEL_ID", "").strip()
-    or get_discord_webhook_channel_id("mod")
+    or get_integration_channel_id(DISCORD_INTEGRATION, "mod")
     or setting_str(_TEMPLATE_SETTINGS, "preview_channel_id", "0")
     or 0
 )
 
 MY_SERVER_GUILD_ID = (
     os.environ.get("MY_SERVER_GUILD_ID", "").strip()
-    or get_discord_webhook_guild_id()
+    or get_integration_guild_id(DISCORD_INTEGRATION)
     or setting_str(_TEMPLATE_SETTINGS, "private_guild_id")
 )
 
 ROLES_JSON_URL = (
     os.environ.get("ROLES_JSON_URL", "").strip()
-    or get_roles_json_url()
+    or get_integration_raw_url(DISCORD_INTEGRATION, "roles_json", "config/roles.json")
     or setting_str(_TEMPLATE_SETTINGS, "roles_json_url")
 )
 
 COMPLETION_STATE_URL = (
     os.environ.get("COMPLETION_STATE_URL", "").strip()
-    or get_completion_state_url()
+    or get_integration_raw_url(DISCORD_INTEGRATION, "state", "state.json")
     or setting_str(_TEMPLATE_SETTINGS, "completion_state_url")
 )
 
@@ -311,7 +302,7 @@ def build_global_mention(*, novel_title: str, novel_role_mention: str, channel_i
 
 
 def fetch_thread_id_map(hostdata: dict) -> dict[str, str]:
-    url = (get_mistmint_discord_thread_id_map_url(hostdata.get("thread_id_map_url") or "") or "").strip()
+    url = get_integration_raw_url(THREAD_INTEGRATION, "thread_id_map", "config/thread_id_map.json")
 
     if not url:
         return {}
@@ -356,7 +347,7 @@ def resolve_publish_targets(hostdata: dict, short_code: str) -> list[int]:
 
     targets = [NEWS_CHANNEL_ID]
 
-    if not (get_mistmint_discord_thread_id_map_url(hostdata.get("thread_id_map_url") or "") or "").strip():
+    if not get_integration_raw_url(THREAD_INTEGRATION, "thread_id_map", "config/thread_id_map.json"):
         print("No configured thread ID map URL. Posting only to the private/news server.")
         return targets
 
