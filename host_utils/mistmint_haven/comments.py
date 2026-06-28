@@ -1,6 +1,11 @@
 # host_utils/mistmint_haven/comments.py
 from .common import *
-from .client import MistmintClient, _http_get_json
+from .client import (
+    MistmintClient,
+    _http_get_json,
+    _mistmint_auth_header_attempts,
+    _mistmint_auth_status,
+)
 from bs4 import BeautifulSoup
 import asyncio
 import aiohttp
@@ -855,15 +860,7 @@ def load_comments_mistmint_trans(comments_api_url: str):
       novel_title, chapter, author, description, reply_to, posted_at
     """
     out = []
-    token  = os.getenv("MISTMINT_TOKEN", "").strip()
-    cookie = os.getenv("MISTMINT_COOKIE", "").strip()
-
-    base_headers = {
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0",
-        "Origin": "https://www.mistminthaven.com",
-        "Referer": "https://www.mistminthaven.com/",
-    }
+    auth_status = _mistmint_auth_status()
 
     def unauth(payload_text: str, payload_json: dict | None) -> bool:
         try:
@@ -894,33 +891,14 @@ def load_comments_mistmint_trans(comments_api_url: str):
     raw_used = ""
 
     # ── FETCH PHASE ────────────────────────────────────────────────────────────
-    with diag_step("comments-fetch", url=comments_api_url, has_token=bool(token), has_cookie=bool(cookie)):
-        if token:
-            h1 = dict(base_headers)
-            h1["Authorization"] = f"Bearer {token}"
-            r, raw, pj = get_with(h1, "bearer")
+    with diag_step("comments-fetch", url=comments_api_url, **auth_status):
+        for label, headers in _mistmint_auth_header_attempts(include_cookie_from_token=True):
+            r, raw, pj = get_with(headers, label)
             if not unauth(raw, pj):
                 payload, raw_used = (pj if pj is not None else {}), raw
-                diag_ok("comments-fetch-ok", mode="bearer")
-            else:
-                h2 = dict(base_headers)
-                h2["Cookie"] = f"auth._token.local=Bearer%20{token}; auth.strategy=local"
-                r, raw, pj = get_with(h2, "cookie-from-token")
-                if not unauth(raw, pj):
-                    payload, raw_used = (pj if pj is not None else {}), raw
-                    diag_ok("comments-fetch-ok", mode="cookie-from-token")
-                else:
-                    diag_fail("comments-fetch-unauthorized", mode="bearer+cookie-from-token")
-
-        if payload is None and cookie:
-            h3 = dict(base_headers)
-            h3["Cookie"] = cookie
-            r, raw, pj = get_with(h3, "cookie-secret")
-            if not unauth(raw, pj):
-                payload, raw_used = (pj if pj is not None else {}), raw
-                diag_ok("comments-fetch-ok", mode="cookie-secret")
-            else:
-                diag_fail("comments-fetch-unauthorized", mode="cookie-secret")
+                diag_ok("comments-fetch-ok", mode=label)
+                break
+            diag_fail("comments-fetch-unauthorized", mode=label)
 
         if payload is None:
             diag_fail("comments-unauthorized")

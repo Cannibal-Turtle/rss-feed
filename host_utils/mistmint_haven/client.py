@@ -93,15 +93,73 @@ def resolve_chapters_api_url(hostdata, novel_title, novel):
 
     return f"{BASE_API}/novels/slug/{slug}/chapters"
 
-def _mistmint_headers():
-    token  = os.getenv("MISTMINT_TOKEN", "").strip()
-    cookie = _resolve_mistmint_cookie()
-    h = {
+def _mistmint_base_headers() -> Dict[str, str]:
+    return {
         "Accept": "application/json",
         "User-Agent": "Mozilla/5.0",
         "Origin": "https://www.mistminthaven.com",
         "Referer": "https://www.mistminthaven.com/",
     }
+
+
+def _mistmint_auth_values() -> Tuple[str, str]:
+    """
+    Central Mistmint auth lookup.
+
+    MISTMINT_TOKEN is the bearer token.
+    MISTMINT_COOKIE can be set directly, or resolved via the host-level
+    token_secret indirection handled by _resolve_mistmint_cookie().
+    """
+    token = os.getenv("MISTMINT_TOKEN", "").strip()
+    cookie = _resolve_mistmint_cookie()
+    return token, cookie
+
+
+def _mistmint_auth_status() -> Dict[str, bool]:
+    token, cookie = _mistmint_auth_values()
+    return {"has_token": bool(token), "has_cookie": bool(cookie)}
+
+
+def _mistmint_auth_header_attempts(
+    *,
+    include_cookie_from_token: bool = False,
+    include_anonymous: bool = False,
+) -> list[tuple[str, Dict[str, str]]]:
+    """
+    Return ordered Mistmint auth header attempts.
+
+    The trans comments endpoint has historically accepted either a bearer token,
+    a Nuxt-style auth cookie made from that token, or a raw cookie. Keeping the
+    order here lets comments reuse the shared auth lookup without losing those
+    fallbacks.
+    """
+    token, cookie = _mistmint_auth_values()
+    attempts: list[tuple[str, Dict[str, str]]] = []
+
+    if token:
+        h = _mistmint_base_headers()
+        h["Authorization"] = f"Bearer {token}"
+        attempts.append(("bearer", h))
+
+        if include_cookie_from_token:
+            h = _mistmint_base_headers()
+            h["Cookie"] = f"auth._token.local=Bearer%20{token}; auth.strategy=local"
+            attempts.append(("cookie-from-token", h))
+
+    if cookie:
+        h = _mistmint_base_headers()
+        h["Cookie"] = cookie
+        attempts.append(("cookie-secret", h))
+
+    if include_anonymous:
+        attempts.append(("anonymous", _mistmint_base_headers()))
+
+    return attempts
+
+
+def _mistmint_headers():
+    token, cookie = _mistmint_auth_values()
+    h = _mistmint_base_headers()
     if token:
         h["Authorization"] = f"Bearer {token}"
     if cookie:
@@ -280,6 +338,10 @@ __all__ = [
     "MistmintClient",
     "resolve_chapters_api_url",
     "resolve_chapter_id",
+    "_mistmint_base_headers",
+    "_mistmint_auth_values",
+    "_mistmint_auth_status",
+    "_mistmint_auth_header_attempts",
     "_mistmint_headers",
     "_http_get_json",
 ]
