@@ -23,11 +23,16 @@ from message_settings import setting_str
 
 try:
     from config_loader import (
+        get_host_discord_target,
         get_integration_channel_id,
         get_integration_guild_id,
         get_integration_raw_url,
+        get_primary_discord_integration,
     )
 except Exception:
+    def get_host_discord_target(host_key: str):
+        return {}
+
     def get_integration_channel_id(name: str, key: str, default: str = "") -> str:
         return default
 
@@ -37,8 +42,15 @@ except Exception:
     def get_integration_raw_url(name: str, key: str, default_path: str = "", default: str = "") -> str:
         return default
 
-DISCORD_INTEGRATION = os.getenv("DISCORD_INTEGRATION", "discord_webhook").strip() or "discord_webhook"
-THREAD_INTEGRATION = os.getenv("THREAD_INTEGRATION", "mistmint_discord").strip() or "mistmint_discord"
+    def get_primary_discord_integration(default: str = "discord_webhook") -> str:
+        return default
+
+PRIMARY_DISCORD_INTEGRATION = (
+    os.getenv("PRIMARY_DISCORD_INTEGRATION", "").strip()
+    or os.getenv("DISCORD_INTEGRATION", "").strip()
+    or get_primary_discord_integration("discord_webhook")
+    or "discord_webhook"
+)
 
 TOKEN = os.environ.get("DISCORD_BOT_TOKEN", "").strip()
 
@@ -48,7 +60,7 @@ _TEMPLATE_SETTINGS = load_template_settings("membership_update")
 
 NOVEL_DISCORD_MAP_URL = (
     os.environ.get("NOVEL_DISCORD_MAP_URL", "").strip()
-    or get_integration_raw_url(DISCORD_INTEGRATION, "novel_discord_map", "config/novel_discord_map.toml")
+    or get_integration_raw_url(PRIMARY_DISCORD_INTEGRATION, "novel_discord_map", "config/novel_discord_map.toml")
     or setting_str(_TEMPLATE_SETTINGS, "novel_discord_map_url")
 )
 # currently only supports single server role attachment
@@ -58,7 +70,7 @@ NOVEL_DISCORD_MAP_URL = (
 # This is your server's news channel.
 NEWS_CHANNEL_ID = int(
     os.environ.get("NEWS_CHANNEL_ID", "").strip()
-    or get_integration_channel_id(DISCORD_INTEGRATION, "announcements")
+    or get_integration_channel_id(PRIMARY_DISCORD_INTEGRATION, "announcements")
     or setting_str(_TEMPLATE_SETTINGS, "news_channel_id", "0")
     or 0
 )
@@ -68,7 +80,7 @@ NEWS_CHANNEL_ID = int(
 PREVIEW_CHANNEL_ID = int(
     os.environ.get("MEMBERSHIP_PREVIEW_CHANNEL_ID", "").strip()
     or os.environ.get("DISCORD_MOD_CHANNEL_ID", "").strip()
-    or get_integration_channel_id(DISCORD_INTEGRATION, "mod")
+    or get_integration_channel_id(PRIMARY_DISCORD_INTEGRATION, "mod")
     or setting_str(_TEMPLATE_SETTINGS, "preview_channel_id", "0")
     or 0
 )
@@ -79,19 +91,19 @@ PREVIEW_CHANNEL_ID = int(
 # Non-private servers get public_global_mention.
 MY_SERVER_GUILD_ID = (
     os.environ.get("MY_SERVER_GUILD_ID", "").strip()
-    or get_integration_guild_id(DISCORD_INTEGRATION)
+    or get_integration_guild_id(PRIMARY_DISCORD_INTEGRATION)
     or setting_str(_TEMPLATE_SETTINGS, "private_guild_id")
 )
 
 ROLES_JSON_URL = (
     os.environ.get("ROLES_JSON_URL", "").strip()
-    or get_integration_raw_url(DISCORD_INTEGRATION, "roles_json", "config/roles.json")
+    or get_integration_raw_url(PRIMARY_DISCORD_INTEGRATION, "roles_json", "config/roles.json")
     or setting_str(_TEMPLATE_SETTINGS, "roles_json_url")
 )
 
 COMPLETION_STATE_URL = (
     os.environ.get("COMPLETION_STATE_URL", "").strip()
-    or get_integration_raw_url(DISCORD_INTEGRATION, "state", "state.json")
+    or get_integration_raw_url(PRIMARY_DISCORD_INTEGRATION, "state", "state.json")
     or setting_str(_TEMPLATE_SETTINGS, "completion_state_url")
 )
 
@@ -112,6 +124,33 @@ BANNER_RATIO = BANNER_SIZE[0] / BANNER_SIZE[1]
 VALID_MODES = {"crop preview", "preview", "publish"}
 VALID_CROP_POSITIONS = {"top", "upper", "upper center", "center", "lower center", "lower", "bottom"}
 CROP_PREVIEW_POSITIONS = ["top", "upper", "upper center", "center", "lower center", "lower", "bottom"]
+
+
+def host_config_key(host: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", str(host or "").strip().casefold()).strip("_")
+
+
+def dedupe_targets(targets):
+    seen = set()
+    deduped = []
+
+    for target in targets:
+        channel_id = int(target.get("channel_id") or 0)
+        if not channel_id or channel_id in seen:
+            continue
+        seen.add(channel_id)
+        target = dict(target)
+        target["channel_id"] = channel_id
+        deduped.append(target)
+
+    return deduped
+
+
+def target_label(target):
+    label = str(target.get("label") or "").strip()
+    integration = str(target.get("integration") or "").strip()
+    channel_id = str(target.get("channel_id") or "").strip()
+    return label or f"{integration}:{channel_id}"
 
 
 def require_discord_token():
@@ -142,12 +181,23 @@ def normalize_role_id(value):
     return m.group(0) if m else ""
 
 
-def fetch_novel_role_id_map():
+def novel_discord_map_url_for_integration(integration: str) -> str:
+    if integration == PRIMARY_DISCORD_INTEGRATION:
+        return NOVEL_DISCORD_MAP_URL
+
+    return get_integration_raw_url(
+        integration,
+        "novel_discord_map",
+        "config/novel_discord_map.toml",
+    )
+
+
+def fetch_novel_role_id_map(integration: str = PRIMARY_DISCORD_INTEGRATION):
     """
-    Fetches discord-webhook/config/novel_discord_map.toml
+    Fetches the target Discord integration's novel_discord_map.toml
     and returns short_code -> raw novel role ID.
     """
-    url = NOVEL_DISCORD_MAP_URL
+    url = novel_discord_map_url_for_integration(integration)
 
     if not url:
         return {}
@@ -180,8 +230,8 @@ def fetch_novel_role_id_map():
     return normalized
 
 
-def resolve_novel_role_mention(short_code):
-    role_map = fetch_novel_role_id_map()
+def resolve_novel_role_mention(short_code, integration: str = PRIMARY_DISCORD_INTEGRATION):
+    role_map = fetch_novel_role_id_map(integration)
     role_id = role_map.get(short_code.upper())
     return f"<@&{role_id}>" if role_id else ""
 
@@ -189,9 +239,13 @@ def resolve_novel_role_mention(short_code):
 _THREAD_ID_MAP_CACHE = {}
 
 
-def fetch_thread_id_map(hostdata):
+def fetch_thread_id_map(
+    integration: str,
+    map_key: str = "thread_id_map",
+    default_path: str = "config/thread_id_map.json",
+):
     """
-    Fetches the Mistmint Discord thread ID map from config/integrations.json.
+    Fetches a host Discord integration's thread ID map.
 
     Expected JSON format:
     {
@@ -200,7 +254,7 @@ def fetch_thread_id_map(hostdata):
       "BOE": "N/A"
     }
     """
-    url = get_integration_raw_url(THREAD_INTEGRATION, "thread_id_map", "config/thread_id_map.json")
+    url = get_integration_raw_url(integration, map_key, default_path)
 
     if not url:
         return {}
@@ -225,11 +279,13 @@ def fetch_thread_id_map(hostdata):
     return normalized
 
 
-def resolve_forum_thread_id(hostdata, short_code):
+def resolve_forum_thread_id(integration: str, short_code: str, route: dict):
     """
-    Gets the forum/thread ID for this novel from the configured thread ID map.
+    Gets the thread ID for this novel from the selected host Discord route.
     """
-    thread_map = fetch_thread_id_map(hostdata)
+    map_key = str(route.get("map_key") or "thread_id_map").strip()
+    default_path = str(route.get("default_path") or "config/thread_id_map.json").strip()
+    thread_map = fetch_thread_id_map(integration, map_key, default_path)
     return thread_map.get(short_code.upper())
 
 
@@ -265,54 +321,73 @@ def role_ids_from_text(text: str):
     return re.findall(r"<@&(\d+)>", text or "")
 
 
-_ROLES_JSON_CACHE = None
-_COMPLETION_STATE_CACHE = None
+_ROLES_JSON_CACHE = {}
+_COMPLETION_STATE_CACHE = {}
 
 
-def fetch_roles_json():
-    global _ROLES_JSON_CACHE
+def roles_json_url_for_integration(integration: str) -> str:
+    if integration == PRIMARY_DISCORD_INTEGRATION:
+        return ROLES_JSON_URL
 
-    if _ROLES_JSON_CACHE is not None:
-        return _ROLES_JSON_CACHE
+    return get_integration_raw_url(integration, "roles_json", "config/roles.json")
 
-    if not ROLES_JSON_URL:
-        _ROLES_JSON_CACHE = {}
-        return _ROLES_JSON_CACHE
 
-    r = requests.get(ROLES_JSON_URL, timeout=15)
+def completion_state_url_for_integration(integration: str) -> str:
+    if integration == PRIMARY_DISCORD_INTEGRATION:
+        return COMPLETION_STATE_URL
+
+    return get_integration_raw_url(integration, "state", "state.json")
+
+
+def guild_id_for_integration(integration: str) -> str:
+    if integration == PRIMARY_DISCORD_INTEGRATION:
+        return MY_SERVER_GUILD_ID
+
+    return get_integration_guild_id(integration)
+
+
+def fetch_roles_json(integration: str = PRIMARY_DISCORD_INTEGRATION):
+    url = roles_json_url_for_integration(integration)
+
+    if not url:
+        return {}
+
+    if url in _ROLES_JSON_CACHE:
+        return _ROLES_JSON_CACHE[url]
+
+    r = requests.get(url, timeout=15)
     r.raise_for_status()
 
     data = r.json()
     if not isinstance(data, dict):
-        raise RuntimeError(f"roles_json_url did not return a JSON object: {ROLES_JSON_URL}")
+        raise RuntimeError(f"roles_json_url did not return a JSON object: {url}")
 
-    _ROLES_JSON_CACHE = data
-    return _ROLES_JSON_CACHE
+    _ROLES_JSON_CACHE[url] = data
+    return _ROLES_JSON_CACHE[url]
 
 
-def fetch_completion_state():
-    global _COMPLETION_STATE_CACHE
+def fetch_completion_state(integration: str = PRIMARY_DISCORD_INTEGRATION):
+    url = completion_state_url_for_integration(integration)
 
-    if _COMPLETION_STATE_CACHE is not None:
-        return _COMPLETION_STATE_CACHE
+    if not url:
+        return {}
 
-    if not COMPLETION_STATE_URL:
-        _COMPLETION_STATE_CACHE = {}
-        return _COMPLETION_STATE_CACHE
+    if url in _COMPLETION_STATE_CACHE:
+        return _COMPLETION_STATE_CACHE[url]
 
-    r = requests.get(COMPLETION_STATE_URL, timeout=15)
+    r = requests.get(url, timeout=15)
     r.raise_for_status()
 
     data = r.json()
     if not isinstance(data, dict):
-        raise RuntimeError(f"completion_state_url did not return a JSON object: {COMPLETION_STATE_URL}")
+        raise RuntimeError(f"completion_state_url did not return a JSON object: {url}")
 
-    _COMPLETION_STATE_CACHE = data
-    return _COMPLETION_STATE_CACHE
+    _COMPLETION_STATE_CACHE[url] = data
+    return _COMPLETION_STATE_CACHE[url]
 
 
-def is_paid_completed_novel(novel_title: str) -> bool:
-    state = fetch_completion_state()
+def is_paid_completed_novel(novel_title: str, integration: str = PRIMARY_DISCORD_INTEGRATION) -> bool:
+    state = fetch_completion_state(integration)
     record = state.get(novel_title, {})
 
     if not isinstance(record, dict):
@@ -321,15 +396,29 @@ def is_paid_completed_novel(novel_title: str) -> bool:
     return bool(record.get("paid_completion"))
 
 
-def resolve_status_role_id(novel_title: str) -> str:
-    roles = fetch_roles_json()
-    role_key = "complete" if is_paid_completed_novel(novel_title) else "ongoing"
+def resolve_status_role_id(novel_title: str, integration: str = PRIMARY_DISCORD_INTEGRATION) -> str:
+    roles = fetch_roles_json(integration)
+    role_key = "complete" if is_paid_completed_novel(novel_title, integration) else "ongoing"
     return normalize_role_id(roles.get(role_key, ""))
 
 
-def build_global_mention(*, novel_title, novel_role_mention, channel_id, guild_id):
-    if int(channel_id) == NEWS_CHANNEL_ID or str(guild_id) == MY_SERVER_GUILD_ID:
-        status_role_id = resolve_status_role_id(novel_title)
+def allowed_mentions_for_mention(mention: str):
+    mention = str(mention or "")
+    role_ids = role_ids_from_text(mention)
+    parse = ["everyone"] if "@everyone" in mention or "@here" in mention else []
+
+    allowed = {"parse": parse}
+    if role_ids:
+        allowed["roles"] = role_ids
+
+    return allowed
+
+
+def build_global_mention(*, novel_title, novel_role_mention, channel_id, guild_id, integration, private_channel_id=0):
+    integration_guild_id = guild_id_for_integration(integration)
+
+    if (private_channel_id and int(channel_id) == int(private_channel_id)) or (integration_guild_id and str(guild_id) == str(integration_guild_id)):
+        status_role_id = resolve_status_role_id(novel_title, integration)
 
         mention_parts = [
             novel_role_mention,
@@ -337,19 +426,12 @@ def build_global_mention(*, novel_title, novel_role_mention, channel_id, guild_i
         ]
         mention = " | ".join(part for part in mention_parts if part)
 
-        role_ids = role_ids_from_text(mention)
+        if mention:
+            return mention, allowed_mentions_for_mention(mention)
 
-        return mention, {
-            "parse": [],
-            "roles": role_ids,
-        }
+    return PUBLIC_GLOBAL_MENTION, allowed_mentions_for_mention(PUBLIC_GLOBAL_MENTION)
 
-    return PUBLIC_GLOBAL_MENTION, {
-        "parse": ["everyone"],
-    }
-
-
-def build_membership_payload(*, host, novel_title, novel, banner_url, channel_id, guild_id, novel_role_mention, suppress_mentions=False):
+def build_membership_payload(*, host, novel_title, novel, banner_url, channel_id, guild_id, novel_role_mention, target_integration, private_channel_id=0, suppress_mentions=False):
     novel_url = novel.get("novel_url", "").strip()
 
     global_mention, allowed_mentions = build_global_mention(
@@ -357,6 +439,8 @@ def build_membership_payload(*, host, novel_title, novel, banner_url, channel_id
         novel_role_mention=novel_role_mention,
         channel_id=channel_id,
         guild_id=guild_id,
+        integration=target_integration,
+        private_channel_id=private_channel_id,
     )
 
     ctx = {
@@ -630,37 +714,93 @@ def mark_short_code_as_membership(short_code: str):
     print(f"Marked {short_code} as membership in {path}")
 
 
-def resolve_publish_targets(hostdata, short_code):
+def route_for_event(target_cfg: dict, event_type: str) -> dict:
+    routes = target_cfg.get("routes", {})
+
+    if isinstance(routes, dict):
+        route = routes.get(event_type) or routes.get("default")
+        if isinstance(route, dict):
+            return route
+
+    route = target_cfg.get("route", {})
+    return route if isinstance(route, dict) else {}
+
+
+def resolve_host_discord_targets(host: str, short_code: str, event_type: str):
+    host_key = host_config_key(host)
+    target_cfg = get_host_discord_target(host_key)
+
+    if not target_cfg:
+        print(f"No host-specific Discord target configured for {host_key}. Posting only to primary Discord.")
+        return []
+
+    integration = str(target_cfg.get("integration") or "").strip()
+    if not integration:
+        print(f"Host-specific Discord target for {host_key} has no integration. Posting only to primary Discord.")
+        return []
+
+    route = route_for_event(target_cfg, event_type)
+    route_type = str(route.get("type") or "thread_map").strip().lower()
+
+    if route_type == "none":
+        print(f"Host-specific Discord route for {host_key}/{event_type} is disabled.")
+        return []
+
+    if route_type == "channel":
+        channel_id = str(route.get("channel_id") or "").strip()
+        channel_key = str(route.get("channel_key") or "announcements").strip()
+
+        if not channel_id:
+            channel_id = get_integration_channel_id(integration, channel_key)
+
+        if not channel_id:
+            print(f"No channel target found for {host_key}/{event_type} in {integration}.")
+            return []
+
+        return [{
+            "channel_id": int(channel_id),
+            "integration": integration,
+            "label": f"{host_key} {channel_key} channel",
+            "private_channel_id": int(channel_id),
+        }]
+
+    if route_type == "thread_map":
+        thread_id = resolve_forum_thread_id(integration, short_code, route)
+
+        if thread_id is None:
+            print(f"No thread target found for {short_code} in {integration}. Posting only to primary Discord.")
+            return []
+
+        thread_id = str(thread_id).strip()
+
+        if not thread_id or thread_id.upper() == "N/A":
+            print(f"{short_code} has no host-specific thread target. Posting only to primary Discord.")
+            return []
+
+        return [{
+            "channel_id": int(thread_id),
+            "integration": integration,
+            "label": f"{host_key} thread",
+            "private_channel_id": 0,
+        }]
+
+    print(f"Unknown host Discord route type {route_type!r} for {host_key}/{event_type}. Posting only to primary Discord.")
+    return []
+
+
+def resolve_publish_targets(host, hostdata, short_code):
     if not NEWS_CHANNEL_ID:
         raise RuntimeError("NEWS_CHANNEL_ID could not be resolved from env, server.json announcements, or template settings.")
 
-    targets = [NEWS_CHANNEL_ID]
+    targets = [{
+        "channel_id": NEWS_CHANNEL_ID,
+        "integration": PRIMARY_DISCORD_INTEGRATION,
+        "label": "primary announcements channel",
+        "private_channel_id": NEWS_CHANNEL_ID,
+    }]
 
-    thread_id = resolve_forum_thread_id(hostdata, short_code)
-
-    if thread_id is None:
-        print(f"ERROR: {short_code} is missing from the configured thread ID map.")
-        print('Add it to that host repo thread_id_map.json, or use "N/A" if it has no thread.')
-        sys.exit(1)
-
-    thread_id = str(thread_id).strip()
-
-    if not thread_id:
-        print(f"ERROR: {short_code} has an empty thread ID in the configured thread ID map.")
-        print('Use "N/A" if this novel should only post to your private/news server.')
-        sys.exit(1)
-
-    if thread_id.upper() == "N/A":
-        print(f"{short_code} has no forum thread. Posting only to private/news server.")
-
-    else:
-        thread_id = int(thread_id)
-
-        if thread_id not in targets:
-            targets.append(thread_id)
-
-    return targets
-
+    targets.extend(resolve_host_discord_targets(host, short_code, "membership_update"))
+    return dedupe_targets(targets)
 
 def usage():
     print("Usage: python tools/publish_membership_update.py <short_code> [banner_url] [mode] [crop_position]")
@@ -728,8 +868,6 @@ def main():
     else:
         print("banner_url empty: using featured_image auto-crop.")
 
-    novel_role_mention = resolve_novel_role_mention(short_code)
-
     if mode == "preview":
         if not PREVIEW_CHANNEL_ID:
             raise RuntimeError(
@@ -738,19 +876,30 @@ def main():
                 "or set MEMBERSHIP_PREVIEW_CHANNEL_ID / DISCORD_MOD_CHANNEL_ID."
             )
 
-        targets = [PREVIEW_CHANNEL_ID]
+        targets = [{
+            "channel_id": PREVIEW_CHANNEL_ID,
+            "integration": PRIMARY_DISCORD_INTEGRATION,
+            "label": "primary mod preview channel",
+            "private_channel_id": PREVIEW_CHANNEL_ID,
+        }]
         suppress_mentions = True
         print(f"Preview target: mod channel {PREVIEW_CHANNEL_ID}")
 
     else:
-        targets = resolve_publish_targets(hostdata, short_code)
+        targets = resolve_publish_targets(host, hostdata, short_code)
         suppress_mentions = False
         print(f"Publishing membership update for: {novel_title}")
-        print(f"Targets: {targets}")
+        print("Targets:")
+        for target in targets:
+            print(f"- {target_label(target)} -> {target['channel_id']}")
 
-    for channel_id in targets:
+    for target in targets:
+        channel_id = int(target["channel_id"])
+        target_integration = str(target.get("integration") or PRIMARY_DISCORD_INTEGRATION)
+        private_channel_id = int(target.get("private_channel_id") or 0)
         channel_data = fetch_channel(channel_id)
         guild_id = channel_data.get("guild_id")
+        target_novel_role_mention = resolve_novel_role_mention(short_code, target_integration)
 
         payload = build_membership_payload(
             host=host,
@@ -759,12 +908,14 @@ def main():
             banner_url=banner_url,
             channel_id=channel_id,
             guild_id=guild_id,
-            novel_role_mention=novel_role_mention,
+            novel_role_mention=target_novel_role_mention,
+            target_integration=target_integration,
+            private_channel_id=private_channel_id,
             suppress_mentions=suppress_mentions,
         )
 
         msg = post_message(channel_id, payload, banner_file=banner_file)
-        print(f"Posted membership update to {channel_id}: message {msg.get('id')}")
+        print(f"Posted membership update to {target_label(target)} ({channel_id}): message {msg.get('id')}")
 
     if mode == "publish":
         mark_short_code_as_membership(short_code)

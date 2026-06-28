@@ -168,6 +168,28 @@ def get_integration_role_id(
     return str(value or "").strip()
 
 
+# ---------------- Generic Discord routing helpers ----------------
+
+def get_primary_discord_config() -> dict[str, Any]:
+    cfg = load_integrations_config()
+    return _as_dict(cfg.get("primary_discord", {}))
+
+
+def get_primary_discord_integration(default: str = "discord_webhook") -> str:
+    primary = get_primary_discord_config()
+    return str(primary.get("integration") or default).strip()
+
+
+def get_host_discord_targets_config() -> dict[str, Any]:
+    cfg = load_integrations_config()
+    return _as_dict(cfg.get("host_discord_targets", {}))
+
+
+def get_host_discord_target(host_key: str) -> dict[str, Any]:
+    targets = get_host_discord_targets_config()
+    return _as_dict(targets.get(str(host_key or "").strip(), {}))
+
+
 # ---------------- Generic comments helpers ----------------
 
 def get_comments_config(source: str) -> dict[str, Any]:

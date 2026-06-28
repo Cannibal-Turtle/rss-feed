@@ -9,6 +9,10 @@
       "comments": "trigger-discord-comments"
     }
   },
+  "primary_discord": {
+    "integration": "discord_webhook",
+    "always_post": true
+  },
   "discord_webhook": {
     "raw_base": "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main",
     "paths": {
@@ -23,6 +27,23 @@
     "raw_base": "https://raw.githubusercontent.com/Cannibal-Turtle/mistmint-discord/main",
     "paths": {
       "thread_id_map": "config/thread_id_map.json"
+    }
+  },
+  "host_discord_targets": {
+    "mistmint_haven": {
+      "integration": "mistmint_discord",
+      "routes": {
+        "membership_update": {
+          "type": "thread_map",
+          "map_key": "thread_id_map",
+          "default_path": "config/thread_id_map.json"
+        },
+        "special_announcement": {
+          "type": "thread_map",
+          "map_key": "thread_id_map",
+          "default_path": "config/thread_id_map.json"
+        }
+      }
     }
   },
   "card_status_update": {
