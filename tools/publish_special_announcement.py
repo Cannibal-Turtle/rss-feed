@@ -730,6 +730,24 @@ def template_text_setting(key: str, default: str = "") -> str:
     return str(value).strip()
 
 
+def truthy_setting(value) -> bool:
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, int):
+        return bool(value)
+
+    return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def env_flag(*names: str, default: bool = False) -> bool:
+    for name in names:
+        value = os.environ.get(name)
+        if value is not None:
+            return truthy_setting(value)
+    return default
+
+
 def discord_timestamp_now() -> str:
     fmt = setting_str(_TEMPLATE_SETTINGS, "time_format", "f") or "f"
     fmt = re.sub(r"[^tTdDfFR]", "", fmt) or "f"
@@ -752,6 +770,8 @@ def build_special_payload(
     announcement_message: str,
     button_label: str,
     button_url: str,
+    banner_spoiler: bool = False,
+    container_spoiler: bool = False,
     suppress_mentions: bool = False,
 ) -> dict:
     global_mention, allowed_mentions = build_global_mention(
@@ -765,14 +785,13 @@ def build_special_payload(
         private_channel_id=private_channel_id,
     )
 
-    banner_spoiler = bool(novel.get("is_nsfw", False))
-
     ctx = {
         "accent_color": setting_str(_TEMPLATE_SETTINGS, "accent_color") or novel.get("discord_color") or hostdata.get("discord_color") or "#C9D3FF",
         "announcement_title": announcement_title,
         "announcement_message": announcement_message,
         "banner_url": banner_url,
         "banner_spoiler": banner_spoiler,
+        "container_spoiler": container_spoiler,
         "banner_not_spoiler": not banner_spoiler,
         "button_label": button_label,
         "button_url": button_url or novel.get("novel_url", ""),
@@ -840,6 +859,11 @@ def main() -> None:
     button_label = template_text_setting("button_label", "READ HERE")
     button_url = template_text_setting("button_url") or novel.get("novel_url", "")
 
+    is_nsfw = truthy_setting(novel.get("is_nsfw", False))
+    manual_banner_spoiler = env_flag("SPECIAL_ANNOUNCEMENT_BLUR_BANNER", "BLUR_BANNER")
+    container_spoiler = env_flag("SPECIAL_ANNOUNCEMENT_BLUR_CARD", "BLUR_CARD")
+    banner_spoiler = is_nsfw or manual_banner_spoiler
+
     if mode != "crop preview" and not announcement_message:
         raise RuntimeError("Announcement message is required for preview/publish mode.")
 
@@ -859,6 +883,12 @@ def main() -> None:
     print(f"Title: {announcement_title}")
     print(f"Button: {button_label} -> {button_url}")
     print(f"Banner source: {banner_source}")
+    print(
+        "Spoilers: "
+        f"banner={'yes' if banner_spoiler else 'no'} "
+        f"(nsfw_auto={'yes' if is_nsfw else 'no'}, manual={'yes' if manual_banner_spoiler else 'no'}), "
+        f"card={'yes' if container_spoiler else 'no'}"
+    )
 
     if banner_file:
         print(f"Banner file: {banner_file}")
@@ -922,6 +952,8 @@ def main() -> None:
             announcement_message=announcement_message,
             button_label=button_label,
             button_url=button_url,
+            banner_spoiler=banner_spoiler,
+            container_spoiler=container_spoiler,
             suppress_mentions=suppress_mentions,
         )
 

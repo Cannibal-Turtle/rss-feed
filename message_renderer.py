@@ -146,6 +146,25 @@ def render_text(value: Any, ctx: dict[str, Any]) -> Any:
     return PLACEHOLDER_RE.sub(repl, value)
 
 
+def parse_bool(value: Any) -> bool | None:
+    if value is None or value == "":
+        return None
+
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, int):
+        return bool(value)
+
+    text = str(value).strip().lower()
+    if text in {"1", "true", "yes", "y", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "off"}:
+        return False
+
+    raise ValueError(f"Invalid boolean value: {value!r}")
+
+
 def parse_color(value: Any) -> int | None:
     """
     Accepts:
@@ -231,6 +250,9 @@ def render_obj(obj: Any, ctx: dict[str, Any]) -> Any:
 
             if key == "color" or key == "accent_color":
                 rendered = parse_color(rendered)
+
+            if key in {"animated", "disabled", "divider", "required", "spoiler"}:
+                rendered = parse_bool(rendered)
 
             if should_drop(key, rendered):
                 continue

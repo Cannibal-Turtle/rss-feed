@@ -11,6 +11,16 @@ on:
         description: "Optional banner image URL. Leave empty to auto-crop the novel featured_image to 4:1."
         required: false
         type: string
+      blur_banner:
+        description: "Blur/spoiler the banner image? NSFW novel banners are auto-blurred even if unchecked."
+        required: false
+        default: false
+        type: boolean
+      blur_card:
+        description: "Blur/spoiler the whole announcement card?"
+        required: false
+        default: false
+        type: boolean
       crop_position:
         description: "Crop position used only when banner_url is empty. Default is upper center."
         required: true
@@ -63,6 +73,8 @@ jobs:
         run: |
           echo "SHORT_CODE=${{ github.event.inputs.short_code }}" >> $GITHUB_ENV
           echo "BANNER_URL=${{ github.event.inputs.banner_url }}" >> $GITHUB_ENV
+          echo "SPECIAL_ANNOUNCEMENT_BLUR_BANNER=${{ github.event.inputs.blur_banner }}" >> $GITHUB_ENV
+          echo "SPECIAL_ANNOUNCEMENT_BLUR_CARD=${{ github.event.inputs.blur_card }}" >> $GITHUB_ENV
           echo "CROP_POSITION=${{ github.event.inputs.crop_position }}" >> $GITHUB_ENV
           echo "MODE=${{ github.event.inputs.mode }}" >> $GITHUB_ENV
           echo "SPECIAL_ANNOUNCEMENT_BANNER_OUTPUT=special_announcement_banner.png" >> $GITHUB_ENV
