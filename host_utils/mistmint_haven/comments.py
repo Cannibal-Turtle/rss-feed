@@ -1128,14 +1128,24 @@ def load_comments_mistmint(comments_api_url: str):
     source = _comments_source()
 
     if source == "public":
+        print("[mistmint] comments_source=public")
+        diag_ok("comments-source", source="public")
         return load_comments_mistmint_public(comments_api_url)
 
     if source == "trans":
+        print("[mistmint] comments_source=trans")
+        diag_ok("comments-source", source="trans")
         return load_comments_mistmint_trans(comments_api_url)
 
     # auto mode
+    print("[mistmint] comments_source=auto; trying trans first")
+    diag_ok("comments-source", source="auto", first_try="trans")
+
     try:
-        return load_comments_mistmint_trans(comments_api_url)
+        rows = load_comments_mistmint_trans(comments_api_url)
+        print("[mistmint] comments_source=auto resolved=trans")
+        diag_ok("comments-auto-resolved", resolved="trans")
+        return rows
     except RuntimeError as e:
         msg = str(e)
 
@@ -1143,6 +1153,7 @@ def load_comments_mistmint(comments_api_url: str):
             raise
 
         diag_fail("comments-auto-public-fallback", error=msg)
+        print("[mistmint] comments_source=auto resolved=public")
         print("[mistmint] trans/all-comments auth failed; falling back to public per-novel comments")
         return load_comments_mistmint_public(comments_api_url)
 
