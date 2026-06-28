@@ -26,6 +26,7 @@ try:
     from config_loader import (
         get_host_discord_target,
         get_integration_channel_id,
+        get_integration_guild_id,
         get_integration_raw_url,
         get_primary_discord_integration,
     )
@@ -37,6 +38,9 @@ except Exception:
         return default
 
     def get_integration_raw_url(name: str, key: str, default_path: str = "", default: str = "") -> str:
+        return default
+
+    def get_integration_guild_id(name: str, default: str = "") -> str:
         return default
 
     def get_primary_discord_integration(default: str = "discord_webhook") -> str:
@@ -76,12 +80,12 @@ ARCHIVE_CHANNEL_ID = int(
     or setting_str(_TEMPLATE_SETTINGS, "archive_channel_id", "1463476725253144751")
 )
 
-NOVEL_DISCORD_MAP_URL = (
-    os.environ.get("NOVEL_DISCORD_MAP_URL", "").strip()
-    or get_integration_raw_url(DISCORD_INTEGRATION, "novel_discord_map", "config/novel_discord_map.toml")
-)
-# Reads role IDs from discord-webhook's rich novel Discord TOML map.
-# currently only supports single server role attachment
+# Optional manual override for the primary/private Discord novel role map.
+# Host-specific posts use their own integration's novel_discord_map unless this is set.
+NOVEL_DISCORD_MAP_URL_OVERRIDE = os.environ.get("NOVEL_DISCORD_MAP_URL", "").strip()
+
+# Optional manual override for the second/extra post target's Discord integration.
+EXTRA_DISCORD_INTEGRATION_OVERRIDE = os.getenv("EXTRA_DISCORD_INTEGRATION", "").strip()
 
 # ---------------- utils ----------------
 
@@ -178,12 +182,31 @@ def resolve_single_novel_thread_route(host: str):
     return integration, route_for_single_novel(target_cfg)
 
 
-def fetch_novel_role_id_map():
+def novel_discord_map_url_for_integration(integration: str) -> str:
+    integration = str(integration or "").strip()
+
+    if not integration:
+        return ""
+
+    if integration == DISCORD_INTEGRATION and NOVEL_DISCORD_MAP_URL_OVERRIDE:
+        return NOVEL_DISCORD_MAP_URL_OVERRIDE
+
+    return get_integration_raw_url(
+        integration,
+        "novel_discord_map",
+        "config/novel_discord_map.toml",
+    )
+
+
+def fetch_novel_role_id_map(integration: str):
     """
-    Fetches discord-webhook/config/novel_discord_map.toml
-    and returns short_code -> raw novel role ID.
+    Fetches one Discord integration's novel_discord_map.toml and returns
+    short_code -> raw novel role ID.
+
+    Role IDs are server-specific, so every post target must use the map from
+    the Discord integration that owns that target.
     """
-    url = NOVEL_DISCORD_MAP_URL
+    url = novel_discord_map_url_for_integration(integration)
 
     if not url:
         return {}
@@ -191,13 +214,17 @@ def fetch_novel_role_id_map():
     if url in _NOVEL_DISCORD_MAP_URL_CACHE:
         return _NOVEL_DISCORD_MAP_URL_CACHE[url]
 
-    r = requests.get(url, timeout=15)
-    r.raise_for_status()
-
-    data = tomllib.loads(r.text)
+    try:
+        r = requests.get(url, timeout=15)
+        r.raise_for_status()
+        data = tomllib.loads(r.text)
+    except Exception as exc:
+        print(f"Warning: could not load novel_discord_map for {integration} from {url}: {exc}")
+        data = {}
 
     if not isinstance(data, dict):
-        raise RuntimeError(f"novel_discord_map_url did not return a TOML table: {url}")
+        print(f"Warning: novel_discord_map did not return a TOML table for {integration}: {url}")
+        data = {}
 
     normalized = {}
 
@@ -215,11 +242,56 @@ def fetch_novel_role_id_map():
     _NOVEL_DISCORD_MAP_URL_CACHE[url] = normalized
     return normalized
 
-def resolve_novel_role_mention(short_code):
-    role_map = fetch_novel_role_id_map()
+
+def resolve_novel_role_mention(short_code, integration: str):
+    role_map = fetch_novel_role_id_map(integration)
     role_id = role_map.get(short_code.upper())
     return f"<@&{role_id}>" if role_id else ""
     
+def host_discord_integration_for_host(host: str) -> str:
+    if EXTRA_DISCORD_INTEGRATION_OVERRIDE:
+        return EXTRA_DISCORD_INTEGRATION_OVERRIDE
+
+    target_cfg = get_host_discord_target(host_config_key(host))
+    return str(target_cfg.get("integration") or "").strip()
+
+
+def channel_guild_id(channel) -> str:
+    if getattr(channel, "guild", None):
+        return str(channel.guild.id)
+
+    guild_id = getattr(channel, "guild_id", None)
+    return str(guild_id or "").strip()
+
+
+def integration_for_channel(channel, preferred_integration: str = "") -> str:
+    """
+    Pick the Discord integration that owns this channel/thread.
+
+    This prevents a role ID from one server being shown in another server's
+    embed. Keep guild_id in each Discord repo's config/server.json so this
+    matching can be exact when multiple Discord targets exist.
+    """
+    channel_guild = channel_guild_id(channel)
+    preferred_integration = str(preferred_integration or "").strip()
+
+    candidates = []
+
+    for candidate in (preferred_integration, DISCORD_INTEGRATION):
+        if candidate and candidate not in candidates:
+            candidates.append(candidate)
+
+    if channel_guild:
+        for candidate in candidates:
+            configured_guild = str(get_integration_guild_id(candidate) or "").strip()
+            if configured_guild and configured_guild == channel_guild:
+                return candidate
+
+    # If we cannot compare guild IDs, trust the explicit/preferred integration.
+    # If there is no preferred integration, use the primary/private integration.
+    return preferred_integration or DISCORD_INTEGRATION
+
+
 def fetch_thread_id_map(integration: str, route: dict):
     """
     Fetches a host-specific Discord thread ID map from config/integrations.json.
@@ -448,6 +520,7 @@ def build_message_payload_for_channel(
     next_free_dt,
     last_free_dt,
     target_channel_id,
+    target_integration,
     forum_post_url,
     novel_role_mention,
 ):
@@ -467,9 +540,9 @@ def build_message_payload_for_channel(
         forum_post_url=forum_post_url,
     )
 
-    # Only show Role field in your archive channel.
-    # This keeps formatting based on WHERE the message is posted.
-    show_role = target_channel_id == ARCHIVE_CHANNEL_ID and bool(novel_role_mention)
+    # Role IDs are server-specific. Only show the Role field if this target
+    # integration's own novel_discord_map.toml had a role for this novel.
+    show_role = bool(target_integration and novel_role_mention)
 
     ctx = {
         "title": title,
@@ -586,22 +659,40 @@ async def on_ready():
 
             forum_post_url = await build_forum_post_url(forum_post_id)
 
-            novel_role_mention = resolve_novel_role_mention(SHORT_CODE)
+            # Always post to the primary/private archive.
+            # If a second channel/thread ID is passed, post there too. Its role
+            # field is resolved from the Discord integration that owns that
+            # target, not from the primary/private server.
+            target_posts = [
+                {
+                    "channel_id": ARCHIVE_CHANNEL_ID,
+                    "preferred_integration": DISCORD_INTEGRATION,
+                }
+            ]
 
-            # Always post to archive.
-            # Only post to another channel/thread if you pass it as the second argument.
-            # The mapped forum_post_id is ONLY used for the Forum Post link, not as a posting target.
-            target_channel_ids = [ARCHIVE_CHANNEL_ID]
-            
             if EXTRA_CHANNEL_ID and EXTRA_CHANNEL_ID != ARCHIVE_CHANNEL_ID:
-                target_channel_ids.append(EXTRA_CHANNEL_ID)
-            
-            # Avoid duplicate posts
-            target_channel_ids = list(dict.fromkeys(target_channel_ids))
+                target_posts.append({
+                    "channel_id": EXTRA_CHANNEL_ID,
+                    "preferred_integration": host_discord_integration_for_host(host),
+                })
+
+            # Avoid duplicate posts while preserving target integration hints.
+            unique_posts = []
+            seen_channel_ids = set()
+
+            for post in target_posts:
+                channel_id = int(post["channel_id"])
+                if channel_id in seen_channel_ids:
+                    continue
+                seen_channel_ids.add(channel_id)
+                unique_posts.append(post)
 
             state.setdefault(SHORT_CODE, [])
 
-            for target_channel_id in target_channel_ids:
+            for target_post in unique_posts:
+                target_channel_id = int(target_post["channel_id"])
+                preferred_integration = str(target_post.get("preferred_integration") or "").strip()
+
                 already_posted = any(
                     str(item.get("channel_id")) == str(target_channel_id)
                     for item in state.get(SHORT_CODE, [])
@@ -613,6 +704,8 @@ async def on_ready():
             
                 try:
                     channel = await resolve_channel(target_channel_id)
+                    target_integration = integration_for_channel(channel, preferred_integration)
+                    novel_role_mention = resolve_novel_role_mention(SHORT_CODE, target_integration)
             
                     payload = build_message_payload_for_channel(
                         title=title,
@@ -622,6 +715,7 @@ async def on_ready():
                         next_free_dt=next_free_dt,
                         last_free_dt=last_free_dt,
                         target_channel_id=int(channel.id),
+                        target_integration=target_integration,
                         forum_post_url=forum_post_url,
                         novel_role_mention=novel_role_mention,
                     )
@@ -637,7 +731,7 @@ async def on_ready():
                         state[SHORT_CODE].append(entry)
                         save_state(state)
 
-                    print(f"Posted novel card for {SHORT_CODE} to {channel.id}")
+                    print(f"Posted novel card for {SHORT_CODE} to {channel.id} using {target_integration or 'no'} Discord integration")
 
                 except Exception as e:
                     print(f"Failed to post novel card for {SHORT_CODE} to {target_channel_id}: {e}")
