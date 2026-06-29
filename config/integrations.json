@@ -59,7 +59,7 @@
     "event_type": "update-novel-status"
   },
   "feed_api_alerts": {
-    "enabled": false,
+    "enabled": true,
     "integration": "discord_webhook",
     "channel_key": "mod",
     "mention_role_key": "admin",
