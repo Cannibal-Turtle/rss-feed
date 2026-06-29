@@ -58,6 +58,14 @@
     "repo": "Cannibal-Turtle/rss-feed",
     "event_type": "update-novel-status"
   },
+  "feed_api_alerts": {
+    "enabled": false,
+    "integration": "discord_webhook",
+    "channel_key": "mod",
+    "mention": "||@mod||",
+    "mode_label": "api fallback",
+    "max_items": 10
+  },
   "comments": {
     "novelupdates": {
       "enabled": true,

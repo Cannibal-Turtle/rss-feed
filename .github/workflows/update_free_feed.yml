@@ -55,6 +55,12 @@ jobs:
         id: feed_changes
         run: python feed_guid_gate.py detect free_chapters_feed.xml /tmp/free_guids_before.txt
 
+      - name: Send feed_api alert if enabled
+        if: steps.feed_changes.outputs.new_items == 'true'
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+        run: python feed_api/send_feed_api_alert.py free
+
       - name: Commit and Push Changes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

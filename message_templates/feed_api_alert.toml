@@ -1,0 +1,11 @@
+mode = "components_v2"
+flags = 32768
+content = "{mention}"
+allowed_mentions = { parse = ["roles"] }
+
+[[components]]
+type = 17
+
+[[components.components]]
+type = 10
+content = "{host}'s feed has been maxed out, switching to {mode} for this batch »»»\n{missing_lines}"
