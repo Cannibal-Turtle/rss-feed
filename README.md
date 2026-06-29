@@ -365,7 +365,7 @@ novels_api_url = "https://api.example.com/api/my-novels"
 
 # Comment source modes:
 # "trans"  = use tokened author dashboard endpoint; best metadata/reply tracking, token required
-# "public" = use no-token public novel comment APIs; less reply tracking, but no token needed
+# "public" = use no-token /comments/novel/{identifier}; novel-page comments only, no chapter thread lookup
 # "auto"   = try "trans" first; if token is missing/expired, fall back to "public"
 comments_source = "auto"
 
@@ -919,7 +919,7 @@ chapter_mode = "auto"
 
 # Comment source modes:
 # "trans"  = use tokened author dashboard endpoint; best metadata/reply tracking, token required
-# "public" = use no-token public novel comment APIs; less reply tracking, but no token needed
+# "public" = use no-token /comments/novel/{identifier}; novel-page comments only, no chapter thread lookup
 # "auto"   = try "trans" first; if token is missing/expired, fall back to "public"
 comments_source = "auto"
 ```
@@ -932,10 +932,12 @@ Typical meaning:
 | `paid_chapters_source` | Whether paid chapters come from a feed-style source or the chapter API/data source |
 | `chapter_mode` | Mistmint paid fallback mode; `auto` tries API/chapter data, `manual` forces manual/state fallback |
 | `comments_source = "trans"` | Uses `comments_api_url` / `comments/trans/all-comments`; best metadata and reply tracking, but token/cookie is required |
-| `comments_source = "public"` | Uses public no-token novel comment APIs; less complete reply tracking, but avoids monthly token refresh |
+| `comments_source = "public"` | Uses public no-token `/comments/novel/{identifier}` endpoints. This is a novel-page comments fallback only: it does not resolve `chapterId`, does not call chapter comment endpoints, and should not be treated as a full chapter comments feed. |
 | `comments_source = "auto"` | Tries `trans` first, then falls back to public mode if the token is missing/expired |
 
-The public Mistmint comments endpoint is internal host logic, not user-facing repo config. The code builds it from `BASE_API` as `/comments/novel/{identifier}` and tries the mapped `novel_id` first, then the novel slug. Keep this in Python unless Mistmint changes endpoint structure often enough that it becomes worth exposing a separate URL template.
+The public Mistmint comments endpoint is internal host logic, not user-facing repo config. The code builds it from `BASE_API` as `/comments/novel/{identifier}` and tries the mapped `novel_id` first, then the novel slug. Based on the current public API shape, this endpoint returns comments attached to the novel itself, not full chapter comment threads. Keep this in Python unless Mistmint changes endpoint structure often enough that it becomes worth exposing a separate URL template.
+
+Public comments mode is intentionally limited. It does not resolve `chapterId`, it does not call `/comments/chapter/{chapterId}`, and it does not build reply chains. Use `trans` mode for the complete author-wide comments feed and richer reply tracking.
 
 ### Mapping
 
@@ -1747,7 +1749,7 @@ Use:
 - Discord role IDs, custom emojis, and role URLs belong in Discord bot repos, not in `rss-feed` mappings.
 - Direct-report template settings belong in `message_templates/*.toml`, not hardcoded Python.
 - Mistmint comments can run in `trans`, `public`, or `auto` mode via `comments_source`.
-- Public Mistmint comment fallback is best-effort; tokened `trans` mode remains the most complete source for author-wide comments and reply tracking.
+- Public Mistmint comment fallback is best-effort and currently limited to public `/comments/novel/{identifier}` results, which should be treated as novel-page comments rather than a full chapter comments feed. Tokened `trans` mode remains the most complete source for author-wide comments and reply tracking.
 
 ---
 

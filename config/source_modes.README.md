@@ -46,8 +46,10 @@ These apply to:
 | Mode     | Meaning                                                                                                      |
 | -------- | ------------------------------------------------------------------------------------------------------------ |
 | `trans`  | Use the tokened author/dashboard comments endpoint. Best metadata and reply tracking, but token is required. |
-| `public` | Use no-token public novel comment APIs. Less reply tracking, but no token needed.                            |
+| `public` | Use no-token public `/comments/novel/{identifier}` APIs. This is a novel-page comments fallback only; it does not resolve `chapterId` or fetch chapter comment threads. |
 | `auto`   | Try `trans` first. If token is missing, expired, or unusable, fall back to `public`.                         |
+
+Important: `public` mode is not a full replacement for `trans` comments. It does not call `/comments/chapter/{chapterId}` and should not be expected to fill a complete chapter-comments RSS feed. Use `trans` mode when chapter comments and richer reply tracking matter.
 
 ## Why this is in `config/`, not `mappings/hosts/`
 
