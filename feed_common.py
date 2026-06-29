@@ -23,7 +23,7 @@ from typing import Any
 from urllib.request import Request, urlopen
 
 from novel_mappings import HOSTING_SITE_DATA
-from config_loader import get_integration_raw_url, get_runtime_fetch_config
+from config_loader import get_integration_raw_url, get_runtime_fetch_config, get_source_mode_value
 
 NSFW_PAREN_RE = re.compile(r"\([^)]*\b(?:nsfw|r-?18|18\+|h{1,3})\b[^)]*\)", re.I)
 
@@ -300,7 +300,8 @@ def chapter_source_mode(host: str, chapter_type: str) -> str:
     host_data = host_data_for(host)
 
     key = SOURCE_MODE_KEYS.get(chapter_type, "")
-    mode = normalize_chapter_source_mode(host_data.get(key, ""))
+    raw = get_source_mode_value(host, key, host_data.get(key, ""))
+    mode = normalize_chapter_source_mode(raw)
     if mode:
         return mode
 

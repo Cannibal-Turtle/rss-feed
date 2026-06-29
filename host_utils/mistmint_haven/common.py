@@ -20,11 +20,21 @@ import unicodedata
 import types
 
 from novel_mappings import HOSTING_SITE_DATA
+from config_loader import get_source_mode_value
 
 
 # ================= MODE CONFIG =================
+MISTMINT_HOST = "Mistmint Haven"
+
+
 def _mistmint_hostdata():
-    return HOSTING_SITE_DATA.get("Mistmint Haven", {})
+    return HOSTING_SITE_DATA.get(MISTMINT_HOST, {})
+
+
+def _mode_value(key: str, default=""):
+    # Runtime/source choices live in config/source_modes.json.
+    # Host TOML is kept as a fallback so older branches do not break.
+    return get_source_mode_value(MISTMINT_HOST, key, _mistmint_hostdata().get(key, default))
 
 
 def _normalize_chapter_source(value: str, default: str) -> str:
@@ -46,37 +56,37 @@ def _normalize_chapter_source(value: str, default: str) -> str:
 
 def _free_chapters_source():
     """
-    From mappings/hosts/mistmint_haven.toml:
+    From config/source_modes.json:
       free_chapters_source = "feed", "api", or "feed_api"
     """
-    return _normalize_chapter_source(_mistmint_hostdata().get("free_chapters_source", "feed"), "feed")
+    return _normalize_chapter_source(_mode_value("free_chapters_source", "feed"), "feed")
 
 
 def _paid_chapters_source():
     """
-    From mappings/hosts/mistmint_haven.toml:
+    From config/source_modes.json:
       paid_chapters_source = "feed", "api", or "feed_api"
     """
-    return _normalize_chapter_source(_mistmint_hostdata().get("paid_chapters_source", "api"), "api")
+    return _normalize_chapter_source(_mode_value("paid_chapters_source", "api"), "api")
 
 
 def _chapter_mode():
     """
-    From mappings/hosts/mistmint_haven.toml:
+    From config/source_modes.json:
       chapter_mode = "auto" or "manual"
     """
-    return str(_mistmint_hostdata().get("chapter_mode", "auto")).strip().lower()
+    return str(_mode_value("chapter_mode", "auto")).strip().lower()
 
 
 def _comments_source():
     """
-    From mappings/hosts/mistmint_haven.toml:
+    From config/source_modes.json:
 
     comments_source = "trans"   # tokened /comments/trans/all-comments
     comments_source = "public"  # no-token public novel comments fallback
     comments_source = "auto"    # try trans first, fall back to public on auth failure
     """
-    value = str(_mistmint_hostdata().get("comments_source", "trans")).strip().lower()
+    value = str(_mode_value("comments_source", "trans")).strip().lower()
     return value if value in {"trans", "public", "auto"} else "trans"
 
 

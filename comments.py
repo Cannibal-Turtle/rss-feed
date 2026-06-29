@@ -23,6 +23,7 @@ from novel_mappings import (
     get_comments_api_url,
     get_comments_feed_url,
 )
+from config_loader import get_source_mode_value
 
 # --- token expiry → repository_dispatch (no Discord creds here) ---
 
@@ -91,7 +92,9 @@ def _token_alerts_enabled_for_host(host: str, data: dict) -> tuple[bool, str]:
     if mode not in {"", "auto", "default"}:
         print(f"[token-alert] {host}: unknown token_alerts={raw!r}; treating as auto")
 
-    comments_source = str(data.get("comments_source") or "").strip().lower()
+    comments_source = str(
+        get_source_mode_value(host, "comments_source", data.get("comments_source") or "")
+    ).strip().lower()
     if comments_source == "public":
         return False, "comments_source=public"
 

@@ -64,6 +64,53 @@ def get_runtime_fetch_config() -> dict[str, Any]:
     return _as_dict(load_runtime_config().get("fetch", {}))
 
 
+# ---------------- Source/mode config helpers ----------------
+
+def normalize_config_key(value: Any) -> str:
+    text = str(value or "").strip().casefold()
+    text = text.replace("&", " and ")
+    text = "".join(ch if ch.isalnum() else "_" for ch in text)
+    text = "_".join(part for part in text.split("_") if part)
+    return text
+
+
+def load_source_modes_config() -> dict[str, Any]:
+    return load_json_config("source_modes.json")
+
+
+def get_source_mode_host_config(host: str) -> dict[str, Any]:
+    cfg = load_source_modes_config()
+
+    # Preferred shape:
+    # {"mistmint_haven": {"free_chapters_source": "feed_api", ...}}
+    # Also supports:
+    # {"hosts": {"mistmint_haven": {...}}}
+    host_map = _as_dict(cfg.get("hosts")) or cfg
+
+    host_text = str(host or "").strip()
+    candidates = []
+    if host_text:
+        candidates.append(host_text)
+        candidates.append(normalize_config_key(host_text))
+
+    seen: set[str] = set()
+    for key in candidates:
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        section = _as_dict(host_map.get(key))
+        if section:
+            return section
+
+    return {}
+
+
+def get_source_mode_value(host: str, key: str, default: Any = "") -> Any:
+    section = get_source_mode_host_config(host)
+    value = section.get(key, None)
+    return default if value is None or value == "" else value
+
+
 def get_downstream_repos() -> list[str]:
     cfg = load_integrations_config()
     dispatch = _as_dict(cfg.get("downstream_dispatch", {}))

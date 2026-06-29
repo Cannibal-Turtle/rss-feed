@@ -1,0 +1,8 @@
+{
+  "mistmint_haven": {
+    "free_chapters_source": "feed_api",
+    "paid_chapters_source": "api",
+    "chapter_mode": "auto",
+    "comments_source": "auto"
+  }
+}
