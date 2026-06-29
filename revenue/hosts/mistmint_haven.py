@@ -47,6 +47,7 @@ HOST_NAME = "Mistmint Haven"
 ROOT = Path(__file__).resolve().parents[2]
 HOST_TOML = ROOT / "mappings" / "hosts" / "mistmint_haven.toml"
 NOVELS_DIR = ROOT / "mappings" / "novels"
+DEFAULT_DASHBOARD_STATS_URL = "https://api.mistminthaven.com/api/trans/dashboard/novel-stats"
 
 
 def load_toml(path: Path, *, required: bool = True) -> Dict[str, Any]:
@@ -146,6 +147,24 @@ def revenue_novels_url(host_cfg: Mapping[str, Any]) -> str:
         )
 
     return set_query_param(url, skipPage=0, limit=100)
+
+
+def dashboard_stats_url(host_cfg: Mapping[str, Any]) -> str:
+    """Return the Mistmint translator dashboard stats URL."""
+    return (
+        os.getenv("MISTMINT_DASHBOARD_STATS_URL", "").strip()
+        or str(host_cfg.get("dashboard_stats_url") or "").strip()
+        or str(host_cfg.get("revenue_dashboard_stats_url") or "").strip()
+        or DEFAULT_DASHBOARD_STATS_URL
+    )
+
+
+def fetch_dashboard_stats(host_cfg: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+    """Fetch account-level translator dashboard stats from Mistmint."""
+    cfg = host_cfg or load_host_config()
+    payload = fetch_json(dashboard_stats_url(cfg), cfg)
+    data = payload.get("data", {}) if isinstance(payload, dict) else {}
+    return dict(data) if isinstance(data, Mapping) else {}
 
 
 def load_local_novel_indexes() -> Dict[str, Dict[str, Dict[str, Any]]]:
@@ -364,13 +383,23 @@ def collect_revenue_rows() -> List[Dict[str, Any]]:
     host_cfg = load_host_config()
     indexes = load_local_novel_indexes()
     api_novels = fetch_my_novels(host_cfg)
+    dashboard_stats = fetch_dashboard_stats(host_cfg)
+
+    account_total_earned_coins = as_int(dashboard_stats.get("totalEarnedCoins"), 0)
+    account_current_balance_coins = as_int(dashboard_stats.get("currentBalanceCoins"), 0)
+    account_total_membership_tickets = as_int(dashboard_stats.get("totalMembershipTickets"), 0)
 
     rows: List[Dict[str, Any]] = []
     for api_novel in api_novels:
         local = match_local_mapping(api_novel, indexes)
         if not local:
             continue
-        rows.append(normalize_row(api_novel, local, host_cfg))
+
+        row = normalize_row(api_novel, local, host_cfg)
+        row["account_total_earned_coins"] = account_total_earned_coins
+        row["account_current_balance_coins"] = account_current_balance_coins
+        row["account_total_membership_tickets"] = account_total_membership_tickets
+        rows.append(row)
 
     rows.sort(key=lambda r: (not r.get("is_paid", False), r["short_code"]))
     return rows

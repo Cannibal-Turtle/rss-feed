@@ -2,10 +2,11 @@ name: Monthly Revenue Report
 
 on:
   schedule:
-    # Runs at 10:00 PM Malaysia time on the last day of every month.
+    # Runs around 10:17 PM Malaysia time on the last day of every month.
     # Cron has no simple "last day of month", so this checks days 28-31,
-    # then the guard step below only allows the real last day to continue.
-    - cron: "0 14 28-31 * *"
+    # then the guard step below only allows the real last-day evening run to continue.
+    # Avoid :00 because scheduled workflows are often delayed around the top of the hour.
+    - cron: "17 14 28-31 * *"
   workflow_dispatch:
 
 permissions:
@@ -19,15 +20,21 @@ jobs:
       - name: Check end of month
         id: endmonth
         run: |
+          LOCAL_DAY="$(TZ=Asia/Kuala_Lumpur date +%d)"
+          LOCAL_HOUR="$(TZ=Asia/Kuala_Lumpur date +%H)"
+          TOMORROW_DAY="$(TZ=Asia/Kuala_Lumpur date -d tomorrow +%d)"
+
+          echo "Malaysia local day=$LOCAL_DAY hour=$LOCAL_HOUR tomorrow_day=$TOMORROW_DAY"
+
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "Manual run: continuing."
-          elif [ "$(TZ=Asia/Kuala_Lumpur date -d tomorrow +%d)" = "01" ]; then
+          elif [ "$TOMORROW_DAY" = "01" ] && [ "$LOCAL_HOUR" -ge 21 ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "Last day of month in Malaysia: continuing."
+            echo "Last day of month evening in Malaysia: continuing."
           else
             echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "Not the last day of month in Malaysia: skipping."
+            echo "Not the intended last-day evening revenue window in Malaysia: skipping."
           fi
 
       - name: Checkout repo

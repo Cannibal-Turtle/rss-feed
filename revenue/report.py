@@ -710,6 +710,17 @@ def first_row_value(rows: Iterable[Mapping[str, Any]], key: str) -> str:
     return ""
 
 
+def first_row_int(rows: Iterable[Mapping[str, Any]], key: str) -> Optional[int]:
+    for row in rows:
+        if key not in row:
+            continue
+        value = row.get(key)
+        if value is None or value == "":
+            continue
+        return as_int(value, 0)
+    return None
+
+
 def monthly_total_emojis(rows: List[Mapping[str, Any]]) -> Tuple[str, str]:
     """Return the monthly summary emojis.
 
@@ -736,13 +747,42 @@ def report_host_label(rows: Iterable[Mapping[str, Any]]) -> str:
     return DEFAULT_REPORT_HOST_LABEL
 
 
-def format_monthly_totals(rows: List[Mapping[str, Any]], state: Mapping[str, Any]) -> str:
-    total_coins, total_tickets = monthly_totals(rows, state)
+def format_monthly_totals(
+    rows: List[Mapping[str, Any]],
+    state: Mapping[str, Any],
+    *,
+    first_run: bool = False,
+) -> str:
+    per_novel_coins, total_tickets = monthly_totals(rows, state)
     coin_emoji, ticket_emoji = monthly_total_emojis(rows)
+    dashboard_monthly_coins = first_row_int(rows, "account_current_balance_coins")
+
+    if dashboard_monthly_coins is None:
+        monthly_coins_text = fmt_month_total(per_novel_coins, "coin")
+    else:
+        # Mistmint dashboard's top coin card comes from currentBalanceCoins.
+        # Use it as the displayed monthly/account total, while keeping the
+        # per-novel delta total for sanity checking below.
+        monthly_coins_text = fmt_total(dashboard_monthly_coins, "coin")
+
+    mismatch_note = ""
+    if (
+        dashboard_monthly_coins is not None
+        and not first_run
+        and dashboard_monthly_coins != per_novel_coins
+    ):
+        mismatch_note = "\n" + render_template_text(
+            "monthly_total_mismatch",
+            {
+                "dashboard_monthly_coins_text": fmt_total(dashboard_monthly_coins, "coin"),
+                "per_novel_monthly_coins_text": fmt_month_total(per_novel_coins, "coin"),
+            },
+        )
 
     ctx = {
-        "monthly_coins_text": fmt_month_total(total_coins, "coin"),
+        "monthly_coins_text": monthly_coins_text,
         "monthly_tickets_text": fmt_month_total(total_tickets, "ticket"),
+        "monthly_total_mismatch_note": mismatch_note,
         "coin_emoji": coin_emoji,
         "ticket_emoji": ticket_emoji,
     }
@@ -816,7 +856,7 @@ def build_embeds(
         prev = previous_item(state, key, row)
         parts.append(format_row(row, prev, role_map))
 
-    summary = format_monthly_totals(report_rows, state)
+    summary = format_monthly_totals(report_rows, state, first_run=first_run)
 
     descriptions = chunk_description(
         parts,
