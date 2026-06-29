@@ -239,11 +239,7 @@ def _alert_integration(config: dict[str, Any]) -> str:
 
 
 def _resolve_channel_id(config: dict[str, Any]) -> str:
-    env_channel = (
-        os.getenv("FEED_API_ALERT_CHANNEL_ID")
-        or os.getenv("DISCORD_MOD_CHANNEL_ID")
-        or ""
-    ).strip()
+    env_channel = os.getenv("FEED_API_ALERT_CHANNEL_ID", "").strip()
     if env_channel:
         return env_channel
 

@@ -32,11 +32,7 @@ DISCORD_INTEGRATION = os.getenv("DISCORD_INTEGRATION", "discord_webhook").strip(
 
 DISCORD_TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 
-CHANNEL_ID = int(
-    os.environ.get("DISCORD_MOD_CHANNEL_ID", "").strip()
-    or get_integration_channel_id(DISCORD_INTEGRATION, "mod")
-    or 0
-)
+CHANNEL_ID = int(get_integration_channel_id(DISCORD_INTEGRATION, "mod") or 0)
 
 EVENT_PATH = os.environ["GITHUB_EVENT_PATH"]
 REPO_SLUG = os.environ.get("GITHUB_REPOSITORY", "")

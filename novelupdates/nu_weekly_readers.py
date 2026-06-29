@@ -55,10 +55,7 @@ _TEMPLATE_SETTINGS = load_template_settings("nu_weekly_readers")
 
 GLOBAL_MENTION = global_mention_from_settings(_TEMPLATE_SETTINGS)
 
-CHANNEL_DEFAULT = (
-    os.environ.get("DISCORD_MOD_CHANNEL_ID", "").strip()
-    or get_integration_channel_id(DISCORD_INTEGRATION, "mod")
-)
+CHANNEL_DEFAULT = get_integration_channel_id(DISCORD_INTEGRATION, "mod")
 
 EMBED_COLOR_HEX = setting_str(
     _TEMPLATE_SETTINGS,

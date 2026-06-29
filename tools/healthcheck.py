@@ -686,7 +686,7 @@ def check_token_alert(hc: Healthcheck, cfg: dict[str, Any]) -> None:
     if _integration_has_path(cfg, "discord_webhook", "server_json"):
         hc.ok("token alert", "mod channel can be resolved through discord_webhook.server_json")
     else:
-        hc.warn("token alert", "mod channel lookup needs discord_webhook.paths.server_json or DISCORD_MOD_CHANNEL_ID")
+        hc.warn("token alert", "mod channel lookup needs discord_webhook.paths.server_json")
 
     _check_template_settings_role(hc, cfg, template_name="token_alert", tool_name="token alert")
 

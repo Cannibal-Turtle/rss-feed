@@ -51,7 +51,6 @@ jobs:
         env:
           MISTMINT_COOKIE: ${{ secrets.MISTMINT_COOKIE }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          DISCORD_MOD_CHANNEL_ID: ${{ secrets.DISCORD_MOD_CHANNEL_ID }}
         run: |
           python revenue/report.py
 

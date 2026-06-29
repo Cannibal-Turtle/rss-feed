@@ -83,7 +83,6 @@ NEWS_CHANNEL_ID = int(
 # No channel ID is hardcoded here.
 PREVIEW_CHANNEL_ID = int(
     os.environ.get("MEMBERSHIP_PREVIEW_CHANNEL_ID", "").strip()
-    or os.environ.get("DISCORD_MOD_CHANNEL_ID", "").strip()
     or get_integration_channel_id(PRIMARY_DISCORD_INTEGRATION, "mod")
     or setting_str(_TEMPLATE_SETTINGS, "preview_channel_id", "0")
     or 0
@@ -940,7 +939,7 @@ def main():
             raise RuntimeError(
                 "Preview channel could not be resolved. "
                 "Check discord-webhook/config/server.json has channels.mod, "
-                "or set MEMBERSHIP_PREVIEW_CHANNEL_ID / DISCORD_MOD_CHANNEL_ID."
+                "or set MEMBERSHIP_PREVIEW_CHANNEL_ID."
             )
 
         targets = [{

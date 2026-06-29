@@ -39,7 +39,6 @@ jobs:
         timeout-minutes: 5
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          DISCORD_MOD_CHANNEL_ID: ${{ secrets.DISCORD_MOD_CHANNEL_ID }}
           NU_STATE_PATH: novelupdates/nu_readers.json
         run: python novelupdates/nu_weekly_readers.py
 

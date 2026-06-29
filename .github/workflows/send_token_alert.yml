@@ -26,7 +26,6 @@ jobs:
       - name: Send Discord alert
         env:
           DISCORD_BOT_TOKEN:      ${{ secrets.DISCORD_BOT_TOKEN }}
-          DISCORD_MOD_CHANNEL_ID: ${{ secrets.DISCORD_MOD_CHANNEL_ID }}
           GITHUB_REPOSITORY:      ${{ github.repository }}
           GITHUB_EVENT_PATH:      ${{ github.event_path }}
         run: python token/send_token_alert.py

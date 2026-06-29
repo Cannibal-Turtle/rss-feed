@@ -10,7 +10,7 @@ What this file does:
 - collects current lifetime totals
 - compares them with revenue/state.json
 - builds one Discord embed announcement
-- sends it to DISCORD_MOD_CHANNEL_ID using DISCORD_BOT_TOKEN
+- sends it to the configured mod channel using DISCORD_BOT_TOKEN
 - saves current lifetime totals + monthly revenue log back to revenue/state.json
 
 Important behavior:
@@ -874,7 +874,7 @@ def send_discord_embeds(
     if not token:
         raise RuntimeError("Missing DISCORD_BOT_TOKEN.")
     if not channel_id:
-        raise RuntimeError("Missing DISCORD_MOD_CHANNEL_ID.")
+        raise RuntimeError("Missing Discord channel id for revenue report.")
 
     payload = render_message(
         "revenue_report",
@@ -904,7 +904,7 @@ def send_discord_embeds(
 
 def send_error_to_discord(message: str, *, host: str = DEFAULT_REPORT_HOST_LABEL) -> None:
     token = os.getenv("DISCORD_BOT_TOKEN", "").strip()
-    channel_id = os.getenv("DISCORD_MOD_CHANNEL_ID", "").strip()
+    channel_id = get_integration_channel_id(DISCORD_INTEGRATION, "mod")
 
     if not token or not channel_id:
         return
@@ -1054,7 +1054,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--print-only", action="store_true", help="Print the Discord payload but do not send it.")
     parser.add_argument("--no-save", action="store_true", help="Do not update revenue/state.json.")
     parser.add_argument("--state", default=str(STATE_PATH), help="State JSON path. Default: revenue/state.json")
-    parser.add_argument("--channel", default="", help="Override DISCORD_MOD_CHANNEL_ID.")
+    parser.add_argument("--channel", default="", help="Override configured Discord channel id.")
     parser.add_argument("--message", default="", help="Optional Discord message id to edit instead of sending a new message.")
     args = parser.parse_args(argv)
 
@@ -1085,7 +1085,6 @@ def main(argv: Optional[List[str]] = None) -> int:
             token = os.getenv("DISCORD_BOT_TOKEN", "").strip()
             channel_id = (
                 args.channel
-                or os.getenv("DISCORD_MOD_CHANNEL_ID", "").strip()
                 or get_integration_channel_id(DISCORD_INTEGRATION, "mod")
             )
             message_id = args.message or os.getenv("DISCORD_REVENUE_MESSAGE_ID", "").strip()
