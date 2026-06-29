@@ -816,8 +816,6 @@ def load_comments_mistmint_public(comments_api_url: str = ""):
             print(f"[mistmint/public] {novel_title}: {len(items)} item(s) from {url or 'no-url'}")
 
             for top in items:
-                top_author = _user_str(top.get("user") or _public_pick(top, "author", "username", "name", "displayName"))
-
                 out.append(_public_comment_item(
                     novel_title=novel_title,
                     novel_slug=novel_slug,
@@ -827,19 +825,17 @@ def load_comments_mistmint_public(comments_api_url: str = ""):
                     default_chapter="Homepage",
                 ))
 
+                # Public mode should not resolve/display reply chains.
+                # Keep nested homepage replies as normal comment items, but leave
+                # reply_to blank so generated RSS stays consistent with public
+                # chapter comments, which do not fetch a parent/reply chain.
                 for rep in (top.get("replies") or []):
-                    reply_to = (
-                        _user_str(rep.get("toUser"))
-                        or _user_str(rep.get("replyToUser"))
-                        or top_author
-                    )
-
                     out.append(_public_comment_item(
                         novel_title=novel_title,
                         novel_slug=novel_slug,
                         novel_id=novel_id,
                         obj=rep,
-                        reply_to=reply_to,
+                        reply_to="",
                         default_chapter="Homepage",
                     ))
 
