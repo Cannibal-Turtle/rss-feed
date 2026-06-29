@@ -4,7 +4,7 @@
     <title>Aggregated Paid Chapters Feed</title>
     <link>https://github.com/cannibal-turtle/</link>
     <description>Aggregated RSS feed for paid chapters across mapped novels.</description>
-    <lastBuildDate>Mon, 29 Jun 2026 16:41:21 +0000</lastBuildDate>
+    <lastBuildDate>Mon, 29 Jun 2026 16:43:19 +0000</lastBuildDate>
     <docs>http://blogs.law.harvard.edu/tech/rss</docs>
     <generator>PyRSS2Gen-1.1.0</generator>
     <item>
@@ -2035,32 +2035,6 @@ It’s 1v1. Sweet, sweet, sweet.
       <host>Mistmint Haven</host>
       <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
       <guid isPermaLink="false">2662fb5c-807b-43f3-b3e0-b05095fd0978</guid>
-    </item>
-    <item>
-      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
-      <volume>Arc 17: Supreme AI Gong × Frail Synthetic Human Shou</volume>
-      <chapter>Chapter 624</chapter>
-      <chaptername>7.30</chaptername>
-      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-17-supreme-ai-gong-frail-synthetic-human-shou-chapter-624</link>
-      <description><![CDATA[【Delicate, soft, pretty little shou × paranoid, psychotic villain gong】
-Dark room, forced confinement, obsessive pampering.
-Shen Yu is bound to a system. His task is to enter various mission worlds and stop anomalous data from causing the worlds' collapse.
-He’s been completing the missions beautifully, except… the process seems a bit off—
-A mentally unstable financial magnate, eyes blood-red, holds him by the waist on the bed and murmurs hoarsely: “Don’t go.”
-A top award-winning actor bends close, lowering his head to drop a kiss by his ear: “You really are beautiful like this.”
-The sound of metal chains clatters—
-The chieftain of a beautiful sea-serpent race coils around his trembling, tearful body…
-It’s 1v1. Sweet, sweet, sweet.
-]]></description>
-      <category>SFW</category>
-      <translator>CannibalTurtle</translator>
-      <short_code>TDLBKGC</short_code>
-      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
-      <coin>5</coin>
-      <pubDate>Mon, 22 Jun 2026 16:41:25 +0000</pubDate>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <guid isPermaLink="false">5bbe36ba-77b7-429d-bd42-0fc9d39a2e5f</guid>
     </item>
   </channel>
 </rss>
