@@ -221,7 +221,7 @@ def _script_exists(path: str) -> bool:
 
 
 def _template_payload_ok(hc: Healthcheck, name: str, ctx: dict[str, Any], *, variant: str | None = None) -> None:
-    label = f"{name}[{variant}]" if variant else name
+    label = f"{name} variant={variant}" if variant else name
     try:
         if str(ROOT) not in sys.path:
             sys.path.insert(0, str(ROOT))
