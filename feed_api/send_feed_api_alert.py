@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
 
 from config_loader import (  # noqa: E402
     get_integration_channel_id,
+    get_integration_role_id,
     load_integrations_config,
 )
 from feed_common import (  # noqa: E402
@@ -27,7 +28,12 @@ from feed_common import (  # noqa: E402
     host_level_feed_url,
     needs_novel_value,
 )
-from message_renderer import render_message, to_discord_api_payload  # noqa: E402
+from message_renderer import (  # noqa: E402
+    load_template_settings,
+    render_message,
+    render_text,
+    to_discord_api_payload,
+)
 from novel_mappings import HOSTING_SITE_DATA  # noqa: E402
 
 API_BASE = "https://discord.com/api/v10"
@@ -163,16 +169,48 @@ def _feed_label(chapter_type: str) -> str:
     return "public" if chapter_type == "free" else chapter_type
 
 
-def _format_missing_lines(host: str, chapter_type: str, items: list[dict[str, Any]], *, max_items: int) -> str:
+def _format_missing_lines(
+    host: str,
+    chapter_type: str,
+    items: list[dict[str, Any]],
+    *,
+    max_items: int,
+    line_format: str,
+    more_line_format: str,
+) -> str:
     feed_label = _feed_label(chapter_type)
     shown = items[:max_items]
-    lines = [
-        f"««« {_chapter_label(item)} not picked up by {host} {feed_label} feed"
-        for item in shown
-    ]
+    lines: list[str] = []
+
+    for item in shown:
+        item_ctx = {
+            "novel": _chapter_label(item),
+            "title": str(item.get("title") or "").strip(),
+            "volume": str(item.get("volume") or "").strip(),
+            "chapter": str(item.get("chapter") or "").strip(),
+            "chaptername": str(item.get("chaptername") or "").strip(),
+            "link": str(item.get("link") or "").strip(),
+            "guid": str(item.get("guid") or "").strip(),
+            "host": host,
+            "feed_label": feed_label,
+            "chapter_type": chapter_type,
+        }
+        line = str(render_text(line_format, item_ctx) or "").strip()
+        if line:
+            lines.append(line)
+
     extra = len(items) - len(shown)
     if extra > 0:
-        lines.append(f"««« +{extra} more not picked up by {host} {feed_label} feed")
+        extra_ctx = {
+            "extra_count": extra,
+            "host": host,
+            "feed_label": feed_label,
+            "chapter_type": chapter_type,
+        }
+        line = str(render_text(more_line_format, extra_ctx) or "").strip()
+        if line:
+            lines.append(line)
+
     return "\n".join(lines)
 
 
@@ -192,6 +230,14 @@ def _enabled(config: dict[str, Any]) -> bool:
     return _truthy(config.get("enabled", False))
 
 
+def _alert_integration(config: dict[str, Any]) -> str:
+    return str(
+        os.getenv("FEED_API_ALERT_INTEGRATION")
+        or config.get("integration")
+        or "discord_webhook"
+    ).strip() or "discord_webhook"
+
+
 def _resolve_channel_id(config: dict[str, Any]) -> str:
     env_channel = (
         os.getenv("FEED_API_ALERT_CHANNEL_ID")
@@ -205,18 +251,70 @@ def _resolve_channel_id(config: dict[str, Any]) -> str:
     if direct:
         return direct
 
-    integration = str(
-        os.getenv("FEED_API_ALERT_INTEGRATION")
-        or config.get("integration")
-        or "discord_webhook"
-    ).strip() or "discord_webhook"
     channel_key = str(
         os.getenv("FEED_API_ALERT_CHANNEL_KEY")
         or config.get("channel_key")
         or "mod"
     ).strip() or "mod"
 
-    return get_integration_channel_id(integration, channel_key)
+    return get_integration_channel_id(_alert_integration(config), channel_key)
+
+
+def _strip_spoiler(value: str) -> str:
+    value = str(value or "").strip()
+    if value.startswith("||") and value.endswith("||") and len(value) >= 4:
+        return value[2:-2].strip()
+    return value
+
+
+def _role_mention(value: str) -> str:
+    value = _strip_spoiler(value)
+    if not value:
+        return ""
+    if value.startswith("<@&") and value.endswith(">"):
+        return value
+    if value.isdigit():
+        return f"<@&{value}>"
+    return value
+
+
+def _resolve_mention(config: dict[str, Any]) -> str:
+    # Direct mention override. The TOML controls spoiler wrapping, so this should
+    # normally be a raw role mention like <@&123> or a plain role ID.
+    direct = str(os.getenv("FEED_API_ALERT_MENTION") or config.get("mention") or "").strip()
+    if direct:
+        return _role_mention(direct)
+
+    direct_role_id = str(
+        os.getenv("FEED_API_ALERT_ROLE_ID")
+        or config.get("mention_role_id")
+        or config.get("role_id")
+        or ""
+    ).strip()
+    if direct_role_id:
+        return _role_mention(direct_role_id)
+
+    role_key = str(
+        os.getenv("FEED_API_ALERT_ROLE_KEY")
+        or os.getenv("FEED_API_ALERT_MENTION_ROLE_KEY")
+        or config.get("mention_role_key")
+        or config.get("role_key")
+        or ""
+    ).strip()
+    if not role_key:
+        return ""
+
+    role_id = get_integration_role_id(
+        _alert_integration(config),
+        role_key,
+        roles_key=str(config.get("roles_key") or "roles_json"),
+        default_path=str(config.get("roles_default_path") or "config/roles.json"),
+    )
+    if not role_id:
+        print(f"[feed_api alert] role {role_key!r} was not found; sending without mention.")
+        return ""
+
+    return _role_mention(role_id)
 
 
 def _send_discord_message(config: dict[str, Any], ctx: dict[str, Any]) -> bool:
@@ -328,7 +426,19 @@ def main(argv: list[str]) -> int:
         print("[feed_api alert] generated feed has no items; skipping.")
         return 0
 
-    mention = str(os.getenv("FEED_API_ALERT_MENTION") or config.get("mention") or "").strip()
+    template_settings = load_template_settings("feed_api_alert")
+    missing_line_format = str(
+        config.get("missing_line_format")
+        or template_settings.get("missing_line_format")
+        or "««« {novel} not picked up by {host} {feed_label} feed"
+    )
+    more_line_format = str(
+        config.get("more_line_format")
+        or template_settings.get("more_line_format")
+        or "««« +{extra_count} more not picked up by {host} {feed_label} feed"
+    )
+
+    mention = _resolve_mention(config)
     mode_label = str(config.get("mode_label") or "api fallback").strip() or "api fallback"
     max_items = int(config.get("max_items") or 10)
 
@@ -348,6 +458,8 @@ def main(argv: list[str]) -> int:
             chapter_type,
             missing,
             max_items=max(1, max_items),
+            line_format=missing_line_format,
+            more_line_format=more_line_format,
         )
 
         ctx = {

@@ -1,7 +1,18 @@
 mode = "components_v2"
 flags = 32768
-content = "{mention}"
+content = "||{mention}||"
+content_when = "mention"
 allowed_mentions = { parse = ["roles"] }
+
+[settings]
+# Each leftover chapter is rendered with this format, then joined into {missing_lines}.
+# Available placeholders: {novel}, {title}, {volume}, {chapter}, {chaptername},
+# {host}, {feed_label}, {chapter_type}, {link}, {guid}
+missing_line_format = "««« {novel} not picked up by {host} {feed_label} feed"
+
+# Used when more missing chapters exist than feed_api_alerts.max_items.
+# Available placeholders: {extra_count}, {host}, {feed_label}, {chapter_type}
+more_line_format = "««« +{extra_count} more not picked up by {host} {feed_label} feed"
 
 [[components]]
 type = 17

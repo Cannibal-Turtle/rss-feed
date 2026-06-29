@@ -62,7 +62,7 @@
     "enabled": false,
     "integration": "discord_webhook",
     "channel_key": "mod",
-    "mention": "||@mod||",
+    "mention_role_key": "admin",
     "mode_label": "api fallback",
     "max_items": 10
   },
