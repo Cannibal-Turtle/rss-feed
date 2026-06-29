@@ -11,7 +11,7 @@ coin_emoji = "<:mistmint_currency:1433046707121422487>"
 ticket_emoji = "<:mistmint_ticket:1517453566632001597>"
 token_secret = "MISTMINT_COOKIE"
 
-free_chapters_source = "api"
+free_chapters_source = "free"
 paid_chapters_source = "api"
 chapter_mode = "auto"
 comments_source = "auto"
