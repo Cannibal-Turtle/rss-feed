@@ -78,6 +78,12 @@
       "fetch_timeout_seconds": 20
     },
     "mistmint_haven": {
+      "dashboard_comments_limit_default": 10,
+      "dashboard_comments_page_scan_default": 1,
+      "novel_comments_limit_default": 50,
+      "novel_comments_page_scan_default": 1,
+      "chapter_comments_limit_default": 100,
+      "chapter_comments_page_scan_default": 1,
       "public_concurrency_default": 6,
       "public_concurrency_max": 10,
       "public_fetch_timeout_seconds": 20

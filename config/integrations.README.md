@@ -259,6 +259,12 @@ Example:
     "fetch_timeout_seconds": 20
   },
   "mistmint_haven": {
+    "dashboard_comments_limit_default": 10,
+    "dashboard_comments_page_scan_default": 1,
+    "novel_comments_limit_default": 50,
+    "novel_comments_page_scan_default": 1,
+    "chapter_comments_limit_default": 100,
+    "chapter_comments_page_scan_default": 3,
     "public_concurrency_default": 6,
     "public_concurrency_max": 10,
     "public_fetch_timeout_seconds": 20
@@ -269,7 +275,20 @@ Example:
 | Section | Meaning |
 | --- | --- |
 | `comments.novelupdates` | Novel Updates comment/readers settings. |
-| `comments.mistmint_haven` | Mistmint public comments API settings. |
+| `comments.mistmint_haven` | Mistmint dashboard/novel/chapter comment API runtime settings. |
+
+Mistmint comment limit settings:
+
+| Key | Meaning |
+| --- | --- |
+| `dashboard_comments_limit_default` | Page size for `/comments/trans/all-comments`; keep this small because each dashboard row may need slow chapter/reply enrichment. |
+| `dashboard_comments_page_scan_default` | Number of dashboard pages to fetch. `1` means only `skipPage=0`. |
+| `novel_comments_limit_default` | Page size for public `/comments/novel/{identifier}` novel-page comments. |
+| `novel_comments_page_scan_default` | Number of public novel comment pages to fetch. `1` means only `skipPage=0`. |
+| `chapter_comments_limit_default` | Page size for `/comments/chapter/{chapterId}` lookups during enrichment/reply resolution. |
+| `chapter_comments_page_scan_default` | Number of chapter thread pages to scan when resolving reply chains. `3` means `skipPage=0`, `1`, and `2`. |
+
+The Python code clamps these values internally, so accidental huge numbers will not hammer Mistmint.
 
 ## What goes here vs elsewhere
 

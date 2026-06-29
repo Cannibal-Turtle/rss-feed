@@ -2,6 +2,10 @@
 from .common import *
 from .client import MistmintClient, _http_get_json, _mistmint_headers
 from bs4 import BeautifulSoup
+from pathlib import Path
+from urllib.parse import urlencode, parse_qsl, urlunparse
+import email.utils
+import xml.etree.ElementTree as ET
 import asyncio
 import aiohttp
 
@@ -21,6 +25,201 @@ def _mistmint_comments_int(key: str, default: int) -> int:
         return int(cfg.get(key, default))
     except Exception:
         return default
+
+
+def _mistmint_comments_clamped_int(key: str, default: int, minimum: int, maximum: int) -> int:
+    value = _mistmint_comments_int(key, default)
+    return max(minimum, min(value, maximum))
+
+
+def _comments_dashboard_limit() -> int:
+    return _mistmint_comments_clamped_int("dashboard_comments_limit_default", 10, 1, 100)
+
+
+def _comments_dashboard_page_scan() -> int:
+    return _mistmint_comments_clamped_int("dashboard_comments_page_scan_default", 1, 1, 5)
+
+
+def _comments_novel_limit() -> int:
+    return _mistmint_comments_clamped_int("novel_comments_limit_default", 50, 1, 100)
+
+
+def _comments_novel_page_scan() -> int:
+    return _mistmint_comments_clamped_int("novel_comments_page_scan_default", 1, 1, 5)
+
+
+def _comments_chapter_limit() -> int:
+    return _mistmint_comments_clamped_int("chapter_comments_limit_default", 100, 1, 100)
+
+
+def _comments_chapter_page_scan() -> int:
+    return _mistmint_comments_clamped_int("chapter_comments_page_scan_default", 3, 1, 5)
+
+def _append_query_params(url: str, params: dict) -> str:
+    """Return url with params merged/overridden.
+
+    Keep host TOML URLs clean, e.g. /comments/trans/all-comments, and let
+    backend code attach Mistmint pagination values.
+    """
+    parsed = urlparse(str(url or ""))
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    for key, value in params.items():
+        if value is None or value == "":
+            continue
+        query[str(key)] = str(value)
+    return urlunparse(parsed._replace(query=urlencode(query)))
+
+
+def _local_xml_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1] if "}" in tag else tag
+
+
+def _parse_comment_dt(value: str) -> datetime.datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+
+    try:
+        dt = datetime.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except Exception:
+        try:
+            dt = email.utils.parsedate_to_datetime(raw)
+        except Exception:
+            return None
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+    return dt.astimezone(datetime.timezone.utc)
+
+
+def _comment_dt_key(value: str) -> int | None:
+    dt = _parse_comment_dt(value)
+    if dt is None:
+        return None
+    return int(dt.timestamp())
+
+
+def _comment_identity_key(
+    *,
+    novel_title: str,
+    chapter: str,
+    author: str,
+    posted_at: str,
+    body: str,
+):
+    when = _comment_dt_key(posted_at)
+    if when is None:
+        return None
+    return (
+        str(novel_title or "").strip().casefold(),
+        normalize_mistmint_chapter_label(chapter),
+        _canon_name(author),
+        when,
+        _norm(body or ""),
+    )
+
+
+def _existing_reply_to_from_feed(raw: str) -> str:
+    text = str(raw or "").strip()
+    if text.startswith("ᯓ✿"):
+        text = text.replace("ᯓ✿", "", 1).strip()
+    low = text.lower()
+    if low.startswith("in reply to"):
+        text = text[len("in reply to"):].strip()
+    return text
+
+
+def _existing_mistmint_comment_items_from_xml(path: str = "aggregated_comments_feed.xml"):
+    """Return previously generated Mistmint comments keyed by display identity.
+
+    Used only as a pre-enrichment cache: if the dashboard page contains a
+    comment already present in the existing RSS XML, reuse that RSS-ready row
+    instead of resolving chapterId/reply chains again. Mistmint API remains the
+    source of truth for which latest comments appear.
+    """
+    feed_path = Path(os.getenv("COMMENTS_FEED_XML", path))
+    if not feed_path.exists():
+        return {}, None
+
+    try:
+        root = ET.parse(feed_path).getroot()
+    except Exception as e:
+        diag_fail("comments-existing-xml-parse", path=str(feed_path), error=str(e))
+        return {}, None
+
+    def child_text(item, wanted: str) -> str:
+        for child in list(item):
+            if _local_xml_name(child.tag) == wanted:
+                return (child.text or "").strip()
+        return ""
+
+    def child_attr(item, wanted: str, attr: str) -> str:
+        for child in list(item):
+            if _local_xml_name(child.tag) == wanted:
+                return str(child.attrib.get(attr) or "").strip()
+        return ""
+
+    existing = {}
+    cutoff = None
+
+    for item in root.iter():
+        if _local_xml_name(item.tag) != "item":
+            continue
+        if child_text(item, "host") != MISTMINT_HOST:
+            continue
+
+        novel_title = child_text(item, "title")
+        chapter = child_text(item, "chapter")
+        author = child_text(item, "creator")
+        body = child_text(item, "description")
+        posted_at = child_text(item, "pubDate")
+        dt = _parse_comment_dt(posted_at)
+        if dt is None:
+            continue
+
+        cutoff = dt if cutoff is None or dt > cutoff else cutoff
+        key = _comment_identity_key(
+            novel_title=novel_title,
+            chapter=chapter,
+            author=author,
+            posted_at=posted_at,
+            body=body,
+        )
+        if key is None:
+            continue
+
+        existing[key] = {
+            "novel_title": novel_title,
+            "chapter": chapter,
+            "author": author,
+            "description": body,
+            "comment_image_url": child_attr(item, "commentImage", "url"),
+            "reply_to": _existing_reply_to_from_feed(child_text(item, "reply_chain")),
+            "posted_at": dt.isoformat(),
+            "guid": child_text(item, "guid"),
+            "url": child_text(item, "link"),
+        }
+
+    if existing:
+        diag_ok("comments-existing-xml-cache", count=len(existing), cutoff=cutoff.isoformat() if cutoff else "")
+    return existing, cutoff
+
+
+def _raw_dashboard_comment_key(obj: dict, pick_func):
+    novel_title = pick_func(obj, "novel", "novelTitle", "title").strip()
+    author = _user_str(obj.get("user") or pick_func(obj, "author", "username", "name", "displayName"))
+    body_raw = (pick_func(obj, "content", "body", "text", "message") or "").strip()
+    body, _image = split_mistmint_sticker_image(body_raw)
+    posted_at = pick_func(obj, "postedAt", "createdAt", "created_at", "date", "timestamp")
+    chapter = normalize_mistmint_chapter_label(pick_func(obj, "chapter", "chapterLabel", "chapterTitle"))
+    return _comment_identity_key(
+        novel_title=novel_title,
+        chapter=chapter,
+        author=author,
+        posted_at=posted_at,
+        body=body,
+    )
+
 
 # --- Mistmint website sticker text -> comment image URL -----------------------
 MISTMINT_STICKER_IMAGES = {
@@ -72,7 +271,8 @@ def match_comment_on_homepage_by_id(novel_id: str, author: str, body_raw: str, p
         payload = _MISTMINT_HOME_CACHE[novel_id]
         diag_ok("homepage-cache-hit", novel_id=novel_id)
     else:
-        url = f"https://api.mistminthaven.com/api/comments/novel/{novel_id}"
+        limit = _comments_novel_limit()
+        url = f"https://api.mistminthaven.com/api/comments/novel/{novel_id}?skipPage=0&limit={limit}"
         payload = _http_get_json(url) or {}
         _MISTMINT_HOME_CACHE[novel_id] = payload
         diag_ok("homepage-fetch", novel_id=novel_id)
@@ -239,7 +439,7 @@ def enrich_all_comments(client: MistmintClient, records: List[Dict[str, Any]]) -
         if cid:
             if cid not in thread_cache:
                 time.sleep(0.2)
-                thread_cache[cid] = client.fetch_chapter_comments(cid, skip_page=0, limit=100)
+                thread_cache[cid] = client.fetch_chapter_comments(cid, skip_page=0, limit=_comments_chapter_limit())
             thread = thread_cache[cid]
             hit = match_comment_in_thread(thread, username=username, created_at_iso=created_at)
             if hit:
@@ -361,9 +561,11 @@ def resolve_reply_to_on_chapter_by_id(client: MistmintClient, chapter_id: str,
         return (rep_dt is None) or abs((rep_dt - want_dt).total_seconds()) <= 300
 
     with diag_step("reply-resolve-chapter", chapter_id=chapter_id, author=author):
-        # try first three pages just in case the comment is older
-        for page in range(0, 3):
-            payload = client.fetch_chapter_comments(chapter_id, skip_page=page, limit=100)
+        # try configured pages just in case the comment is older
+        limit = _comments_chapter_limit()
+        page_scan = _comments_chapter_page_scan()
+        for page in range(page_scan):
+            payload = client.fetch_chapter_comments(chapter_id, skip_page=page, limit=limit)
             for top in (payload.get("data") or []):
                 parent_user = _name(top.get("user"))
                 if _is_same(top):
@@ -387,7 +589,8 @@ def resolve_reply_to_on_homepage_by_id(novel_id: str, author: str, body_raw: str
         payload = _MISTMINT_HOME_CACHE[novel_id]
         diag_ok("homepage-cache-hit", novel_id=novel_id)
     else:
-        url = f"https://api.mistminthaven.com/api/comments/novel/{novel_id}"
+        limit = _comments_novel_limit()
+        url = f"https://api.mistminthaven.com/api/comments/novel/{novel_id}?skipPage=0&limit={limit}"
         payload = _http_get_json(url) or {}
         _MISTMINT_HOME_CACHE[novel_id] = payload
         diag_ok("homepage-fetch", novel_id=novel_id)
@@ -550,7 +753,7 @@ def _comments_public_timeout_seconds() -> int:
     return max(1, value)
 
 
-def _fetch_public_novel_comments(novel_slug: str, novel_id: str, limit: int):
+def _fetch_public_novel_comments(novel_slug: str, novel_id: str, limit: int, page_scan: int = 1):
     """
     Public endpoint fallback.
 
@@ -571,21 +774,31 @@ def _fetch_public_novel_comments(novel_slug: str, novel_id: str, limit: int):
     first_items = []
 
     for ident in candidates:
-        url = f"{BASE_API}/comments/novel/{ident}?skipPage=0&limit={limit}"
-        payload = _http_get_json(url, headers=_public_headers())
+        all_items = []
+        first_ident_url = ""
 
-        if payload is None:
-            continue
+        for page in range(page_scan):
+            url = f"{BASE_API}/comments/novel/{ident}?skipPage={page}&limit={limit}"
+            payload = _http_get_json(url, headers=_public_headers())
 
-        items = _public_data_list(payload)
-        diag_ok("public-comments-fetch", ident=ident, count=len(items))
+            if payload is None:
+                continue
 
-        if not first_url:
-            first_url = url
-            first_items = items
+            items = _public_data_list(payload)
+            diag_ok("public-comments-fetch", ident=ident, page=page, count=len(items))
 
-        if items:
-            return url, items
+            if not first_url:
+                first_url = url
+                first_items = items
+            if not first_ident_url:
+                first_ident_url = url
+
+            all_items.extend(items)
+            if not items:
+                break
+
+        if all_items:
+            return first_ident_url, all_items
 
     return first_url, first_items
 
@@ -618,6 +831,7 @@ async def _fetch_public_novel_comments_async(
     novel_slug: str,
     novel_id: str,
     limit: int,
+    page_scan: int = 1,
 ):
     """
     Async version of _fetch_public_novel_comments().
@@ -636,21 +850,31 @@ async def _fetch_public_novel_comments_async(
     first_items = []
 
     for ident in candidates:
-        url = f"{BASE_API}/comments/novel/{ident}?skipPage=0&limit={limit}"
-        payload = await _http_get_json_async(session, url, headers=_public_headers())
+        all_items = []
+        first_ident_url = ""
 
-        if payload is None:
-            continue
+        for page in range(page_scan):
+            url = f"{BASE_API}/comments/novel/{ident}?skipPage={page}&limit={limit}"
+            payload = await _http_get_json_async(session, url, headers=_public_headers())
 
-        items = _public_data_list(payload)
-        diag_ok("public-comments-fetch", ident=ident, count=len(items))
+            if payload is None:
+                continue
 
-        if not first_url:
-            first_url = url
-            first_items = items
+            items = _public_data_list(payload)
+            diag_ok("public-comments-fetch", ident=ident, page=page, count=len(items))
 
-        if items:
-            return url, items
+            if not first_url:
+                first_url = url
+                first_items = items
+            if not first_ident_url:
+                first_ident_url = url
+
+            all_items.extend(items)
+            if not items:
+                break
+
+        if all_items:
+            return first_ident_url, all_items
 
     return first_url, first_items
 
@@ -661,6 +885,7 @@ async def _fetch_public_comments_for_novel_async(
     novel_title: str,
     meta: dict,
     limit: int,
+    page_scan: int,
 ):
     async with sem:
         novel_url = (meta.get("novel_url") or "").rstrip("/")
@@ -676,12 +901,13 @@ async def _fetch_public_comments_for_novel_async(
             novel_slug=novel_slug,
             novel_id=novel_id,
             limit=limit,
+            page_scan=page_scan,
         )
 
         return novel_title, novel_slug, novel_id, url, items
 
 
-async def _load_comments_mistmint_public_async(novels: dict, limit: int):
+async def _load_comments_mistmint_public_async(novels: dict, limit: int, page_scan: int):
     concurrency = _comments_public_concurrency()
     sem = asyncio.Semaphore(concurrency)
 
@@ -696,6 +922,7 @@ async def _load_comments_mistmint_public_async(novels: dict, limit: int):
                 novel_title=novel_title,
                 meta=meta,
                 limit=limit,
+                page_scan=page_scan,
             )
             for novel_title, meta in novels.items()
         ]
@@ -804,13 +1031,14 @@ def load_comments_mistmint_public(comments_api_url: str = ""):
     Public mode is novel-level, so this uses gentle concurrency.
     """
     out = []
-    limit = 50
+    limit = _comments_novel_limit()
+    page_scan = _comments_novel_page_scan()
 
     novels = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("novels", {}) or {}
     concurrency = _comments_public_concurrency()
 
-    with diag_step("comments-public-load", novel_count=len(novels), limit=limit, concurrency=concurrency):
-        results = asyncio.run(_load_comments_mistmint_public_async(novels, limit))
+    with diag_step("comments-public-load", novel_count=len(novels), limit=limit, page_scan=page_scan, concurrency=concurrency):
+        results = asyncio.run(_load_comments_mistmint_public_async(novels, limit, page_scan))
 
         for novel_title, novel_slug, novel_id, url, items in results:
             print(f"[mistmint/public] {novel_title}: {len(items)} item(s) from {url or 'no-url'}")
@@ -828,18 +1056,12 @@ def load_comments_mistmint_public(comments_api_url: str = ""):
                 ))
 
                 for rep in (top.get("replies") or []):
-                    reply_to = (
-                        _user_str(rep.get("toUser"))
-                        or _user_str(rep.get("replyToUser"))
-                        or top_author
-                    )
-
                     out.append(_public_comment_item(
                         novel_title=novel_title,
                         novel_slug=novel_slug,
                         novel_id=novel_id,
                         obj=rep,
-                        reply_to=reply_to,
+                        reply_to="",
                         default_chapter="Homepage",
                     ))
 
@@ -866,48 +1088,6 @@ def load_comments_mistmint_trans(comments_api_url: str, resolved_label: str = ""
         t = (payload_text or "").lower()
         return ("you must be logged in" in t) or ('"code":401' in t)
 
-    def get_with(headers: dict, label: str):
-        r = requests.get(comments_api_url, headers=headers, timeout=20)
-        # tiny snapshot about the HTTP attempt
-        diag_snapshot(f"comments-fetch-{label}", {
-            "status": r.status_code,
-            "ctype": r.headers.get("content-type", "?"),
-            "bytes": len(r.content)
-        })
-        raw = r.text
-        pj = None
-        try:
-            pj = r.json()
-        except Exception:
-            pass
-        return r, raw, pj
-
-    payload = None
-    raw_used = ""
-
-    # ── FETCH PHASE ────────────────────────────────────────────────────────────
-    with diag_step(
-        "comments-fetch",
-        url=comments_api_url,
-        has_token=bool(request_headers.get("Authorization")),
-        has_cookie=bool(request_headers.get("Cookie")),
-    ):
-        r, raw, pj = get_with(request_headers, "shared")
-        if unauth(raw, pj):
-            diag_fail("comments-fetch-unauthorized", mode="shared")
-            print("[mistmint] unauthorized; set MISTMINT_TOKEN or MISTMINT_COOKIE")
-
-            # Same behavior as before: fail loudly so upstream can alert.
-            raise RuntimeError("AUTH_ERROR: Mistmint unauthorized (token invalid or expired)")
-
-        payload, raw_used = (pj if pj is not None else {}), raw
-        diag_ok("comments-fetch-ok", mode="shared")
-
-        # keep this snapshot light; don’t dump the whole JSON
-        top_keys = list(payload)[:8] if isinstance(payload, dict) else []
-        diag_snapshot("comments-raw", {"type": type(payload).__name__, "top_keys": top_keys})
-
-    # ── ITEM EXTRACTION ───────────────────────────────────────────────────────
     def pick_list(obj):
         if isinstance(obj, list):
             return obj
@@ -924,7 +1104,72 @@ def load_comments_mistmint_trans(comments_api_url: str, resolved_label: str = ""
                         return w
         return []
 
-    items = pick_list(payload)
+    dashboard_limit = _comments_dashboard_limit()
+    dashboard_page_scan = _comments_dashboard_page_scan()
+
+    def dashboard_page_url(page: int) -> str:
+        return _append_query_params(
+            comments_api_url,
+            {"skipPage": page, "limit": dashboard_limit, "type": "all"},
+        )
+
+    def get_with(url: str, headers: dict, label: str):
+        r = requests.get(url, headers=headers, timeout=20)
+        # tiny snapshot about the HTTP attempt
+        diag_snapshot(f"comments-fetch-{label}", {
+            "url": url,
+            "status": r.status_code,
+            "ctype": r.headers.get("content-type", "?"),
+            "bytes": len(r.content)
+        })
+        raw = r.text
+        pj = None
+        try:
+            pj = r.json()
+        except Exception:
+            pass
+        return r, raw, pj
+
+    payload = None
+    raw_used = ""
+    items = []
+
+    # ── FETCH PHASE ────────────────────────────────────────────────────────────
+    with diag_step(
+        "comments-fetch",
+        url=comments_api_url,
+        dashboard_limit=dashboard_limit,
+        dashboard_page_scan=dashboard_page_scan,
+        has_token=bool(request_headers.get("Authorization")),
+        has_cookie=bool(request_headers.get("Cookie")),
+    ):
+        for page in range(dashboard_page_scan):
+            page_url = dashboard_page_url(page)
+            r, raw, pj = get_with(page_url, request_headers, f"shared-page-{page}")
+            if unauth(raw, pj):
+                diag_fail("comments-fetch-unauthorized", mode="shared", page=page)
+                print("[mistmint] unauthorized; set MISTMINT_TOKEN or MISTMINT_COOKIE")
+
+                # Same behavior as before: fail loudly so upstream can alert.
+                raise RuntimeError("AUTH_ERROR: Mistmint unauthorized (token invalid or expired)")
+
+            page_payload = pj if pj is not None else {}
+            if payload is None:
+                payload = page_payload
+            raw_used += raw or ""
+
+            page_items = pick_list(page_payload)
+            diag_ok("comments-fetch-ok", mode="shared", page=page, count=len(page_items))
+            items.extend(page_items)
+
+            # keep this snapshot light; don’t dump the whole JSON
+            top_keys = list(page_payload)[:8] if isinstance(page_payload, dict) else []
+            diag_snapshot("comments-raw", {"type": type(page_payload).__name__, "top_keys": top_keys, "page": page})
+
+            if not page_items:
+                break
+
+    payload = payload if payload is not None else {}
     diag_snapshot("comments-items", {"count": len(items)})
 
     if not items:
@@ -984,10 +1229,35 @@ def load_comments_mistmint_trans(comments_api_url: str, resolved_label: str = ""
             if base:
                 obj["novelSlug"] = base.split("/")[-1]
 
-    with diag_step("comments-enrich"):
+    existing_by_key, existing_cutoff = _existing_mistmint_comment_items_from_xml()
+    reused_existing = []
+    enrich_candidates = []
+
+    if existing_by_key and existing_cutoff:
+        cutoff_slop = existing_cutoff + datetime.timedelta(seconds=1)
+        for obj in items:
+            key = _raw_dashboard_comment_key(obj, pick)
+            obj_dt = _parse_comment_dt(pick(obj, "postedAt", "createdAt", "created_at", "date", "timestamp"))
+            if key in existing_by_key and obj_dt is not None and obj_dt <= cutoff_slop:
+                reused_existing.append(existing_by_key[key])
+            else:
+                enrich_candidates.append(obj)
+        if reused_existing:
+            diag_ok(
+                "comments-enrich-skip-existing",
+                reused=len(reused_existing),
+                candidates=len(enrich_candidates),
+                cutoff=existing_cutoff.isoformat(),
+            )
+    else:
+        enrich_candidates = items
+
+    with diag_step("comments-enrich", candidates=len(enrich_candidates), reused=len(reused_existing)):
         client = MistmintClient(translator_cookie=_resolve_mistmint_cookie())
-        enriched = enrich_all_comments(client, items)
-        diag_snapshot("comments-enriched", {"count": len(enriched)})
+        enriched = enrich_all_comments(client, enrich_candidates) if enrich_candidates else []
+        diag_snapshot("comments-enriched", {"count": len(enriched), "reused": len(reused_existing)})
+
+    out.extend(reused_existing)
 
     def _parse_when(d):
         s = pick(d, "postedAt", "createdAt", "created_at", "date", "timestamp")
