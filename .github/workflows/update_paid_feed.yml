@@ -15,7 +15,7 @@ permissions:
   contents: write
 
 env:
-  FORCE_DOWNSTREAM: "false"  # change to "true" to force both cron + manual runs for downstream workflows (discord-webhook, mistmint-discord) even if no new feed GUIDs were added
+  FORCE_DOWNSTREAM: "false"  # emergency YAML fallback; prefer config/integrations.json → downstream_dispatch.force
 
 # Match the free job so only one feed job pushes at a time
 concurrency:
@@ -123,16 +123,23 @@ jobs:
           PY
           )
 
+          CONFIG_FORCE_DOWNSTREAM=$(python - <<'PY'
+          from config_loader import should_force_downstream
+          print("true" if should_force_downstream("paid") else "false")
+          PY
+          )
+
           RSS_FEED_REF=$(git rev-parse HEAD)
 
           echo "NEW_ITEMS=$NEW_ITEMS"
           echo "FORCE_DOWNSTREAM=$FORCE_DOWNSTREAM"
           echo "MANUAL_FORCE_DOWNSTREAM=$MANUAL_FORCE_DOWNSTREAM"
+          echo "CONFIG_FORCE_DOWNSTREAM=$CONFIG_FORCE_DOWNSTREAM"
           echo "DOWNSTREAM_REPOS=$DOWNSTREAM_REPOS"
           echo "DISPATCH_EVENT=$DISPATCH_EVENT"
           echo "RSS_FEED_REF=$RSS_FEED_REF"
 
-          if [ "$NEW_ITEMS" != "true" ] && [ "$FORCE_DOWNSTREAM" != "true" ] && [ "$MANUAL_FORCE_DOWNSTREAM" != "true" ]; then
+          if [ "$NEW_ITEMS" != "true" ] && [ "$FORCE_DOWNSTREAM" != "true" ] && [ "$MANUAL_FORCE_DOWNSTREAM" != "true" ] && [ "$CONFIG_FORCE_DOWNSTREAM" != "true" ]; then
             echo "No new paid feed GUIDs and downstream force is false. Skipping downstream trigger."
             exit 0
           fi

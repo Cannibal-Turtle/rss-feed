@@ -7,6 +7,11 @@
     "events": {
       "chapters": "trigger-discord-notify",
       "comments": "trigger-discord-comments"
+    },
+    "force": {
+      "free": false,
+      "paid": false,
+      "comments": false
     }
   },
   "primary_discord": {

@@ -19,6 +19,11 @@ It should **not** contain Discord bot tokens, Mistmint cookies, or other secrets
     "events": {
       "chapters": "trigger-discord-notify",
       "comments": "trigger-discord-comments"
+    },
+    "force": {
+      "free": false,
+      "paid": false,
+      "comments": false
     }
   },
   "primary_discord": {
@@ -58,6 +63,11 @@ This tells `rss-feed` which downstream repos should be triggered after feeds/com
   "events": {
     "chapters": "trigger-discord-notify",
     "comments": "trigger-discord-comments"
+  },
+  "force": {
+    "free": false,
+    "paid": false,
+    "comments": false
   }
 }
 ```
@@ -67,6 +77,11 @@ This tells `rss-feed` which downstream repos should be triggered after feeds/com
 | `repos` | GitHub repositories that receive `repository_dispatch` events. |
 | `events.chapters` | Event type sent after chapter feeds update. |
 | `events.comments` | Event type sent after comments update. |
+| `force.free` / `force.paid` / `force.comments` / `force.chapters` | Temporarily force the matching cron/manual workflow to dispatch downstream even when no new GUIDs were added. `force.chapters` covers both free and paid. |
+
+Set only the workflow you want to force to `true`, commit it, and set it back to `false` after the intervention window. Example: `"paid": true` makes paid-feed cron runs trigger downstream even if `paid_chapters_feed.xml` did not gain a new GUID.
+
+Optional emergency global switch: `"force_downstream": true` inside `downstream_dispatch` forces all downstream dispatches. Prefer the per-feed `force` block for normal use.
 
 This is for GitHub workflow-to-workflow routing, not direct Discord posting.
 

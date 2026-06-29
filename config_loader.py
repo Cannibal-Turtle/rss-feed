@@ -16,6 +16,19 @@ def _as_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _as_bool(value: Any, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    text = str(value).strip().casefold()
+    if text in {"1", "true", "yes", "y", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "off"}:
+        return False
+    return default
+
+
 def load_json_config(filename: str) -> dict[str, Any]:
     path = CONFIG_DIR / filename
 
@@ -116,6 +129,30 @@ def get_downstream_repos() -> list[str]:
     dispatch = _as_dict(cfg.get("downstream_dispatch", {}))
     repos = dispatch.get("repos", [])
     return [str(repo).strip() for repo in repos if str(repo).strip()]
+
+
+def should_force_downstream(feed: str = "") -> bool:
+    cfg = load_integrations_config()
+    dispatch = _as_dict(cfg.get("downstream_dispatch", {}))
+
+    # Emergency global switch for all downstream dispatches.
+    if _as_bool(dispatch.get("force_downstream"), False):
+        return True
+
+    # Per-feed switches, intended for temporary cron/manual intervention.
+    # Supported shape:
+    #   "force": {"free": false, "paid": false, "comments": false}
+    force = _as_dict(dispatch.get("force", {}))
+    key = normalize_config_key(feed)
+
+    if key and _as_bool(force.get(key), False):
+        return True
+
+    # Optional grouped switch for both free + paid chapter workflows.
+    if key in {"free", "paid", "chapters"} and _as_bool(force.get("chapters"), False):
+        return True
+
+    return False
 
 
 def get_dispatch_event(kind: str, default: str = "") -> str:

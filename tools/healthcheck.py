@@ -506,6 +506,28 @@ def check_integrations_base(hc: Healthcheck, cfg: dict[str, Any]) -> None:
         else:
             hc.warn("downstream dispatch", f"event for {kind} is missing")
 
+    force = _as_dict(dispatch.get("force"))
+    if force:
+        known_force_keys = {"free", "paid", "comments", "chapters"}
+        unknown_force_keys = sorted(set(force) - known_force_keys)
+        if unknown_force_keys:
+            hc.warn("downstream dispatch", f"unknown force key(s): {', '.join(unknown_force_keys)}")
+        for kind in ("free", "paid", "comments", "chapters"):
+            if kind not in force:
+                continue
+            value = force[kind]
+            text = str(value).strip().casefold()
+            if isinstance(value, bool) or text in {"1", "0", "true", "false", "yes", "no", "y", "n", "on", "off"}:
+                if _truthy(value):
+                    hc.warn("downstream dispatch", f"force.{kind}=true; cron/manual runs will dispatch even with no new GUIDs")
+                else:
+                    hc.ok("downstream dispatch", f"force.{kind}=false")
+            else:
+                hc.warn("downstream dispatch", f"force.{kind} should be boolean true/false")
+
+    if _truthy(dispatch.get("force_downstream")):
+        hc.warn("downstream dispatch", "force_downstream=true; all downstream dispatches are forced")
+
     primary = _as_dict(cfg.get("primary_discord"))
     primary_name = str(primary.get("integration") or "discord_webhook").strip()
     if not _integration_section(cfg, primary_name):
