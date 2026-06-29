@@ -8,7 +8,7 @@ allowed_mentions = { parse = ["roles"] }
 # Each leftover chapter is rendered with this format, then joined into {missing_lines}.
 # Available placeholders: {novel}, {title}, {volume}, {chapter}, {chaptername},
 # {host}, {feed_label}, {chapter_type}, {link}, {guid}
-missing_line_format = "««« {novel} not picked up by {host} {feed_label} feed"
+missing_line_format = "««« {title} ʚɞ {chapter} ʚɞ {chaptername} not picked up by {host} {feed_label} feed"
 
 # Used when more missing chapters exist than feed_api_alerts.max_items.
 # Available placeholders: {extra_count}, {host}, {feed_label}, {chapter_type}
