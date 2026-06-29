@@ -19,8 +19,8 @@ rss-feed/
 │  ├─ update_paid_feed.yml
 │  ├─ update_comments.yml
 │  ├─ create_novel_toml.yml
-│  ├─ update_novel_status.yml
-│  ├─ publish_single_novel.yml
+│  ├─ update_novel_card.yml
+│  ├─ publish_novel_card.yml
 │  ├─ publish_membership_update.yml
 │  ├─ monthly_revenue.yml
 │  ├─ nu_weekly_readers.yml
@@ -59,7 +59,7 @@ rss-feed/
 ├─ message_templates/
 │  ├─ membership_update.toml
 │  ├─ nu_weekly_readers.toml
-│  ├─ publish_single_novel.toml
+│  ├─ publish_novel_card.toml
 │  ├─ revenue_report.toml
 │  └─ token_alert.toml
 ├─ novelupdates/
@@ -76,8 +76,8 @@ rss-feed/
 │  ├─ audit_dead_host_utils.py
 │  ├─ create_novel_toml.py
 │  ├─ publish_membership_update.py
-│  ├─ publish_single_novel.py
-│  └─ update_novel_status.py
+│  ├─ publish_novel_card.py
+│  └─ update_novel_card.py
 ├─ free_chapters_feed.xml
 ├─ paid_chapters_feed.xml
 ├─ aggregated_comments_feed.xml
@@ -1043,7 +1043,7 @@ This repo has direct Discord tools/reports, so it also has templates:
 ```text
 message_templates/membership_update.toml
 message_templates/nu_weekly_readers.toml
-message_templates/publish_single_novel.toml
+message_templates/publish_novel_card.toml
 message_templates/revenue_report.toml
 message_templates/token_alert.toml
 ```
@@ -1275,7 +1275,7 @@ site_genres = ["Modern", "Romance", "Yaoi", "Transmigration"]
 Script:
 
 ```text
-tools/update_novel_status.py
+tools/update_novel_card.py
 ```
 
 State/targets:
@@ -1287,7 +1287,7 @@ novel_status_targets.json
 Workflow:
 
 ```text
-.github/workflows/update_novel_status.yml
+.github/workflows/update_novel_card.yml
 ```
 
 Purpose:
@@ -1313,19 +1313,19 @@ host: "Mistmint Haven"
 Script:
 
 ```text
-tools/publish_single_novel.py
+tools/publish_novel_card.py
 ```
 
 Template:
 
 ```text
-message_templates/publish_single_novel.toml
+message_templates/publish_novel_card.toml
 ```
 
 Workflow:
 
 ```text
-.github/workflows/publish_single_novel.yml
+.github/workflows/publish_novel_card.yml
 ```
 
 Workflow inputs:
@@ -1420,7 +1420,7 @@ That setting is the last fallback. Preferred global/public pings should live in 
 | `dry_run` | Preview without committing |
 | `overwrite` | Allow replacing an existing mapping file |
 
-### `publish_single_novel.yml`
+### `publish_novel_card.yml`
 
 | Input | Purpose |
 | --- | --- |
@@ -1434,7 +1434,7 @@ That setting is the last fallback. Preferred global/public pings should live in 
 | `short_code` | Novel short code, e.g. `AMLWC` |
 | `banner_url` | Membership banner image URL |
 
-### `update_novel_status.yml`
+### `update_novel_card.yml`
 
 | Input | Purpose |
 | --- | --- |
@@ -1451,8 +1451,8 @@ That setting is the last fallback. Preferred global/public pings should live in 
 | `update_paid_feed.yml` | Regenerates paid RSS feed, scheduled hourly |
 | `update_comments.yml` | Regenerates comments RSS feed, scheduled hourly |
 | `create_novel_toml.yml` | Creates a new novel TOML from a configured host API |
-| `update_novel_status.yml` | Edits existing Discord novel status cards |
-| `publish_single_novel.yml` | Manually posts a novel/status card |
+| `update_novel_card.yml` | Edits existing Discord novel status cards |
+| `publish_novel_card.yml` | Manually posts a novel/status card |
 | `publish_membership_update.yml` | Manually posts membership announcement |
 | `monthly_revenue.yml` | Posts monthly revenue report |
 | `nu_weekly_readers.yml` | Posts weekly NU reader-count report |
@@ -1558,7 +1558,7 @@ Manual fallback:
 
 6. Run the relevant feed workflow.
 
-7. Run `publish_single_novel.yml` if you need a manual card.
+7. Run `publish_novel_card.yml` if you need a manual card.
 
 8. Confirm `novel_status_targets.json` updates if the novel has a status card.
 
@@ -1635,7 +1635,7 @@ When adding a new novel:
 2. Add a unique `short_code`.
 3. Check `tags`, `site_genres`, `chapter_count`, `last_chapter`, and `discord_color` before publishing. For world-hopping, tick exactly one world-hopping checkbox so the matching role tag appears inside `tags`.
 4. Add Discord role/emoji/role URL data in the Discord repo.
-5. Run `publish_single_novel.yml`.
+5. Run `publish_novel_card.yml`.
 6. Confirm `novel_status_targets.json` was updated.
 7. If the novel enters membership, run `publish_membership_update.yml` with:
    - `short_code`
@@ -1742,7 +1742,7 @@ Use:
 - `start_date = ""` safely means no duration phrase in completion messages.
 - `site_genres` is the full Mistmint API genre list; `tags` is the Discord-supported mention list.
 - Leaving both world-hopping checkboxes unchecked adds no world-hopping tag to `tags`.
-- `update_novel_status.py` edits existing Discord messages instead of reposting.
+- `update_novel_card.py` edits existing Discord messages instead of reposting.
 - `novel_status_targets.json` stores message targets by short code.
 - Discord role IDs, custom emojis, and role URLs belong in Discord bot repos, not in `rss-feed` mappings.
 - Direct-report template settings belong in `message_templates/*.toml`, not hardcoded Python.

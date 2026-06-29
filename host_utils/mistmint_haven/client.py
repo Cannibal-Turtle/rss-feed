@@ -35,7 +35,7 @@ def _extract_chapter_id_from_html(html: str, chapter_slug: str) -> Optional[str]
 
     # unescaped JSON path
     pat1 = re.compile(
-        rf'"slug"\s*:\s*"{re.escape(chapter_slug)}"(?s).*?"id"\s*:\s*"({UUID_RE})"',
+        rf'"slug"\s*:\s*"{re.escape(chapter_slug)}".*?"id"\s*:\s*"({UUID_RE})"',
         re.I | re.S
     )
     m = pat1.search(html)
@@ -44,7 +44,7 @@ def _extract_chapter_id_from_html(html: str, chapter_slug: str) -> Optional[str]
 
     # escaped-quote JSON path
     pat2 = re.compile(
-        rf'slug\\\"\s*:\s*\\\"{re.escape(chapter_slug)}\\\"(?s).*?id\\\"\s*:\s*\\\"({UUID_RE})\\\"',
+        rf'slug\\\"\s*:\s*\\\"{re.escape(chapter_slug)}\\\".*?id\\\"\s*:\s*\\\"({UUID_RE})\\\"',
         re.I | re.S
     )
     m = pat2.search(html)
@@ -115,13 +115,30 @@ def _mistmint_auth_values() -> Tuple[str, str]:
     return token, cookie
 
 
-def _mistmint_headers():
-    token, cookie = _mistmint_auth_values()
+def _mistmint_headers(
+    *,
+    token: Optional[str] = None,
+    cookie: Optional[str] = None,
+) -> Dict[str, str]:
+    """
+    Shared Mistmint request headers.
+
+    This is the same token/cookie header builder used by dashboard-style API
+    calls. Passing cookie lets MistmintClient reuse an explicitly supplied
+    cookie while still attaching MISTMINT_TOKEN when it exists.
+    """
+    env_token, env_cookie = _mistmint_auth_values()
+    token = env_token if token is None else str(token or "").strip()
+    cookie = env_cookie if cookie is None else str(cookie or "").strip()
+
     h = _mistmint_base_headers()
+
     if token:
         h["Authorization"] = f"Bearer {token}"
+
     if cookie:
         h["Cookie"] = cookie
+
     return h
 
 def _http_get_json(url: str, headers: dict | None = None):
@@ -162,18 +179,26 @@ def resolve_chapter_id(novel_slug: str, chapter_slug: str) -> str:
 
 class MistmintClient:
     def __init__(self, translator_cookie: Optional[str] = None, timeout: int = 20):
+        token, resolved_cookie = _mistmint_auth_values()
+
         if translator_cookie is None:
-            translator_cookie = _resolve_mistmint_cookie()
+            translator_cookie = resolved_cookie
+
         self.s = requests.Session()
-        self.s.headers.update(DEFAULT_HEADERS)
+        self.s.headers.update(_mistmint_base_headers())
         self.timeout = timeout
-        self.cookie = translator_cookie
+        self.token = token
+        self.cookie = str(translator_cookie or "").strip()
+        self.has_auth = bool(self.token or self.cookie)
         self._chapter_id_cache: Dict[Tuple[str, str], Optional[str]] = {}
 
+    def _auth_headers(self) -> Dict[str, str]:
+        return _mistmint_headers(token=self.token, cookie=self.cookie)
+
     def _get(self, url: str, use_cookie: bool = False) -> requests.Response:
-        headers = {}
-        if use_cookie and self.cookie:
-            headers["Cookie"] = self.cookie
+        # keep use_cookie as the public/internal switch name, but it now means
+        # "use Mistmint auth headers" (bearer token and/or cookie).
+        headers = self._auth_headers() if use_cookie else _mistmint_base_headers()
         try:
             r = self.s.get(url, headers=headers, timeout=self.timeout, allow_redirects=True)
         except requests.Timeout:
@@ -194,7 +219,7 @@ class MistmintClient:
         return r
 
     def fetch_all_comments(self) -> Dict[str, Any]:
-        r = self._get(ALL_COMMENTS_URL, use_cookie=bool(self.cookie))
+        r = self._get(ALL_COMMENTS_URL, use_cookie=self.has_auth)
         r.raise_for_status()
         return r.json()
 
@@ -243,8 +268,8 @@ class MistmintClient:
         except Exception:
             pass
     
-        # 2) cookie HTML + smarter HTML JSON fallback + API fallback
-        if self.cookie:
+        # 2) authenticated HTML + smarter HTML JSON fallback + API fallback
+        if self.has_auth:
             if 'diag_step' in globals():
                 with diag_step("chapterId-cookie", novel=novel_slug, chapter=chapter_slug):
                     r2 = self._get(url, use_cookie=True)
@@ -283,7 +308,7 @@ class MistmintClient:
     def fetch_chapter_comments(self, chapter_id: str, skip_page: int = 0, limit: int = 100) -> Dict[str, Any]:
         u = f"{BASE_API}/comments/chapter/{chapter_id}?skipPage={skip_page}&limit={limit}"
         with diag_step("thread-fetch", chapter_id=chapter_id, page=skip_page, limit=limit):
-            r = self._get(u, use_cookie=bool(self.cookie))
+            r = self._get(u, use_cookie=self.has_auth)
             try:
                 data = r.json()
                 diag_ok("thread-json", chapter_id=chapter_id, count=len(data.get("data", [])))

@@ -42,6 +42,20 @@ def resolve_short_code(title: str, host: str) -> str | None:
                 return novel.get("short_code")
     return None
 
+
+def resolve_title_host_from_short_code(short_code: str) -> tuple[str, str] | None:
+    want = str(short_code or "").strip().upper()
+
+    if not want:
+        return None
+
+    for host, data in HOSTING_SITE_DATA.items():
+        for novel_title, novel in data.get("novels", {}).items():
+            if str(novel.get("short_code") or "").strip().upper() == want:
+                return novel_title, host
+
+    return None
+
 def fetch_api(url, cookie_env):
     headers = {}
     cookie = os.environ.get(cookie_env)
@@ -166,17 +180,30 @@ def update_status_field(embed: Embed, new_value: str) -> Embed:
 
 # ─── Main ───────────────────────────────────────────────────────────────────────
 
-if len(sys.argv) != 3:
-    print("Usage: python update_novel_status.py <title> <host>")
+if len(sys.argv) == 2:
+    short_code = sys.argv[1].strip().upper()
+    resolved = resolve_title_host_from_short_code(short_code)
+
+    if not resolved:
+        print(f"⚠️ No novel found for short_code {short_code}, skipping status update.")
+        sys.exit(0)
+
+    TITLE, HOST = resolved
+
+elif len(sys.argv) == 3:
+    TITLE = sys.argv[1]
+    HOST  = sys.argv[2]
+
+    short_code = resolve_short_code(TITLE, HOST)
+    if not short_code:
+        print(f"⚠️ No short_code for {TITLE} ({HOST}), skipping status update.")
+        sys.exit(0)
+
+    short_code = short_code.strip().upper()
+
+else:
+    print("Usage: python update_novel_card.py <short_code> OR python update_novel_card.py <title> <host>")
     sys.exit(1)
-
-TITLE = sys.argv[1]
-HOST  = sys.argv[2]
-
-short_code = resolve_short_code(TITLE, HOST)
-if not short_code:
-    print(f"⚠️ No short_code for {TITLE} ({HOST}), skipping status update.")
-    sys.exit(0)
 
 targets_map = load_targets()
 targets = targets_map.get(short_code.upper()) or targets_map.get(short_code.lower(), [])
@@ -196,7 +223,7 @@ async def on_ready():
             continue
 
         for novel_title, novel in data["novels"].items():
-            if novel.get("short_code") != short_code:
+            if str(novel.get("short_code") or "").strip().upper() != short_code:
                 continue
 
             utils = get_host_utils(host_name)

@@ -1,4 +1,4 @@
-name: Publish Single Novel Embed
+name: Publish Novel Card Embed
 
 on:
   workflow_dispatch:
@@ -7,16 +7,12 @@ on:
         description: "Novel short code (e.g. TVITPA, TDLBKGC, ATVHE)"
         required: true
         type: string
-      channel_id:
-        description: "Extra Discord channel/thread ID to post into (optional)"
-        required: false
-        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: publish-single-novel
+  group: publish-novel-card
   cancel-in-progress: false
 
 jobs:
@@ -43,23 +39,13 @@ jobs:
       - name: Resolve arguments
         run: |
           echo "SHORT_CODE=${{ github.event.inputs.short_code }}" >> $GITHUB_ENV
-
-          if [ -n "${{ github.event.inputs.channel_id }}" ]; then
-            echo "CHANNEL_ID=${{ github.event.inputs.channel_id }}" >> $GITHUB_ENV
-            echo "📍 Posting to archive channel + extra target: ${{ github.event.inputs.channel_id }}"
-          else
-            echo "📍 Posting to archive channel only"
-          fi
+          echo "📍 Posting to configured novel card archive target(s)"
 
       - name: Run publish script
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         run: |
-          if [ -n "$CHANNEL_ID" ]; then
-            python tools/publish_single_novel.py "$SHORT_CODE" "$CHANNEL_ID"
-          else
-            python tools/publish_single_novel.py "$SHORT_CODE"
-          fi
+          python tools/publish_novel_card.py "$SHORT_CODE"
 
       - name: Commit updated novel_status_targets.json
         run: |

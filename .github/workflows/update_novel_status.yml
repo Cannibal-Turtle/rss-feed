@@ -6,12 +6,8 @@ on:
 
   workflow_dispatch:
     inputs:
-      title:
-        description: "Novel title"
-        required: true
-        type: string
-      host:
-        description: "Hosting site (e.g. Mistmint Haven)"
+      short_code:
+        description: "Novel short code (e.g. AMLWC)"
         required: true
         type: string
 
@@ -39,22 +35,32 @@ jobs:
 
       - name: Resolve payload
         run: |
-          TITLE="${{ github.event.client_payload.title || github.event.inputs.title }}"
-          HOST="${{ github.event.client_payload.host || github.event.inputs.host }}"
+          SHORT_CODE="${{ github.event.client_payload.short_code || github.event.inputs.short_code }}"
+          TITLE="${{ github.event.client_payload.title }}"
+          HOST="${{ github.event.client_payload.host }}"
 
-          if [ -z "$TITLE" ] || [ -z "$HOST" ]; then
-            echo "❌ Missing title or host"
+          if [ -z "$SHORT_CODE" ] && { [ -z "$TITLE" ] || [ -z "$HOST" ]; }; then
+            echo "❌ Missing short_code, or title + host"
             exit 1
           fi
 
+          echo "SHORT_CODE=$SHORT_CODE" >> $GITHUB_ENV
           echo "TITLE=$TITLE" >> $GITHUB_ENV
           echo "HOST=$HOST" >> $GITHUB_ENV
           echo "SOURCE=${{ github.event.client_payload.source || 'manual' }}" >> $GITHUB_ENV
 
-          echo "🔔 Updating novel status for $TITLE ($HOST)"
+          if [ -n "$SHORT_CODE" ]; then
+            echo "🔔 Updating novel card for $SHORT_CODE"
+          else
+            echo "🔔 Updating novel card for $TITLE ($HOST)"
+          fi
 
       - name: Run updater
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         run: |
-          python tools/update_novel_status.py "$TITLE" "$HOST"
+          if [ -n "$SHORT_CODE" ]; then
+            python tools/update_novel_card.py "$SHORT_CODE"
+          else
+            python tools/update_novel_card.py "$TITLE" "$HOST"
+          fi

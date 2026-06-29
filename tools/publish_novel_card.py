@@ -72,7 +72,7 @@ except ModuleNotFoundError:
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
 STATE_FILE = "novel_status_targets.json"
 
-_TEMPLATE_SETTINGS = load_template_settings("publish_single_novel")
+_TEMPLATE_SETTINGS = load_template_settings("publish_novel_card")
 
 ARCHIVE_CHANNEL_ID = int(
     os.environ.get("ARCHIVE_CHANNEL_ID", "").strip()
@@ -127,7 +127,7 @@ def route_for_single_novel(target_cfg: dict) -> dict:
     Return the host Discord route used for the optional per-novel Discord link.
 
     Preferred route keys, in order:
-      - publish_single_novel
+      - publish_novel_card
       - novel_card
       - default
 
@@ -138,7 +138,7 @@ def route_for_single_novel(target_cfg: dict) -> dict:
     routes = target_cfg.get("routes", {})
 
     if isinstance(routes, dict):
-        for key in ("publish_single_novel", "novel_card", "default"):
+        for key in ("publish_novel_card", "novel_card", "default"):
             route = routes.get(key)
             if isinstance(route, dict):
                 return route
@@ -256,6 +256,40 @@ def host_discord_integration_for_host(host: str) -> str:
     return str(target_cfg.get("integration") or "").strip()
 
 
+def host_novel_cards_archive_target(host: str) -> dict | None:
+    """
+    Resolve the host/server archive channel for novel cards.
+
+    Example: Mistmint Haven -> host_discord_targets.mistmint_haven.integration
+    -> that Discord repo's config/server.json -> novel_cards_archive.
+    """
+    integration = host_discord_integration_for_host(host)
+
+    if not integration:
+        print(f"No host-specific Discord integration configured for {host_config_key(host)}; no host archive card will be posted.")
+        return None
+
+    channel_id = get_integration_channel_id(integration, "novel_cards_archive")
+
+    if not channel_id:
+        print(
+            f"No novel_cards_archive found in {integration} config/server.json; "
+            f"no host archive card will be posted for {host_config_key(host)}."
+        )
+        return None
+
+    try:
+        channel_id_int = int(channel_id)
+    except ValueError:
+        print(f"Invalid novel_cards_archive for {integration}: {channel_id!r}")
+        return None
+
+    return {
+        "channel_id": channel_id_int,
+        "preferred_integration": integration,
+    }
+
+
 def channel_guild_id(channel) -> str:
     if getattr(channel, "guild", None):
         return str(channel.guild.id)
@@ -348,15 +382,15 @@ def resolve_forum_post_id(host, short_code):
     route_type = str(route.get("type") or "thread_map").strip().lower()
 
     if route_type == "none":
-        print(f"Host-specific Discord route for {host_config_key(host)}/publish_single_novel is disabled.")
+        print(f"Host-specific Discord route for {host_config_key(host)}/publish_novel_card is disabled.")
         return None
 
     if route_type == "channel":
-        print(f"Host-specific Discord route for {host_config_key(host)}/publish_single_novel is channel-only; no per-novel Forum Post link will be added.")
+        print(f"Host-specific Discord route for {host_config_key(host)}/publish_novel_card is channel-only; no per-novel Forum Post link will be added.")
         return None
 
     if route_type != "thread_map":
-        print(f"Unknown host Discord route type {route_type!r} for {host_config_key(host)}/publish_single_novel; no Forum Post link will be added.")
+        print(f"Unknown host Discord route type {route_type!r} for {host_config_key(host)}/publish_novel_card; no Forum Post link will be added.")
         return None
 
     thread_map = fetch_thread_id_map(integration, route)
@@ -526,7 +560,7 @@ def build_message_payload_for_channel(
 ):
     """
     Builds the same novel-card message as before, but with the visible text/layout
-    moved to message_templates/publish_single_novel.toml.
+    moved to message_templates/publish_novel_card.toml.
     """
     status_text = build_status_text(
         completed=completed,
@@ -555,12 +589,12 @@ def build_message_payload_for_channel(
         "links_text": links_text,
     }
 
-    return render_message("publish_single_novel", ctx)
+    return render_message("publish_novel_card", ctx)
 
 # ---------------- main ----------------
 
 if len(sys.argv) < 2:
-    print("Usage: python publish_single_novel.py <short_code> [channel_id]")
+    print("Usage: python publish_novel_card.py <short_code> [channel_id]")
     sys.exit(1)
 
 SHORT_CODE = sys.argv[1].upper()
@@ -660,9 +694,11 @@ async def on_ready():
             forum_post_url = await build_forum_post_url(forum_post_id)
 
             # Always post to the primary/private archive.
-            # If a second channel/thread ID is passed, post there too. Its role
-            # field is resolved from the Discord integration that owns that
-            # target, not from the primary/private server.
+            # Also post to the host/server archive when integrations.json points
+            # this host to a Discord repo whose server.json has novel_cards_archive.
+            # If a second channel/thread ID is passed manually, treat it as an
+            # extra override/testing target. Each target resolves its role field
+            # from the Discord integration that owns that channel/server.
             target_posts = [
                 {
                     "channel_id": ARCHIVE_CHANNEL_ID,
@@ -670,7 +706,12 @@ async def on_ready():
                 }
             ]
 
-            if EXTRA_CHANNEL_ID and EXTRA_CHANNEL_ID != ARCHIVE_CHANNEL_ID:
+            host_archive_target = host_novel_cards_archive_target(host)
+
+            if host_archive_target:
+                target_posts.append(host_archive_target)
+
+            if EXTRA_CHANNEL_ID:
                 target_posts.append({
                     "channel_id": EXTRA_CHANNEL_ID,
                     "preferred_integration": host_discord_integration_for_host(host),
