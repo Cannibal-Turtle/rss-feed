@@ -19,4 +19,4 @@ type = 17
 
 [[components.components]]
 type = 10
-content = "{host}'s feed has been maxed out, switching to {mode} for this batch »»»\n{missing_lines}"
+content = "⚠️ {host}'s feed has been maxed out, switching to {mode} for this batch »»»\n{missing_lines}"
