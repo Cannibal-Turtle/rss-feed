@@ -11,7 +11,10 @@ from host_utils import get_host_utils
 from feed_common import (
     chapter_fetch_concurrency,
     chapter_source_mode,
+    chapter_source_uses_api,
+    chapter_source_uses_feed,
     entry_matches_chapter_type,
+    feed_looks_capped_at_current_batch,
     fetch_parsed_feed_async,
     has_nsfw_marker,
     host_level_feed_url,
@@ -280,9 +283,8 @@ async def fetch_feed_async(session, feed_url):
     )
 
 
-def process_host_free_feed(host, feed_url):
+def build_host_free_items_from_parsed_feed(host, parsed_feed):
     utils = get_host_utils(host)
-    parsed_feed = feedparser.parse(feed_url)
     items = []
 
     for entry in parsed_feed.entries:
@@ -291,6 +293,33 @@ def process_host_free_feed(host, feed_url):
         append_free_entry_item(items, host, utils, entry)
 
     return items
+
+
+def process_host_free_feed(host, feed_url):
+    parsed_feed = feedparser.parse(feed_url)
+    return build_host_free_items_from_parsed_feed(host, parsed_feed)
+
+
+def _free_item_dedupe_key(item):
+    guid_obj = getattr(item, "guid", None)
+    guid = getattr(guid_obj, "guid", "") or ""
+    link = getattr(item, "link", "") or ""
+    return guid.strip() or link.strip()
+
+
+def dedupe_free_items(items):
+    merged = {}
+
+    for item in items:
+        key = _free_item_dedupe_key(item)
+        if not key:
+            key = f"{item.host}:{item.title}:{item.volume}:{item.chapter}:{item.chaptername}:{item.link}"
+
+        existing = merged.get(key)
+        if existing is None or item.pubDate > existing.pubDate:
+            merged[key] = item
+
+    return list(merged.values())
 
 
 async def process_novel_free_feed(session, host, novel_title, details, feed_url):
@@ -346,9 +375,58 @@ async def main_async():
             utils = get_host_utils(host)
             mode = chapter_source_mode(host, "free")
 
-            # API source, preferred path: generator controls one async task per novel.
+            api_scan_reason = ""
+
+            # Feed modes: plain feed OR feed_api hybrid.
+            # feed_api only falls back to API when a host/global feed looks capped.
+            if chapter_source_uses_feed(mode):
+                host_feed_url = host_level_feed_url(host, "free")
+                if host_feed_url and not needs_novel_value(host_feed_url):
+                    parsed_feed = feedparser.parse(host_feed_url)
+                    rss_items.extend(build_host_free_items_from_parsed_feed(host, parsed_feed))
+
+                    if mode == "feed_api" and feed_looks_capped_at_current_batch(parsed_feed):
+                        api_scan_reason = (
+                            f"{host} feed shows {len(parsed_feed.entries)} visible entries "
+                            "and the oldest visible row is still in the current batch"
+                        )
+                else:
+                    any_novel_feed = False
+                    for novel_title, details in data.get("novels", {}).items():
+                        feed_url = resolved_novel_feed_url(host, novel_title, details, "free")
+                        if not feed_url:
+                            continue
+
+                        any_novel_feed = True
+                        if completion_state is None:
+                            completion_state = load_completion_state()
+
+                        if should_skip_completed(novel_title, "free", details, state=completion_state):
+                            print(f"Skipping {novel_title}: free completion already exists.")
+                            continue
+
+                        tasks.append(
+                            asyncio.create_task(
+                                process_novel_free_feed(session, host, novel_title, details, feed_url)
+                            )
+                        )
+
+                    if not any_novel_feed:
+                        print(f"No free feed source defined for host: {host}")
+                        if mode == "feed_api":
+                            api_scan_reason = f"{host} has no usable free feed source"
+
+                if not chapter_source_uses_api(mode):
+                    continue
+
+                if not api_scan_reason:
+                    continue
+
+                print(f"[free-feed] {api_scan_reason}; scanning mapped novels through API fallback.")
+
+            # API modes: plain api OR feed_api fallback.
             # Host utils only provides the host-specific scraper for ONE novel.
-            if mode == "api":
+            if chapter_source_uses_api(mode):
                 scrape_free_chapters_async = utils.get("scrape_free_chapters_async")
 
                 if scrape_free_chapters_async:
@@ -376,41 +454,14 @@ async def main_async():
                 print(f"No scrape_free_chapters_async defined for host: {host}")
                 continue
 
-            # Feed source, host/global scope: fetch once, match title after.
-            # No completion gate here; the feed itself is the source of current entries.
-            host_feed_url = host_level_feed_url(host, "free")
-            if host_feed_url and not needs_novel_value(host_feed_url):
-                rss_items.extend(process_host_free_feed(host, host_feed_url))
-                continue
-
-            # Feed source, novel scope: queue one async fetch per novel.
-            any_novel_feed = False
-            for novel_title, details in data.get("novels", {}).items():
-                feed_url = resolved_novel_feed_url(host, novel_title, details, "free")
-                if not feed_url:
-                    continue
-
-                any_novel_feed = True
-                if completion_state is None:
-                    completion_state = load_completion_state()
-
-                if should_skip_completed(novel_title, "free", details, state=completion_state):
-                    print(f"Skipping {novel_title}: free completion already exists.")
-                    continue
-
-                tasks.append(
-                    asyncio.create_task(
-                        process_novel_free_feed(session, host, novel_title, details, feed_url)
-                    )
-                )
-
-            if not any_novel_feed:
-                print(f"No free feed source defined for host: {host}")
-
         if tasks:
             results = await asyncio.gather(*tasks)
             for items in results:
                 rss_items.extend(items)
+
+    # feed_api can surface the same chapter from both feed and API.
+    # Dedupe before sorting so downstream repos see one item per GUID/link.
+    rss_items = dedupe_free_items(rss_items)
 
     # Sort all items newest-first.
     # Tie-breaker: host/title alphabetical, then chapter number.

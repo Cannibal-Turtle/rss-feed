@@ -11,14 +11,15 @@ coin_emoji = "<:mistmint_currency:1433046707121422487>"
 ticket_emoji = "<:mistmint_ticket:1517453566632001597>"
 token_secret = "MISTMINT_COOKIE"
 
-free_chapters_source = "feed"
+free_chapters_source = "feed_api"
 paid_chapters_source = "api"
 chapter_mode = "auto"
 comments_source = "auto"
 
 # Chapter source modes:
-# "feed" = use a host-provided feed/RSS-style source when available
-# "api"  = use the host API/chapter data source when available
+# "feed"     = use a host-provided feed/RSS-style source only
+# "api"      = use the host API/chapter data source only
+# "feed_api" = use the feed, then scan mapped novels through API only if the host feed looks capped
 
 # Chapter mode:
 # "auto"   = use real API/chapter data when available; safest/default

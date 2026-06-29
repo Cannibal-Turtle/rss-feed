@@ -59,6 +59,58 @@ def normalize_title_key(title: str) -> str:
     return re.sub(r"\s+", " ", str(title or "")).strip().casefold()
 
 
+def _parsed_time_to_utc(tt: Any) -> datetime.datetime | None:
+    if not tt:
+        return None
+    try:
+        return datetime.datetime(*tt[:6], tzinfo=datetime.timezone.utc)
+    except Exception:
+        return None
+
+
+def parsed_entry_pub_date(entry: Any) -> datetime.datetime | None:
+    tt = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
+    if not tt and isinstance(entry, dict):
+        tt = entry.get("published_parsed") or entry.get("updated_parsed")
+    return _parsed_time_to_utc(tt)
+
+
+def parsed_feed_build_date(parsed_feed: Any) -> datetime.datetime | None:
+    feed = getattr(parsed_feed, "feed", None) or {}
+    for key in ("updated_parsed", "published_parsed", "created_parsed"):
+        tt = getattr(feed, key, None)
+        if not tt and isinstance(feed, dict):
+            tt = feed.get(key)
+        dt = _parsed_time_to_utc(tt)
+        if dt is not None:
+            return dt
+    return None
+
+
+def feed_looks_capped_at_current_batch(parsed_feed: Any) -> bool:
+    """Return True when a 100-row host feed may be hiding same-time leftovers.
+
+    Mistmint's public feed shows 100 items. If the oldest visible item still has
+    the same timestamp as the channel build time or newest entry, there may be
+    more same-timestamp rows beyond the cap.
+    """
+
+    entries = list(getattr(parsed_feed, "entries", []) or [])
+    if len(entries) < 100:
+        return False
+
+    oldest_dt = parsed_entry_pub_date(entries[-1])
+    if oldest_dt is None:
+        return False
+
+    build_dt = parsed_feed_build_date(parsed_feed)
+    if build_dt is not None and oldest_dt == build_dt:
+        return True
+
+    newest_dt = parsed_entry_pub_date(entries[0])
+    return newest_dt is not None and oldest_dt == newest_dt
+
+
 def entry_matches_chapter_type(utils: dict[str, Any], entry: Any, chapter_type: str) -> bool:
     """Return whether one source entry belongs in this generated feed.
 
@@ -204,8 +256,40 @@ def novels_for_host(host: str) -> dict[str, dict[str, Any]]:
     return host_data_for(host).get("novels", {}) or {}
 
 
+def normalize_chapter_source_mode(value: Any) -> str:
+    """Normalize chapter source mode names used in host TOML/env/config.
+
+    Supported canonical modes:
+    - feed: use only RSS/feed-style source
+    - api: use only chapter API/data source
+    - feed_api: use feed first, then API only when the feed looks capped
+    """
+
+    raw = str(value or "").strip().casefold().replace("-", "_").replace("+", "_")
+    raw = re.sub(r"\s+", "_", raw)
+
+    aliases = {
+        "feed": "feed",
+        "rss": "feed",
+        "api": "api",
+        "feed_api": "feed_api",
+        "api_feed": "feed_api",
+        "feed_with_api": "feed_api",
+        "feed_with_api_fallback": "feed_api",
+        "feed_api_fallback": "feed_api",
+        "hybrid": "feed_api",
+    }
+
+    return aliases.get(raw, "")
+
+
 def chapter_source_mode(host: str, chapter_type: str) -> str:
-    """Return host source mode for this chapter type: "feed" or "api".
+    """Return host source mode for this chapter type.
+
+    Modes:
+    - feed: use the feed/RSS-style source only
+    - api: use the chapter API/data source only
+    - feed_api: use feed, then API only when the feed looks capped
 
     If the host TOML does not say explicitly:
     - free defaults to feed, unless there is no free_feed_url but there is a chapters_api_url
@@ -216,9 +300,9 @@ def chapter_source_mode(host: str, chapter_type: str) -> str:
     host_data = host_data_for(host)
 
     key = SOURCE_MODE_KEYS.get(chapter_type, "")
-    raw = str(host_data.get(key, "") or "").strip().casefold()
-    if raw in {"feed", "api"}:
-        return raw
+    mode = normalize_chapter_source_mode(host_data.get(key, ""))
+    if mode:
+        return mode
 
     if chapter_type == "free":
         return "api" if host_data.get("chapters_api_url") and not host_data.get("free_feed_url") else "feed"
@@ -227,6 +311,14 @@ def chapter_source_mode(host: str, chapter_type: str) -> str:
         return "feed" if host_data.get("paid_feed_url") else "api"
 
     return "feed"
+
+
+def chapter_source_uses_feed(mode: str) -> bool:
+    return normalize_chapter_source_mode(mode) in {"feed", "feed_api"}
+
+
+def chapter_source_uses_api(mode: str) -> bool:
+    return normalize_chapter_source_mode(mode) in {"api", "feed_api"}
 
 
 def host_level_feed_url(host: str, chapter_type: str) -> str:
@@ -335,7 +427,7 @@ def source_scope_for(host: str, novel_title: str, details: dict[str, Any], chapt
 
     mode = chapter_source_mode(host, chapter_type)
 
-    if mode == "feed":
+    if chapter_source_uses_feed(mode):
         novel_feed = novel_level_feed_url(details, chapter_type)
         if novel_feed:
             return "novel_feed"
@@ -344,9 +436,7 @@ def source_scope_for(host: str, novel_title: str, details: dict[str, Any], chapt
         if host_feed:
             return "novel_feed" if needs_novel_value(host_feed) else "host_feed"
 
-        return ""
-
-    if mode == "api":
+    if chapter_source_uses_api(mode):
         scope = api_source_scope(host, details)
         if scope == "novel":
             return "novel_api"

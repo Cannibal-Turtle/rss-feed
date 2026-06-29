@@ -12,7 +12,10 @@ from host_utils import get_host_utils
 from feed_common import (
     chapter_fetch_concurrency,
     chapter_source_mode,
+    chapter_source_uses_api,
+    chapter_source_uses_feed,
     entry_matches_chapter_type,
+    feed_looks_capped_at_current_batch,
     fetch_parsed_feed_async,
     has_nsfw_marker,
     host_level_feed_url,
@@ -213,9 +216,8 @@ def append_paid_feed_entry_item(rss_items, host, utils, entry, *, forced_title="
     rss_items.append(build_paid_item(host, main_title, chap))
 
 
-def process_host_paid_feed(host, feed_url):
+def build_host_paid_items_from_parsed_feed(host, parsed_feed):
     utils = get_host_utils(host)
-    parsed_feed = feedparser.parse(feed_url)
     items = []
 
     for entry in parsed_feed.entries:
@@ -224,6 +226,11 @@ def process_host_paid_feed(host, feed_url):
         append_paid_feed_entry_item(items, host, utils, entry)
 
     return items
+
+
+def process_host_paid_feed(host, feed_url):
+    parsed_feed = feedparser.parse(feed_url)
+    return build_host_paid_items_from_parsed_feed(host, parsed_feed)
 
 
 def process_novel_paid_feed(host, novel_title, details, feed_url):
@@ -376,46 +383,65 @@ async def main_async():
         for host, data in HOSTING_SITE_DATA.items():
             mode = chapter_source_mode(host, "paid")
 
-            # Feed source, host/global scope: fetch once, match title after.
-            # No completion gate here; the feed itself is the source of current entries.
-            if mode == "feed":
+            api_scan_reason = ""
+
+            # Feed modes: plain feed OR feed_api hybrid.
+            # feed_api only falls back to API when a host/global feed looks capped.
+            if chapter_source_uses_feed(mode):
                 host_feed_url = host_level_feed_url(host, "paid")
                 if host_feed_url and not needs_novel_value(host_feed_url):
-                    scraped.extend(process_host_paid_feed(host, host_feed_url))
-                    continue
+                    parsed_feed = feedparser.parse(host_feed_url)
+                    scraped.extend(build_host_paid_items_from_parsed_feed(host, parsed_feed))
 
-                # Feed source, novel scope: loop novels and gate before fetching.
-                any_novel_feed = False
-                for novel_title, details in data.get("novels", {}).items():
-                    feed_url = resolved_novel_feed_url(host, novel_title, details, "paid")
-                    if not feed_url:
-                        continue
-
-                    any_novel_feed = True
-                    if not details.get("paid_feed"):
-                        print(f"Skipping {novel_title}: has_paid=false or no paid_feed configured.")
-                        continue
-
-                    if should_skip_completed(novel_title, "paid", details, state=completion_state):
-                        print(f"Skipping {novel_title}: paid_completion already exists.")
-                        continue
-
-                    tasks.append(
-                        asyncio.create_task(
-                            process_novel_paid_feed_async(session, host, novel_title, details, feed_url)
+                    if mode == "feed_api" and feed_looks_capped_at_current_batch(parsed_feed):
+                        api_scan_reason = (
+                            f"{host} paid feed shows {len(parsed_feed.entries)} visible entries "
+                            "and the oldest visible row is still in the current batch"
                         )
-                    )
+                else:
+                    # Feed source, novel scope: loop novels and gate before fetching.
+                    any_novel_feed = False
+                    for novel_title, details in data.get("novels", {}).items():
+                        feed_url = resolved_novel_feed_url(host, novel_title, details, "paid")
+                        if not feed_url:
+                            continue
 
-                if not any_novel_feed:
-                    print(f"No paid feed source defined for host: {host}")
-                continue
+                        any_novel_feed = True
+                        if not details.get("paid_feed"):
+                            print(f"Skipping {novel_title}: has_paid=false or no paid_feed configured.")
+                            continue
 
-            # API/source handled per novel.
-            for novel_title, details in data.get("novels", {}).items():
-                if not should_check_paid_novel(novel_title, details, completion_state):
+                        if should_skip_completed(novel_title, "paid", details, state=completion_state):
+                            print(f"Skipping {novel_title}: paid_completion already exists.")
+                            continue
+
+                        tasks.append(
+                            asyncio.create_task(
+                                process_novel_paid_feed_async(session, host, novel_title, details, feed_url)
+                            )
+                        )
+
+                    if not any_novel_feed:
+                        print(f"No paid feed source defined for host: {host}")
+                        if mode == "feed_api":
+                            api_scan_reason = f"{host} has no usable paid feed source"
+
+                if not chapter_source_uses_api(mode):
                     continue
 
-                tasks.append(asyncio.create_task(process_novel(session, host, novel_title)))
+                if not api_scan_reason:
+                    continue
+
+                print(f"[paid-feed] {api_scan_reason}; scanning mapped novels through API fallback.")
+
+            # API/source handled per novel for api OR feed_api fallback.
+            if chapter_source_uses_api(mode):
+                for novel_title, details in data.get("novels", {}).items():
+                    if not should_check_paid_novel(novel_title, details, completion_state):
+                        continue
+
+                    tasks.append(asyncio.create_task(process_novel(session, host, novel_title)))
+                continue
 
         if tasks:
             results = await asyncio.gather(*tasks)

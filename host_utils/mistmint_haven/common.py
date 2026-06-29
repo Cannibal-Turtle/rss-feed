@@ -27,20 +27,37 @@ def _mistmint_hostdata():
     return HOSTING_SITE_DATA.get("Mistmint Haven", {})
 
 
+def _normalize_chapter_source(value: str, default: str) -> str:
+    raw = str(value or default).strip().lower().replace("-", "_").replace("+", "_")
+    raw = re.sub(r"\s+", "_", raw)
+    aliases = {
+        "feed": "feed",
+        "rss": "feed",
+        "api": "api",
+        "feed_api": "feed_api",
+        "api_feed": "feed_api",
+        "feed_with_api": "feed_api",
+        "feed_with_api_fallback": "feed_api",
+        "feed_api_fallback": "feed_api",
+        "hybrid": "feed_api",
+    }
+    return aliases.get(raw, default)
+
+
 def _free_chapters_source():
     """
     From mappings/hosts/mistmint_haven.toml:
-      free_chapters_source = "feed" or "api"
+      free_chapters_source = "feed", "api", or "feed_api"
     """
-    return str(_mistmint_hostdata().get("free_chapters_source", "feed")).strip().lower()
+    return _normalize_chapter_source(_mistmint_hostdata().get("free_chapters_source", "feed"), "feed")
 
 
 def _paid_chapters_source():
     """
     From mappings/hosts/mistmint_haven.toml:
-      paid_chapters_source = "api" or "feed"
+      paid_chapters_source = "feed", "api", or "feed_api"
     """
-    return str(_mistmint_hostdata().get("paid_chapters_source", "api")).strip().lower()
+    return _normalize_chapter_source(_mistmint_hostdata().get("paid_chapters_source", "api"), "api")
 
 
 def _chapter_mode():
@@ -64,7 +81,7 @@ def _comments_source():
 
 
 def _use_api_feed():
-    return _free_chapters_source() == "api"
+    return _free_chapters_source() in {"api", "feed_api"}
 
 
 def _manual_mode_on():
