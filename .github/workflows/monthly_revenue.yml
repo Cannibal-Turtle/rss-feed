@@ -2,11 +2,10 @@ name: Monthly Revenue Report
 
 on:
   schedule:
-    # Runs around 10:17 PM Malaysia time on the last day of every month.
+    # Runs around 6:30 PM Malaysia time on the last day of every month.
     # Cron has no simple "last day of month", so this checks days 28-31,
     # then the guard step below only allows the real last-day evening run to continue.
-    # Avoid :00 because scheduled workflows are often delayed around the top of the hour.
-    - cron: "17 14 28-31 * *"
+    - cron: "30 10 28-31 * *"
   workflow_dispatch:
 
 permissions:
