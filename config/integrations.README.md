@@ -284,9 +284,9 @@ Mistmint comment limit settings:
 | `dashboard_comments_limit_default` | Page size for `/comments/trans/all-comments`; keep this small because each dashboard row may need slow chapter/reply enrichment. |
 | `dashboard_comments_page_scan_default` | Number of dashboard pages to fetch. `1` means only `skipPage=0`. |
 | `novel_comments_limit_default` | Page size for public `/comments/novel/{identifier}` novel-page comments. |
-| `novel_comments_page_scan_default` | Number of public novel comment pages to fetch. `1` means only `skipPage=0`. |
+| `novel_comments_page_scan_default` | Maximum public novel-comment pages allowed. `1` means only `skipPage=0`; higher values stop early when the current page is empty or already reaches the existing XML cutoff. |
 | `chapter_comments_limit_default` | Page size for `/comments/chapter/{chapterId}` lookups during enrichment/reply resolution. |
-| `chapter_comments_page_scan_default` | Number of chapter thread pages to scan when resolving reply chains. `3` means `skipPage=0`, `1`, and `2`. |
+| `chapter_comments_page_scan_default` | Maximum chapter-thread pages allowed during enrichment/reply resolution. The scan stops early when the target comment is found, the page is empty, or the current page already reaches the target timestamp. |
 
 The Python code clamps these values internally, so accidental huge numbers will not hammer Mistmint.
 

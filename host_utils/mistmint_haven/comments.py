@@ -221,6 +221,148 @@ def _raw_dashboard_comment_key(obj: dict, pick_func):
     )
 
 
+def _comment_created_dt(obj: dict) -> datetime.datetime | None:
+    if not isinstance(obj, dict):
+        return None
+    for key in ("createdAt", "postedAt", "created_at", "date", "timestamp"):
+        dt = _parse_comment_dt(obj.get(key))
+        if dt is not None:
+            return dt
+    return None
+
+
+def _iter_comment_page_objects(items: list):
+    for top in items or []:
+        if not isinstance(top, dict):
+            continue
+        yield top
+        for rep in (top.get("replies") or []):
+            if isinstance(rep, dict):
+                yield rep
+
+
+def _oldest_comment_dt_in_page(items: list) -> datetime.datetime | None:
+    oldest = None
+    for obj in _iter_comment_page_objects(items):
+        dt = _comment_created_dt(obj)
+        if dt is None:
+            continue
+        oldest = dt if oldest is None or dt < oldest else oldest
+    return oldest
+
+
+def _comment_page_covers_target(items: list, target_dt: datetime.datetime | None) -> bool:
+    """Return True when this page appears old enough to include target_dt.
+
+    This is a stop condition for smart paging. Page scans still have a hard
+    max from config, but we do not fetch the next page when the current page
+    already reaches older than the comment/cutoff timestamp we care about.
+    """
+    if target_dt is None:
+        return False
+    oldest = _oldest_comment_dt_in_page(items)
+    if oldest is None:
+        return False
+    return oldest <= target_dt
+
+
+def _merge_comment_payloads(payloads: list[dict]) -> dict:
+    merged = {"data": []}
+    for payload in payloads or []:
+        if not isinstance(payload, dict):
+            continue
+        for item in (payload.get("data") or []):
+            merged["data"].append(item)
+    return merged
+
+
+def _existing_mistmint_comment_cutoffs_by_novel(path: str = "aggregated_comments_feed.xml"):
+    """Return latest existing Mistmint comment timestamp per novel title.
+
+    Public novel-comment paging uses this only as a cutoff/checkpoint. The
+    Mistmint API remains the source of truth.
+    """
+    feed_path = Path(os.getenv("COMMENTS_FEED_XML", path))
+    if not feed_path.exists():
+        return {}
+
+    try:
+        root = ET.parse(feed_path).getroot()
+    except Exception as e:
+        diag_fail("comments-existing-xml-cutoff-parse", path=str(feed_path), error=str(e))
+        return {}
+
+    def child_text(item, wanted: str) -> str:
+        for child in list(item):
+            if _local_xml_name(child.tag) == wanted:
+                return (child.text or "").strip()
+        return ""
+
+    cutoffs = {}
+    for item in root.iter():
+        if _local_xml_name(item.tag) != "item":
+            continue
+        if child_text(item, "host") != MISTMINT_HOST:
+            continue
+
+        title = child_text(item, "title")
+        dt = _parse_comment_dt(child_text(item, "pubDate"))
+        if not title or dt is None:
+            continue
+
+        key = title.strip().casefold()
+        prev = cutoffs.get(key)
+        if prev is None or dt > prev:
+            cutoffs[key] = dt
+
+    if cutoffs:
+        diag_ok("comments-existing-xml-novel-cutoffs", count=len(cutoffs))
+    return cutoffs
+
+
+_MISTMINT_HOME_PAGE_CACHE: dict[str, dict[int, dict]] = {}
+
+
+def _fetch_homepage_comments_for_target(novel_id: str, target_dt: datetime.datetime | None = None) -> dict:
+    """Fetch novel-page comments with smart paging.
+
+    `novel_comments_page_scan_default` is the maximum number of pages allowed.
+    We stop early when the current page is empty or already reaches the target
+    timestamp.
+    """
+    if not novel_id:
+        return {}
+
+    limit = _comments_novel_limit()
+    max_pages = _comments_novel_page_scan()
+    pages = _MISTMINT_HOME_PAGE_CACHE.setdefault(novel_id, {})
+    payloads = []
+
+    for page in range(max_pages):
+        if page not in pages:
+            url = f"{BASE_API}/comments/novel/{novel_id}?skipPage={page}&limit={limit}"
+            pages[page] = _http_get_json(url) or {}
+            diag_ok("homepage-fetch", novel_id=novel_id, page=page)
+        else:
+            diag_ok("homepage-cache-hit", novel_id=novel_id, page=page)
+
+        payload = pages[page]
+        payloads.append(payload)
+        page_items = payload.get("data") or []
+
+        if not page_items:
+            diag_ok("homepage-stop-empty-page", novel_id=novel_id, page=page)
+            break
+
+        if _comment_page_covers_target(page_items, target_dt):
+            diag_ok("homepage-stop-time-covered", novel_id=novel_id, page=page)
+            break
+
+    merged = _merge_comment_payloads(payloads)
+    _MISTMINT_HOME_CACHE[novel_id] = merged
+    return merged
+
+
 # --- Mistmint website sticker text -> comment image URL -----------------------
 MISTMINT_STICKER_IMAGES = {
     ":shirone_banned:": "https://cdn.discordapp.com/emojis/1514344193378619392.webp?size=128&quality=lossless",
@@ -266,20 +408,10 @@ def match_comment_on_homepage_by_id(novel_id: str, author: str, body_raw: str, p
     if not novel_id:
         return None, ""
 
-    # fetch/cached payload
-    if novel_id in _MISTMINT_HOME_CACHE:
-        payload = _MISTMINT_HOME_CACHE[novel_id]
-        diag_ok("homepage-cache-hit", novel_id=novel_id)
-    else:
-        limit = _comments_novel_limit()
-        url = f"https://api.mistminthaven.com/api/comments/novel/{novel_id}?skipPage=0&limit={limit}"
-        payload = _http_get_json(url) or {}
-        _MISTMINT_HOME_CACHE[novel_id] = payload
-        diag_ok("homepage-fetch", novel_id=novel_id)
-
     want_name = _canon_name(author)
     want_dt   = _iso_dt(posted_at)
     want_body = _norm(body_raw)
+    payload = _fetch_homepage_comments_for_target(novel_id, want_dt)
 
     def _time_close(theirs: str, target: datetime.datetime | None) -> bool:
         if target is None:
@@ -396,7 +528,39 @@ def match_comment_in_thread(thread_json: Dict[str, Any], username: str, created_
 
 def enrich_all_comments(client: MistmintClient, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
-    thread_cache: Dict[str, Dict[str, Any]] = {}
+    thread_cache: Dict[str, Dict[int, Dict[str, Any]]] = {}
+
+    def cached_chapter_page(chapter_id: str, page: int, limit: int) -> Dict[str, Any]:
+        pages = thread_cache.setdefault(chapter_id, {})
+        if page not in pages:
+            time.sleep(0.2)
+            pages[page] = client.fetch_chapter_comments(chapter_id, skip_page=page, limit=limit)
+        return pages[page]
+
+    def fetch_chapter_thread_for_target(chapter_id: str, username: str, created_at: str):
+        limit = _comments_chapter_limit()
+        max_pages = _comments_chapter_page_scan()
+        target_dt = _parse_comment_dt(created_at)
+        payloads = []
+
+        for page in range(max_pages):
+            payload = cached_chapter_page(chapter_id, page, limit)
+            payloads.append(payload)
+            page_items = payload.get("data") or []
+
+            hit = match_comment_in_thread({"data": page_items}, username=username, created_at_iso=created_at)
+            if hit:
+                return _merge_comment_payloads(payloads), hit
+
+            if not page_items:
+                diag_ok("comment-match-stop-empty-page", chapter_id=chapter_id, page=page)
+                break
+
+            if _comment_page_covers_target(page_items, target_dt):
+                diag_ok("comment-match-stop-time-covered", chapter_id=chapter_id, page=page)
+                break
+
+        return _merge_comment_payloads(payloads), None
 
     for rec in records:
         novel_slug    = rec.get("novelSlug")   or ""
@@ -435,13 +599,11 @@ def enrich_all_comments(client: MistmintClient, records: List[Dict[str, Any]]) -
         item["chapterId"] = cid
         item["gated"] = gated
 
-        # If a chapter thread exists, try to match the comment and mark reply info
+        # If a chapter thread exists, try to match the comment and mark reply info.
+        # Page scan is smart: page_scan is a max cap, and later pages are only
+        # fetched while the current page has not reached the target timestamp.
         if cid:
-            if cid not in thread_cache:
-                time.sleep(0.2)
-                thread_cache[cid] = client.fetch_chapter_comments(cid, skip_page=0, limit=_comments_chapter_limit())
-            thread = thread_cache[cid]
-            hit = match_comment_in_thread(thread, username=username, created_at_iso=created_at)
+            _thread, hit = fetch_chapter_thread_for_target(cid, username=username, created_at=created_at)
             if hit:
                 item["commentId"] = hit.get("id") or hit.get("_id")
                 item["is_reply"]  = bool(hit.get("parentId") or hit.get("replyToId"))
@@ -561,12 +723,15 @@ def resolve_reply_to_on_chapter_by_id(client: MistmintClient, chapter_id: str,
         return (rep_dt is None) or abs((rep_dt - want_dt).total_seconds()) <= 300
 
     with diag_step("reply-resolve-chapter", chapter_id=chapter_id, author=author):
-        # try configured pages just in case the comment is older
+        # Smart scan: page_scan is a max cap, not pages always fetched.
+        # Stop once the current page reaches the target timestamp.
         limit = _comments_chapter_limit()
         page_scan = _comments_chapter_page_scan()
         for page in range(page_scan):
             payload = client.fetch_chapter_comments(chapter_id, skip_page=page, limit=limit)
-            for top in (payload.get("data") or []):
+            page_items = payload.get("data") or []
+
+            for top in page_items:
                 parent_user = _name(top.get("user"))
                 if _is_same(top):
                     diag_ok("reply-resolve-top", chapter_id=chapter_id, page=page)
@@ -577,6 +742,14 @@ def resolve_reply_to_on_chapter_by_id(client: MistmintClient, chapter_id: str,
                         diag_ok("reply-resolve-hit", chapter_id=chapter_id, parent=who, page=page)
                         return (who or "").strip()
 
+            if not page_items:
+                diag_ok("reply-resolve-stop-empty-page", chapter_id=chapter_id, page=page)
+                break
+
+            if _comment_page_covers_target(page_items, want_dt):
+                diag_ok("reply-resolve-stop-time-covered", chapter_id=chapter_id, page=page)
+                break
+
         diag_fail("reply-resolve-miss", chapter_id=chapter_id, author=author)
         return ""
         
@@ -585,19 +758,10 @@ def resolve_reply_to_on_homepage_by_id(novel_id: str, author: str, body_raw: str
     if not novel_id:
         return ""
 
-    if novel_id in _MISTMINT_HOME_CACHE:
-        payload = _MISTMINT_HOME_CACHE[novel_id]
-        diag_ok("homepage-cache-hit", novel_id=novel_id)
-    else:
-        limit = _comments_novel_limit()
-        url = f"https://api.mistminthaven.com/api/comments/novel/{novel_id}?skipPage=0&limit={limit}"
-        payload = _http_get_json(url) or {}
-        _MISTMINT_HOME_CACHE[novel_id] = payload
-        diag_ok("homepage-fetch", novel_id=novel_id)
-
     want_author = _canon_name(author)
     want_body = _norm(body_raw)
     want_dt = _iso_dt(posted_at)
+    payload = _fetch_homepage_comments_for_target(novel_id, want_dt)
 
     for top in (payload.get("data") or []):
         parent_user = _user_str(top.get("user"))
@@ -753,7 +917,13 @@ def _comments_public_timeout_seconds() -> int:
     return max(1, value)
 
 
-def _fetch_public_novel_comments(novel_slug: str, novel_id: str, limit: int, page_scan: int = 1):
+def _fetch_public_novel_comments(
+    novel_slug: str,
+    novel_id: str,
+    limit: int,
+    page_scan: int = 1,
+    cutoff_dt: datetime.datetime | None = None,
+):
     """
     Public endpoint fallback.
 
@@ -797,6 +967,10 @@ def _fetch_public_novel_comments(novel_slug: str, novel_id: str, limit: int, pag
             if not items:
                 break
 
+            if _comment_page_covers_target(items, cutoff_dt):
+                diag_ok("public-comments-stop-time-covered", ident=ident, page=page)
+                break
+
         if all_items:
             return first_ident_url, all_items
 
@@ -832,6 +1006,7 @@ async def _fetch_public_novel_comments_async(
     novel_id: str,
     limit: int,
     page_scan: int = 1,
+    cutoff_dt: datetime.datetime | None = None,
 ):
     """
     Async version of _fetch_public_novel_comments().
@@ -873,6 +1048,10 @@ async def _fetch_public_novel_comments_async(
             if not items:
                 break
 
+            if _comment_page_covers_target(items, cutoff_dt):
+                diag_ok("public-comments-stop-time-covered", ident=ident, page=page)
+                break
+
         if all_items:
             return first_ident_url, all_items
 
@@ -886,6 +1065,7 @@ async def _fetch_public_comments_for_novel_async(
     meta: dict,
     limit: int,
     page_scan: int,
+    cutoff_by_novel: dict | None = None,
 ):
     async with sem:
         novel_url = (meta.get("novel_url") or "").rstrip("/")
@@ -896,18 +1076,28 @@ async def _fetch_public_comments_for_novel_async(
             diag_fail("public-comments-skip-no-id", novel=novel_title)
             return novel_title, novel_slug, novel_id, "", []
 
+        cutoff_dt = None
+        if cutoff_by_novel:
+            cutoff_dt = cutoff_by_novel.get(str(novel_title or "").strip().casefold())
+
         url, items = await _fetch_public_novel_comments_async(
             session=session,
             novel_slug=novel_slug,
             novel_id=novel_id,
             limit=limit,
             page_scan=page_scan,
+            cutoff_dt=cutoff_dt,
         )
 
         return novel_title, novel_slug, novel_id, url, items
 
 
-async def _load_comments_mistmint_public_async(novels: dict, limit: int, page_scan: int):
+async def _load_comments_mistmint_public_async(
+    novels: dict,
+    limit: int,
+    page_scan: int,
+    cutoff_by_novel: dict | None = None,
+):
     concurrency = _comments_public_concurrency()
     sem = asyncio.Semaphore(concurrency)
 
@@ -923,6 +1113,7 @@ async def _load_comments_mistmint_public_async(novels: dict, limit: int, page_sc
                 meta=meta,
                 limit=limit,
                 page_scan=page_scan,
+                cutoff_by_novel=cutoff_by_novel,
             )
             for novel_title, meta in novels.items()
         ]
@@ -1036,9 +1227,15 @@ def load_comments_mistmint_public(comments_api_url: str = ""):
 
     novels = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("novels", {}) or {}
     concurrency = _comments_public_concurrency()
+    cutoff_by_novel = _existing_mistmint_comment_cutoffs_by_novel() if page_scan > 1 else {}
 
     with diag_step("comments-public-load", novel_count=len(novels), limit=limit, page_scan=page_scan, concurrency=concurrency):
-        results = asyncio.run(_load_comments_mistmint_public_async(novels, limit, page_scan))
+        results = asyncio.run(_load_comments_mistmint_public_async(
+            novels,
+            limit,
+            page_scan,
+            cutoff_by_novel=cutoff_by_novel,
+        ))
 
         for novel_title, novel_slug, novel_id, url, items in results:
             print(f"[mistmint/public] {novel_title}: {len(items)} item(s) from {url or 'no-url'}")
