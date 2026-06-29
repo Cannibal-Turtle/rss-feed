@@ -124,16 +124,15 @@ def host_config_key(host: str) -> str:
 
 def route_for_single_novel(target_cfg: dict) -> dict:
     """
-    Return the host Discord route used for the optional per-novel Discord link.
+    Return the host Discord route used by the novel-card publisher.
+
+    For novel cards, the normal host route is a shared archive channel
+    (config/server.json -> novel_cards_archive), not a per-novel thread.
 
     Preferred route keys, in order:
       - publish_novel_card
       - novel_card
       - default
-
-    If the host has a Discord target but no route for this tool yet, default to
-    thread_map so existing Mistmint-style thread maps keep working without adding
-    another route entry.
     """
     routes = target_cfg.get("routes", {})
 
@@ -148,9 +147,10 @@ def route_for_single_novel(target_cfg: dict) -> dict:
         return route
 
     return {
-        "type": "thread_map",
-        "map_key": "thread_id_map",
-        "default_path": "config/thread_id_map.json",
+        "type": "channel",
+        "channel_key": "novel_cards_archive",
+        "server_key": "server_json",
+        "default_path": "config/server.json",
     }
 
 
@@ -263,17 +263,44 @@ def host_novel_cards_archive_target(host: str) -> dict | None:
     Example: Mistmint Haven -> host_discord_targets.mistmint_haven.integration
     -> that Discord repo's config/server.json -> novel_cards_archive.
     """
-    integration = host_discord_integration_for_host(host)
+    target_cfg = get_host_discord_target(host_config_key(host))
+    integration = str(target_cfg.get("integration") or "").strip()
+
+    if EXTRA_DISCORD_INTEGRATION_OVERRIDE:
+        integration = EXTRA_DISCORD_INTEGRATION_OVERRIDE
 
     if not integration:
         print(f"No host-specific Discord integration configured for {host_config_key(host)}; no host archive card will be posted.")
         return None
 
-    channel_id = get_integration_channel_id(integration, "novel_cards_archive")
+    route = route_for_single_novel(target_cfg)
+    route_type = str(route.get("type") or "channel").strip().lower()
+
+    if route_type == "none":
+        print(f"Host-specific novel-card archive route is disabled for {host_config_key(host)}.")
+        return None
+
+    if route_type != "channel":
+        print(
+            f"Host-specific novel-card route for {host_config_key(host)} is {route_type!r}, "
+            "not a shared archive channel; no host archive card will be posted."
+        )
+        return None
+
+    channel_key = str(route.get("channel_key") or "novel_cards_archive").strip()
+    server_key = str(route.get("server_key") or "server_json").strip()
+    default_path = str(route.get("default_path") or "config/server.json").strip()
+
+    channel_id = get_integration_channel_id(
+        integration,
+        channel_key,
+        server_key=server_key,
+        default_path=default_path,
+    )
 
     if not channel_id:
         print(
-            f"No novel_cards_archive found in {integration} config/server.json; "
+            f"No {channel_key} found in {integration} {default_path}; "
             f"no host archive card will be posted for {host_config_key(host)}."
         )
         return None
@@ -281,7 +308,7 @@ def host_novel_cards_archive_target(host: str) -> dict | None:
     try:
         channel_id_int = int(channel_id)
     except ValueError:
-        print(f"Invalid novel_cards_archive for {integration}: {channel_id!r}")
+        print(f"Invalid {channel_key} for {integration}: {channel_id!r}")
         return None
 
     return {

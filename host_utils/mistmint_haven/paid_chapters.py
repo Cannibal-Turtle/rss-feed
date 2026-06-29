@@ -304,6 +304,21 @@ async def novel_has_paid_update_mistmint_async(session, novel_url: str) -> bool:
 
     return try_recent or (latest_num > last_posted)
 
+
+def skip_paid_update_precheck_mistmint() -> bool:
+    """Return True when the paid generator should scrape Mistmint directly.
+
+    In API mode, Mistmint's update check and paid scraper both call the same
+    chapters endpoint, so the check is not cheaper. Skipping it avoids fetching
+    /api/novels/slug/{slug}/chapters twice for novels that have updates.
+
+    In STATE/manual mode, keep the precheck because it only reads local state
+    and prevents repeated state-export work.
+    """
+
+    return _mistmint_mode() == "API"
+
+
 def split_paid_chapter_mistmint(raw_title: str):
     """
     Kept for API compatibility with Dragonholic, but Mistmint premium
@@ -314,5 +329,6 @@ def split_paid_chapter_mistmint(raw_title: str):
 __all__ = [
     "scrape_paid_chapters_mistmint_async",
     "novel_has_paid_update_mistmint_async",
+    "skip_paid_update_precheck_mistmint",
     "split_paid_chapter_mistmint",
 ]
