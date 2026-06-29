@@ -360,6 +360,83 @@ async def process_free_api_novel(session, host, novel_title, details):
     return [build_free_item(host, novel_title, details, chap) for chap in (chapters or [])]
 
 
+def should_check_free_novel(novel_title, details, completion_state):
+    if should_skip_completed(novel_title, "free", details, state=completion_state):
+        print(f"Skipping {novel_title}: free completion already exists.")
+        return False
+
+    return True
+
+
+def add_novel_free_feed_tasks(tasks, session, host, data, completion_state):
+    """Queue novel-scoped free feed fetches for one host.
+
+    This keeps feed scheduling separate from source-mode control flow, so
+    main_async only decides *when* to use feed/API and these helpers decide
+    *which mapped novels* should be checked.
+    """
+
+    any_novel_feed = False
+
+    for novel_title, details in data.get("novels", {}).items():
+        feed_url = resolved_novel_feed_url(host, novel_title, details, "free")
+        if not feed_url:
+            continue
+
+        any_novel_feed = True
+
+        if completion_state is None:
+            completion_state = load_completion_state()
+
+        if not should_check_free_novel(novel_title, details, completion_state):
+            continue
+
+        tasks.append(
+            asyncio.create_task(
+                process_novel_free_feed(session, host, novel_title, details, feed_url)
+            )
+        )
+
+    return any_novel_feed, completion_state
+
+
+def add_free_api_tasks(tasks, session, host, data, completion_state):
+    """Queue free API fetches for one host.
+
+    Plain api mode and feed_api fallback both call this same helper, so the
+    fallback uses the exact same mapped-novel API path as normal api mode.
+    """
+
+    utils = get_host_utils(host)
+    scrape_free_chapters_async = utils.get("scrape_free_chapters_async")
+
+    if not scrape_free_chapters_async:
+        print(f"No scrape_free_chapters_async defined for host: {host}")
+        return completion_state
+
+    if completion_state is None:
+        completion_state = load_completion_state()
+
+    any_api_novel = False
+
+    for novel_title, details in data.get("novels", {}).items():
+        any_api_novel = True
+
+        if not should_check_free_novel(novel_title, details, completion_state):
+            continue
+
+        tasks.append(
+            asyncio.create_task(
+                process_free_api_novel(session, host, novel_title, details)
+            )
+        )
+
+    if not any_api_novel:
+        print(f"No free API novels defined for host: {host}")
+
+    return completion_state
+
+
 async def main_async():
     rss_items = []
 
@@ -372,15 +449,14 @@ async def main_async():
 
         # Loop over each host defined in the mapping.
         for host, data in HOSTING_SITE_DATA.items():
-            utils = get_host_utils(host)
             mode = chapter_source_mode(host, "free")
-
             api_scan_reason = ""
 
             # Feed modes: plain feed OR feed_api hybrid.
             # feed_api only falls back to API when a host/global feed looks capped.
             if chapter_source_uses_feed(mode):
                 host_feed_url = host_level_feed_url(host, "free")
+
                 if host_feed_url and not needs_novel_value(host_feed_url):
                     parsed_feed = feedparser.parse(host_feed_url)
                     rss_items.extend(build_host_free_items_from_parsed_feed(host, parsed_feed))
@@ -391,25 +467,13 @@ async def main_async():
                             "and the oldest visible row is still in the current batch"
                         )
                 else:
-                    any_novel_feed = False
-                    for novel_title, details in data.get("novels", {}).items():
-                        feed_url = resolved_novel_feed_url(host, novel_title, details, "free")
-                        if not feed_url:
-                            continue
-
-                        any_novel_feed = True
-                        if completion_state is None:
-                            completion_state = load_completion_state()
-
-                        if should_skip_completed(novel_title, "free", details, state=completion_state):
-                            print(f"Skipping {novel_title}: free completion already exists.")
-                            continue
-
-                        tasks.append(
-                            asyncio.create_task(
-                                process_novel_free_feed(session, host, novel_title, details, feed_url)
-                            )
-                        )
+                    any_novel_feed, completion_state = add_novel_free_feed_tasks(
+                        tasks,
+                        session,
+                        host,
+                        data,
+                        completion_state,
+                    )
 
                     if not any_novel_feed:
                         print(f"No free feed source defined for host: {host}")
@@ -425,33 +489,15 @@ async def main_async():
                 print(f"[free-feed] {api_scan_reason}; scanning mapped novels through API fallback.")
 
             # API modes: plain api OR feed_api fallback.
-            # Host utils only provides the host-specific scraper for ONE novel.
+            # Both paths queue API fetches through the same helper.
             if chapter_source_uses_api(mode):
-                scrape_free_chapters_async = utils.get("scrape_free_chapters_async")
-
-                if scrape_free_chapters_async:
-                    if completion_state is None:
-                        completion_state = load_completion_state()
-
-                    any_api_novel = False
-                    for novel_title, details in data.get("novels", {}).items():
-                        any_api_novel = True
-
-                        if should_skip_completed(novel_title, "free", details, state=completion_state):
-                            print(f"Skipping {novel_title}: free completion already exists.")
-                            continue
-
-                        tasks.append(
-                            asyncio.create_task(
-                                process_free_api_novel(session, host, novel_title, details)
-                            )
-                        )
-
-                    if not any_api_novel:
-                        print(f"No free API novels defined for host: {host}")
-                    continue
-
-                print(f"No scrape_free_chapters_async defined for host: {host}")
+                completion_state = add_free_api_tasks(
+                    tasks,
+                    session,
+                    host,
+                    data,
+                    completion_state,
+                )
                 continue
 
         if tasks:
