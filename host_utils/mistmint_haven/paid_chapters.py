@@ -212,112 +212,6 @@ async def scrape_paid_chapters_mistmint_async(session, novel_url: str, host: str
     return items, ""
 
 
-async def novel_has_paid_update_mistmint_async(session, novel_url: str) -> bool:
-    _log_mistmint_mode("has-paid-check", novel_url)
-
-    if _mistmint_mode() == "STATE":
-        block = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("novels", {})
-        short_code = None
-        for _title, det in block.items():
-            if (det.get("novel_url") or "").rstrip("/") == (novel_url or "").rstrip("/"):
-                short_code = det.get("short_code"); break
-        if not short_code:
-            return False
-        st = _load_mistmint_state()
-        entry = st.get(short_code, {"last_posted_chapter": 0, "latest_available_chapter": 0})
-        return int(entry.get("latest_available_chapter", 0)) > int(entry.get("last_posted_chapter", 0))
-        
-    cookie = _resolve_mistmint_cookie()
-
-    # Fallback to state only when manual mode is forced.
-    if _manual_mode_on():
-        block = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("novels", {})
-        short_code = None
-        for _title, det in block.items():
-            if (det.get("novel_url") or "").rstrip("/") == (novel_url or "").rstrip("/"):
-                short_code = det.get("short_code"); break
-        if not short_code:
-            return False
-        st = _load_mistmint_state()
-        entry = st.get(short_code, {"last_posted_chapter": 0, "latest_available_chapter": 0})
-        return int(entry.get("latest_available_chapter", 0)) > int(entry.get("last_posted_chapter", 0))
-
-    # API path
-    host = "Mistmint Haven"
-    hostdata = HOSTING_SITE_DATA.get(host, {})
-    novel_title, details = _mistmint_find_details_by_url(host, novel_url)
-
-    details_for_api = dict(details or {})
-    details_for_api.setdefault("novel_url", novel_url)
-
-    url = resolve_chapters_api_url(hostdata, novel_title, details_for_api)
-
-    if not url:
-        diag_fail("mistmint-paid-check-api-url-missing", novel_url=novel_url)
-        return False
-
-    try:
-        async with session.get(url, headers=_mistmint_headers(), timeout=AIOHTTP_TIMEOUT) as resp:
-            if resp.status != 200:
-                diag_fail("mistmint-paid-check-http", url=url, code=resp.status)
-                return False
-            data = await resp.json()
-    except Exception as e:
-        diag_fail("mistmint-paid-check-ex", url=url, error=str(e))
-        return False
-
-    nonfree = []
-    for vol in (data or {}).get("data", []) or []:
-        for ch in (vol.get("chapters") or []):
-            if ch.get("isFree") is False and not ch.get("isHidden"):
-                nonfree.append(ch)
-    if not nonfree:
-        return False
-
-    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
-
-    def _dt(s):
-        try:
-            return datetime.datetime.fromisoformat((s or "").replace("Z","+00:00")).astimezone(datetime.timezone.utc)
-        except Exception:
-            return None
-
-    # Recent if createdAt OR updatedAt within 7 days
-    try_recent = any(
-        (lambda ca, ua: (ca and ca >= cutoff) or (ua and ua >= cutoff))(
-            _dt(ch.get("createdAt")), _dt(ch.get("updatedAt"))
-        )
-        for ch in nonfree
-    )
-
-    # Or delta vs state (latest paid chapterNumber > last_posted_chapter)
-    block = HOSTING_SITE_DATA.get("Mistmint Haven", {}).get("novels", {})
-    short_code = None
-    for _title, det in block.items():
-        if (det.get("novel_url") or "").rstrip("/") == (novel_url or "").rstrip("/"):
-            short_code = det.get("short_code"); break
-    latest_num = max(int(float(ch.get("chapterNumber") or 0)) for ch in nonfree)
-    last_posted = 0
-    if short_code:
-        st = _load_mistmint_state()
-        last_posted = int((st.get(short_code, {}) or {}).get("last_posted_chapter", 0))
-
-    return try_recent or (latest_num > last_posted)
-
-
-def skip_paid_update_precheck_mistmint() -> bool:
-    """Return True when the paid generator should scrape Mistmint directly.
-
-    In API mode, Mistmint's update check and paid scraper both call the same
-    chapters endpoint, so the check is not cheaper. Skipping it avoids fetching
-    /api/novels/slug/{slug}/chapters twice for novels that have updates.
-
-    In STATE/manual mode, keep the precheck because it only reads local state
-    and prevents repeated state-export work.
-    """
-
-    return _mistmint_mode() == "API"
-
 
 def split_paid_chapter_mistmint(raw_title: str):
     """
@@ -328,7 +222,5 @@ def split_paid_chapter_mistmint(raw_title: str):
 
 __all__ = [
     "scrape_paid_chapters_mistmint_async",
-    "novel_has_paid_update_mistmint_async",
-    "skip_paid_update_precheck_mistmint",
     "split_paid_chapter_mistmint",
 ]

@@ -13,8 +13,6 @@ from .client import resolve_chapters_api_url
 from .free_chapters import scrape_free_chapters_mistmint_async
 from .paid_chapters import (
     scrape_paid_chapters_mistmint_async,
-    novel_has_paid_update_mistmint_async,
-    skip_paid_update_precheck_mistmint,
     split_paid_chapter_mistmint,
 )
 from .comments import (
@@ -35,8 +33,6 @@ MISTMINT_UTILS = {
     "split_paid_title": split_paid_chapter_mistmint,
     "format_volume_from_url": format_volume_from_url,
     "chapter_num": chapter_num,
-    "novel_has_paid_update_async": novel_has_paid_update_mistmint_async,
-    "skip_paid_update_precheck": skip_paid_update_precheck_mistmint,
     "scrape_paid_chapters_async": scrape_paid_chapters_mistmint_async,
 
     # Comments/etc.

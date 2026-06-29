@@ -277,28 +277,8 @@ async def process_novel(session, host, novel_title):
         print(f"Scraping: {novel_url}")
         utils = get_host_utils(host)
 
-        # Host-agnostic: if the host exposes a cheap update check, use it.
-        # Hosts can opt out when their "check" would hit the same expensive
-        # source as the real scrape. Mistmint API mode does this because both
-        # paths call /api/novels/slug/{slug}/chapters.
-        skip_update_precheck = utils.get("skip_paid_update_precheck", False)
-        if callable(skip_update_precheck):
-            try:
-                skip_update_precheck = bool(skip_update_precheck())
-            except Exception:
-                skip_update_precheck = False
-
-        update_checker = utils.get("novel_has_paid_update_async")
-        if not skip_update_precheck and callable(update_checker):
-            try:
-                has = await update_checker(session, novel_url)
-                if not has:
-                    print(f"Skipping {novel_title}: no recent paid update found.")
-                    return []
-            except Exception:
-                # If a host-specific check fails, fall back to scraping attempt.
-                pass
-
+        # Paid API/source mode now mirrors free API mode:
+        # fetch/build once and let history/state/guid gates decide what is new.
         paid_chapters, _main_desc = await utils["scrape_paid_chapters_async"](session, novel_url, host)
         return [build_paid_item(host, novel_title, chap) for chap in (paid_chapters or [])]
 

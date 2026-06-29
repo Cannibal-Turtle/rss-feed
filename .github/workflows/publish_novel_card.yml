@@ -1,4 +1,4 @@
-name: Publish Novel Card Embed
+name: Publish Novel Card
 
 on:
   workflow_dispatch:
