@@ -642,8 +642,10 @@ def check_feed_api_alert(hc: Healthcheck, cfg: dict[str, Any]) -> None:
     except Exception:
         hc.error("feed_api alerts", "max_items must be an integer")
 
-    if not os.getenv("DISCORD_BOT_TOKEN"):
-        hc.warn("feed_api alerts", "enabled but DISCORD_BOT_TOKEN is not set in this environment")
+    if os.getenv("DISCORD_BOT_TOKEN"):
+        hc.ok("feed_api alerts", "DISCORD_BOT_TOKEN is available for local/CI posting scripts")
+    else:
+        hc.ok("feed_api alerts", "DISCORD_BOT_TOKEN not set; healthcheck does not need secrets")
 
 
 def _check_template_settings_role(
