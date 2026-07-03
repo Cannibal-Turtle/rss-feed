@@ -12,7 +12,7 @@ last_chapter = "Chapter 81"
 has_free = true
 has_paid = true
 is_nsfw = false
-is_membership = false
+is_membership = true
 
 discord_color = "#22aa58"
 
