@@ -484,6 +484,27 @@ def normalize_world_hopping_tag(value: str) -> str:
     return tag
 
 
+def order_tags(tags: list[str], supported_tags: dict[str, str]) -> list[str]:
+    """Return tags in the stable Discord role order."""
+    priority = [tag for tag in TAG_PRIORITY if tag in supported_tags]
+    priority_index = {tag: i for i, tag in enumerate(priority)}
+    return sorted(tags, key=lambda tag: priority_index.get(tag, 999))
+
+
+def enforce_mutually_exclusive_tag_groups(tags: list[str]) -> list[str]:
+    """
+    Keep mutually exclusive broad/relationship tags from coexisting.
+
+    Mistmint site genres can include both Romance and Yaoi. For Discord tags,
+    BL is the more specific/accurate role, so keep bl and drop romance when both
+    are inferred. The full native list is still preserved separately in site_genres.
+    """
+    normalized = {norm_key(tag) for tag in tags}
+    if "bl" in normalized and "romance" in normalized:
+        return [tag for tag in tags if norm_key(tag) != "romance"]
+    return tags
+
+
 def apply_world_hopping_tag(tags: list[str], world_hopping_tag: str, supported_tags: dict[str, str]) -> list[str]:
     """
     If a world-hopping tag is chosen, keep it inside tags so downstream Discord
@@ -494,7 +515,7 @@ def apply_world_hopping_tag(tags: list[str], world_hopping_tag: str, supported_t
     world-hopping role.
     """
     if not world_hopping_tag:
-        return tags
+        return order_tags(enforce_mutually_exclusive_tag_groups(tags), supported_tags)
 
     blocked = {"transmigration", "quick transmigration", "infinite flow"}
     cleaned = [tag for tag in tags if norm_key(tag) not in blocked]
@@ -503,9 +524,7 @@ def apply_world_hopping_tag(tags: list[str], world_hopping_tag: str, supported_t
     if normalized_special in supported_tags and normalized_special not in cleaned:
         cleaned.append(normalized_special)
 
-    priority = [tag for tag in TAG_PRIORITY if tag in supported_tags]
-    priority_index = {tag: i for i, tag in enumerate(priority)}
-    return sorted(cleaned, key=lambda tag: priority_index.get(tag, 999))
+    return order_tags(enforce_mutually_exclusive_tag_groups(cleaned), supported_tags)
 
 
 def infer_tags(api_novel: dict[str, Any], supported_tags: dict[str, str]) -> tuple[list[str], list[str]]:
@@ -544,9 +563,8 @@ def infer_tags(api_novel: dict[str, Any], supported_tags: dict[str, str]) -> tup
             unmapped.append(raw)
 
     # Stable, neat order based on your Discord tag role config.
-    priority = [tag for tag in TAG_PRIORITY if tag in supported_tags]
-    priority_index = {tag: i for i, tag in enumerate(priority)}
-    ordered = sorted(found, key=lambda tag: priority_index.get(tag, 999))
+    found = enforce_mutually_exclusive_tag_groups(found)
+    ordered = order_tags(found, supported_tags)
     return ordered, unmapped
 
 
