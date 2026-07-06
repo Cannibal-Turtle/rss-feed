@@ -4,7 +4,22 @@
     <title>Aggregated Comments Feed</title>
     <link>https://github.com/Cannibal-Turtle</link>
     <description>Aggregated RSS feed for comments across hosting sites.</description>
-    <lastBuildDate>Mon, 06 Jul 2026 18:30:52 +0000</lastBuildDate>
+    <lastBuildDate>Mon, 06 Jul 2026 19:00:56 +0000</lastBuildDate>
+    <item>
+      <title>After the Male Leads Went Crazy, They All Turned into Male Ghosts</title>
+      <chapter>Chapter 15</chapter>
+      <link>https://www.mistminthaven.com/novels/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts/arc-1-the-charming-landlord-is-too-hard-to-handle-chapter-15</link>
+      <dc:creator><![CDATA[bitterbeo]]></dc:creator>
+      <description><![CDATA[The plot thickens! 😮]]></description>
+      <translator>CannibalTurtle</translator>
+      <short_code>AMLWC</short_code>
+      <featuredImage url="https://i.imgur.com/EBt5zTK.jpeg"/>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <category>SFW</category>
+      <pubDate>Mon, 06 Jul 2026 18:59:30 +0000</pubDate>
+      <guid isPermaLink="false">6b09a9ae-8eae-4c47-b770-beb34afffa42</guid>
+    </item>
     <item>
       <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
       <chapter>Chapter 14</chapter>
@@ -147,21 +162,6 @@
       <category>SFW</category>
       <pubDate>Fri, 03 Jul 2026 16:04:18 +0000</pubDate>
       <guid isPermaLink="false">7cb0a926-6d0d-476c-9b73-01675ba8d41b</guid>
-    </item>
-    <item>
-      <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
-      <chapter>Homepage</chapter>
-      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring</link>
-      <dc:creator><![CDATA[xoMireuxo]]></dc:creator>
-      <description><![CDATA[Who comes from TikTok? 'cause I am, hehehe. It was a vertical short drama and the animation is AI. I don't like the inconsistency of the animation but the story hooked me, so when the video stopped midway in Arc 1 I knew I had to find if there's a novel of that. And thankfully, a good Samaritan commented the title of the novel and I found this. Btw, thanks for translating this, translator-nim!]]></description>
-      <translator>CannibalTurtle</translator>
-      <short_code>TVITPA</short_code>
-      <featuredImage url="https://i.imgur.com/iqZDcKV.jpeg"/>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <category>SFW</category>
-      <pubDate>Fri, 03 Jul 2026 15:30:29 +0000</pubDate>
-      <guid isPermaLink="false">33d12bcb-40c2-4b49-a959-36e2fd450f21</guid>
     </item>
   </channel>
 </rss>
