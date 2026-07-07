@@ -4,7 +4,23 @@
     <title>Aggregated Comments Feed</title>
     <link>https://github.com/Cannibal-Turtle</link>
     <description>Aggregated RSS feed for comments across hosting sites.</description>
-    <lastBuildDate>Tue, 07 Jul 2026 07:00:53 +0000</lastBuildDate>
+    <lastBuildDate>Tue, 07 Jul 2026 07:30:49 +0000</lastBuildDate>
+    <item>
+      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
+      <chapter>Chapter 694</chapter>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-19-top-musician-gong-autistic-little-pitiful-shou-chapter-694</link>
+      <dc:creator><![CDATA[CrunchyGourd]]></dc:creator>
+      <description><![CDATA[Sticker comment]]></description>
+      <commentImage url="https://cdn.discordapp.com/emojis/1514344183475732520.webp?size=128&amp;quality=lossless"/>
+      <translator>CannibalTurtle</translator>
+      <short_code>TDLBKGC</short_code>
+      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <category>SFW</category>
+      <pubDate>Tue, 07 Jul 2026 07:26:45 +0000</pubDate>
+      <guid isPermaLink="false">a717b1d4-45ed-4423-8de0-a786bf934d94</guid>
+    </item>
     <item>
       <title>After the Male Leads Went Crazy, They All Turned into Male Ghosts</title>
       <chapter>Chapter 15</chapter>
@@ -146,22 +162,6 @@
       <category>SFW</category>
       <pubDate>Fri, 03 Jul 2026 23:09:51 +0000</pubDate>
       <guid isPermaLink="false">dadbf345-a705-43fa-af13-f2651407b2a6</guid>
-    </item>
-    <item>
-      <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
-      <chapter>Homepage</chapter>
-      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring</link>
-      <dc:creator><![CDATA[CannibalTurtle]]></dc:creator>
-      <description><![CDATA[I saw that one the other day! If you don't know, there's also a manhua and live action *wink wink*]]></description>
-      <reply_chain><![CDATA[ᯓ✿ In reply to xoMireuxo]]></reply_chain>
-      <translator>CannibalTurtle</translator>
-      <short_code>TVITPA</short_code>
-      <featuredImage url="https://i.imgur.com/iqZDcKV.jpeg"/>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <category>SFW</category>
-      <pubDate>Fri, 03 Jul 2026 16:04:18 +0000</pubDate>
-      <guid isPermaLink="false">7cb0a926-6d0d-476c-9b73-01675ba8d41b</guid>
     </item>
   </channel>
 </rss>
