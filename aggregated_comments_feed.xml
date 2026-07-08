@@ -4,7 +4,23 @@
     <title>Aggregated Comments Feed</title>
     <link>https://github.com/Cannibal-Turtle</link>
     <description>Aggregated RSS feed for comments across hosting sites.</description>
-    <lastBuildDate>Wed, 08 Jul 2026 09:00:49 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 08 Jul 2026 09:30:53 +0000</lastBuildDate>
+    <item>
+      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
+      <chapter>Chapter 697</chapter>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-19-top-musician-gong-autistic-little-pitiful-shou-chapter-697</link>
+      <dc:creator><![CDATA[CrunchyGourd]]></dc:creator>
+      <description><![CDATA[Sticker comment]]></description>
+      <commentImage url="https://cdn.discordapp.com/emojis/1514344183475732520.webp?size=128&amp;quality=lossless"/>
+      <translator>CannibalTurtle</translator>
+      <short_code>TDLBKGC</short_code>
+      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <category>SFW</category>
+      <pubDate>Wed, 08 Jul 2026 09:08:01 +0000</pubDate>
+      <guid isPermaLink="false">99ffe45e-1fd9-4c0b-9de2-0fbcaef6becd</guid>
+    </item>
     <item>
       <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
       <chapter>Chapter 694</chapter>
@@ -147,21 +163,6 @@
       <category>SFW</category>
       <pubDate>Sat, 04 Jul 2026 07:06:51 +0000</pubDate>
       <guid isPermaLink="false">598c9fbb-ef2d-4471-8ec0-49d502e4be90</guid>
-    </item>
-    <item>
-      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
-      <chapter>Homepage</chapter>
-      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught</link>
-      <dc:creator><![CDATA[oreo.badtz]]></dc:creator>
-      <description><![CDATA[This is sooo good!! Literally pulling all-nighters can't wait for more available chapters!]]></description>
-      <translator>CannibalTurtle</translator>
-      <short_code>TDLBKGC</short_code>
-      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <category>SFW</category>
-      <pubDate>Fri, 03 Jul 2026 23:09:51 +0000</pubDate>
-      <guid isPermaLink="false">dadbf345-a705-43fa-af13-f2651407b2a6</guid>
     </item>
   </channel>
 </rss>
