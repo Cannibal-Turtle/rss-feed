@@ -4,7 +4,23 @@
     <title>Aggregated Comments Feed</title>
     <link>https://github.com/Cannibal-Turtle</link>
     <description>Aggregated RSS feed for comments across hosting sites.</description>
-    <lastBuildDate>Fri, 10 Jul 2026 05:01:14 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 10 Jul 2026 05:31:10 +0000</lastBuildDate>
+    <item>
+      <title>Help! I Accidentally Flirted with the Lord God, What Do I Do?!</title>
+      <chapter>Chapter 2</chapter>
+      <link>https://www.mistminthaven.com/novels/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do/arc-1-cannon-fodder-in-an-entertainment-industry-domineering-ceo-novel-chapter-2</link>
+      <dc:creator><![CDATA[mai]]></dc:creator>
+      <description><![CDATA[Sticker comment]]></description>
+      <commentImage url="https://cdn.discordapp.com/emojis/1514344178207952946.webp?size=128&amp;quality=lossless"/>
+      <translator>CannibalTurtle</translator>
+      <short_code>HIAFLG</short_code>
+      <featuredImage url="https://i.imgur.com/7LRK6Uw.png"/>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <category>SFW</category>
+      <pubDate>Fri, 10 Jul 2026 05:05:02 +0000</pubDate>
+      <guid isPermaLink="false">fd767c48-3712-4540-bc0c-0259db05cd64</guid>
+    </item>
     <item>
       <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
       <chapter>Chapter 4</chapter>
@@ -147,21 +163,6 @@
       <category>SFW</category>
       <pubDate>Mon, 06 Jul 2026 08:46:38 +0000</pubDate>
       <guid isPermaLink="false">ec321d5c-294a-452f-9bb5-ae779d9ca7fb</guid>
-    </item>
-    <item>
-      <title>After Transmigrating into the Villain, I Got a HE with the Female Lead's Older Brother</title>
-      <chapter>Chapter 43</chapter>
-      <link>https://www.mistminthaven.com/novels/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother/chapter-43</link>
-      <dc:creator><![CDATA[ChimiyaT0T]]></dc:creator>
-      <description><![CDATA[And I oop Thnx ya for the chappiieee~]]></description>
-      <translator>CannibalTurtle</translator>
-      <short_code>ATVHE</short_code>
-      <featuredImage url="https://i.imgur.com/lGogTew.png"/>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <category>SFW</category>
-      <pubDate>Mon, 06 Jul 2026 02:55:19 +0000</pubDate>
-      <guid isPermaLink="false">87ee28f7-2f9b-44b9-83a1-e03e2108216e</guid>
     </item>
   </channel>
 </rss>
