@@ -4,7 +4,23 @@
     <title>Aggregated Comments Feed</title>
     <link>https://github.com/Cannibal-Turtle</link>
     <description>Aggregated RSS feed for comments across hosting sites.</description>
-    <lastBuildDate>Fri, 10 Jul 2026 01:30:28 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 10 Jul 2026 02:00:24 +0000</lastBuildDate>
+    <item>
+      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
+      <chapter>Chapter 2</chapter>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-2</link>
+      <dc:creator><![CDATA[Jack]]></dc:creator>
+      <description><![CDATA[Sticker comment]]></description>
+      <commentImage url="https://cdn.discordapp.com/emojis/1514344183475732520.webp?size=128&amp;quality=lossless"/>
+      <translator>CannibalTurtle</translator>
+      <short_code>TDLBKGC</short_code>
+      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <category>SFW</category>
+      <pubDate>Fri, 10 Jul 2026 01:50:35 +0000</pubDate>
+      <guid isPermaLink="false">c1561eaf-9ba8-48f5-ab93-e98bd088bb1a</guid>
+    </item>
     <item>
       <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
       <chapter>Chapter 700</chapter>
@@ -146,22 +162,6 @@
       <category>SFW</category>
       <pubDate>Sat, 04 Jul 2026 18:55:06 +0000</pubDate>
       <guid isPermaLink="false">d7d30f3e-d17b-4571-9925-c8389dda7da4</guid>
-    </item>
-    <item>
-      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
-      <chapter>Chapter 585</chapter>
-      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-16-gentle-film-emperor-gong-little-nobody-assistant-shou-chapter-585</link>
-      <dc:creator><![CDATA[CrunchyGourd]]></dc:creator>
-      <description><![CDATA[Sticker comment]]></description>
-      <commentImage url="https://cdn.discordapp.com/emojis/1514344183475732520.webp?size=128&amp;quality=lossless"/>
-      <translator>CannibalTurtle</translator>
-      <short_code>TDLBKGC</short_code>
-      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <category>SFW</category>
-      <pubDate>Sat, 04 Jul 2026 08:18:19 +0000</pubDate>
-      <guid isPermaLink="false">aa1dc413-6b4f-4afc-a327-92b897f7e280</guid>
     </item>
   </channel>
 </rss>
