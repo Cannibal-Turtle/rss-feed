@@ -1,0 +1,26 @@
+name: Delete Today's Discord Messages (MYT)
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel_ids:
+        description: "Channel/Thread IDs; separate multiple IDs with commas, spaces, or new lines."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  delete_today:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Delete today's messages (MYT)
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          CHANNEL_IDS: ${{ inputs.channel_ids }}
+        run: python tools/delete_discord_today.py
