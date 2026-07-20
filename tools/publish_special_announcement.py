@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT))
 from novel_mappings import HOSTING_SITE_DATA
 from message_renderer import load_template_settings, render_message, render_text, to_discord_api_payload
 from message_settings import setting_str
+from announcement_banner import AUTO_CROP_POSITION, crop_announcement_image
 
 try:
     from config_loader import (
@@ -117,8 +118,8 @@ BANNER_FILENAME = BANNER_OUTPUT_PATH.name
 BANNER_SIZE = (1600, 400)
 BANNER_RATIO = BANNER_SIZE[0] / BANNER_SIZE[1]
 VALID_MODES = {"crop preview", "preview", "publish"}
-VALID_CROP_POSITIONS = {"top", "upper", "upper center", "center", "lower center", "lower", "bottom"}
-CROP_PREVIEW_POSITIONS = ["top", "upper", "upper center", "center", "lower center", "lower", "bottom"]
+VALID_CROP_POSITIONS = {"auto", "top", "upper", "upper center", "center", "lower center", "lower", "bottom"}
+CROP_PREVIEW_POSITIONS = ["auto", "top", "upper", "upper center", "center", "lower center", "lower", "bottom"]
 
 
 def host_config_key(host: str) -> str:
@@ -594,37 +595,12 @@ def download_image(url: str) -> Image.Image:
     return ImageOps.exif_transpose(image)
 
 
-def crop_to_ratio(image: Image.Image, ratio: float, crop_position: str = "upper center") -> Image.Image:
-    width, height = image.size
-
-    if width <= 0 or height <= 0:
-        raise RuntimeError(f"Invalid image size: {width}x{height}")
-
-    current_ratio = width / height
-
-    if current_ratio > ratio:
-        new_width = int(height * ratio)
-        left = max((width - new_width) // 2, 0)
-        return image.crop((left, 0, left + new_width, height))
-
-    if current_ratio < ratio:
-        new_height = int(width / ratio)
-        excess = max(height - new_height, 0)
-        vertical_positions = {
-            "top": 0.00,
-            "upper": 0.20,
-            "upper center": 0.35,
-            "center": 0.50,
-            "lower center": 0.65,
-            "lower": 0.80,
-            "bottom": 1.00,
-        }
-        factor = vertical_positions.get((crop_position or "upper center").strip().lower(), 0.35)
-        top = int(round(excess * factor))
-        top = max(0, min(top, excess))
-        return image.crop((0, top, width, top + new_height))
-
-    return image
+def crop_to_ratio(
+    image: Image.Image,
+    ratio: float,
+    crop_position: str = AUTO_CROP_POSITION,
+) -> Image.Image:
+    return crop_announcement_image(image, ratio, crop_position=crop_position)
 
 
 def save_image_as_png(image: Image.Image, path: Path) -> None:
@@ -636,7 +612,7 @@ def save_image_as_png(image: Image.Image, path: Path) -> None:
     image.save(path, "PNG", optimize=True)
 
 
-def save_banner_preview_from_url(url: str, path: Path, *, crop: bool, crop_position: str = "upper center") -> Path:
+def save_banner_preview_from_url(url: str, path: Path, *, crop: bool, crop_position: str = AUTO_CROP_POSITION) -> Path:
     image = download_image(url)
 
     if crop:
@@ -821,7 +797,7 @@ def parse_args():
     short_code = sys.argv[1].upper().strip()
     banner_url = sys.argv[2].strip() if len(sys.argv) >= 3 else ""
     mode = sys.argv[3].strip().lower() if len(sys.argv) >= 4 else "publish"
-    crop_position = sys.argv[4].strip().lower() if len(sys.argv) >= 5 else "upper center"
+    crop_position = sys.argv[4].strip().lower() if len(sys.argv) >= 5 else AUTO_CROP_POSITION
 
     return short_code, banner_url, mode, crop_position
 
@@ -829,8 +805,8 @@ def parse_args():
 def usage():
     print("Usage: python tools/publish_special_announcement.py <short_code> [banner_url] [mode] [crop_position]")
     print("Modes: crop preview, preview, publish")
-    print("Crop positions: top, upper, upper center, center, lower center, lower, bottom")
-    print("banner_url is optional. Leave it empty to auto-crop the novel featured_image to 4:1.")
+    print("Crop positions: auto, top, upper, upper center, center, lower center, lower, bottom")
+    print("banner_url is optional. Leave it empty to auto-crop the novel featured_image to 4:1. Auto uses MediaPipe face detection with upper-center fallback.")
     print("Edit message_templates/special_announcement.toml to change title, body, button label, or button URL.")
 
 

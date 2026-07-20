@@ -12,11 +12,12 @@ on:
         required: false
         type: string
       crop_position:
-        description: "Crop position used only when banner_url is empty. Default is upper center."
+        description: "Crop position used only when banner_url is empty. Default is auto (MediaPipe face-aware with upper-center fallback)."
         required: true
-        default: upper center
+        default: auto
         type: choice
         options:
+          - auto
           - top
           - upper
           - upper center

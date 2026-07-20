@@ -4,3 +4,4 @@ aiohttp
 beautifulsoup4
 requests
 Pillow
+mediapipe>=0.10.31,<0.11
