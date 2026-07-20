@@ -280,36 +280,66 @@ def _looks_like_title_strip(
     return very_wide_strip or lower_title_band or not looks_like_subject
 
 
-def _choose_title_aware_fallback(
-    rejected_boxes: list[tuple[float, float, float, float]],
-    *,
-    image_height: float,
-    default: str = DEFAULT_FALLBACK_CROP_POSITION,
-) -> str:
-    """Pick the opposite vertical area when title-like text was rejected."""
-    if not rejected_boxes or image_height <= 0:
-        return default
+def _combine_boxes(
+    boxes: list[tuple[float, float, float, float]],
+) -> tuple[float, float, float, float] | None:
+    if not boxes:
+        return None
 
-    total_weight = 0.0
-    weighted_center = 0.0
+    return (
+        min(box[0] for box in boxes),
+        min(box[1] for box in boxes),
+        max(box[2] for box in boxes),
+        max(box[3] for box in boxes),
+    )
 
-    for x1, y1, x2, y2 in rejected_boxes:
-        box_width = max(x2 - x1, 1.0)
-        box_height = max(y2 - y1, 1.0)
-        weight = box_width * box_height
-        center_y_fraction = ((y1 + y2) / 2.0) / image_height
-        weighted_center += center_y_fraction * weight
-        total_weight += weight
 
-    if total_weight <= 0:
-        return default
+def _crop_away_from_title_box(
+    image: Image.Image,
+    ratio: float,
+    title_box: tuple[float, float, float, float],
+) -> tuple[Image.Image, str]:
+    """Place the crop directly above or below a rejected title region."""
+    width, height = image.size
 
-    center_y_fraction = weighted_center / total_weight
-    if center_y_fraction >= 0.55:
-        return "upper center"
-    if center_y_fraction <= 0.45:
-        return "lower center"
-    return default
+    if width <= 0 or height <= 0:
+        raise RuntimeError(f"Invalid image size: {width}x{height}")
+
+    current_ratio = width / height
+    if current_ratio >= ratio:
+        return (
+            _crop_by_position(image, ratio, DEFAULT_FALLBACK_CROP_POSITION),
+            f"{DEFAULT_FALLBACK_CROP_POSITION} fallback",
+        )
+
+    new_height = max(1, int(width / ratio))
+    _, title_top, _, title_bottom = title_box
+    title_top = _clamp(title_top, 0, height)
+    title_bottom = _clamp(title_bottom, 0, height)
+    title_top_fraction = title_top / height
+
+    if title_top_fraction < 0.48:
+        # The title begins in the upper half, so the likely artwork is below it.
+        top = int(round(title_bottom))
+        top = int(_clamp(top, 0, max(height - new_height, 0)))
+        return image.crop((0, top, width, top + new_height)), "below rejected title"
+
+    if title_top_fraction > 0.52:
+        # The title begins in the lower half, so preserve the artwork above it.
+        top = int(round(title_top - new_height))
+        top = int(_clamp(top, 0, max(height - new_height, 0)))
+        return image.crop((0, top, width, top + new_height)), "above rejected title"
+
+    top_space = title_top
+    bottom_space = height - title_bottom
+    if bottom_space > top_space:
+        top = int(round(title_bottom))
+        top = int(_clamp(top, 0, max(height - new_height, 0)))
+        return image.crop((0, top, width, top + new_height)), "below rejected title"
+
+    top = int(round(title_top - new_height))
+    top = int(_clamp(top, 0, max(height - new_height, 0)))
+    return image.crop((0, top, width, top + new_height)), "above rejected title"
 
 
 def _candidate_score(
@@ -328,7 +358,7 @@ def _candidate_score(
 
 
 def _detect_yolo_subject_focus_box(image: Image.Image):
-    """Return a subject box, focus kind, status, and optional fallback."""
+    """Return a subject box, kind, status, fallback, and rejected title box."""
     try:
         model = _get_yolo_model()
         result = model.predict(
@@ -342,11 +372,11 @@ def _detect_yolo_subject_focus_box(image: Image.Image):
             verbose=False,
         )[0]
     except Exception as exc:
-        return None, None, f"YOLOE failed: {type(exc).__name__}: {exc}", None
+        return None, None, f"YOLOE failed: {type(exc).__name__}: {exc}", None, None
 
     boxes = getattr(result, "boxes", None)
     if boxes is None or len(boxes) == 0:
-        return None, None, "YOLOE detected no objects", None
+        return None, None, "YOLOE detected no objects", None, None
 
     width, height = image.size
     image_area = max(float(width * height), 1.0)
@@ -418,12 +448,10 @@ def _detect_yolo_subject_focus_box(image: Image.Image):
                 None,
                 None,
                 f"YOLOE rejected title-like detection(s): {labels}",
-                _choose_title_aware_fallback(
-                    rejected_title_boxes,
-                    image_height=height,
-                ),
+                None,
+                _combine_boxes(rejected_title_boxes),
             )
-        return None, None, "YOLOE found no usable person, character, or animal subject", None
+        return None, None, "YOLOE found no usable person, character, or animal subject", None, None
 
     face_candidates = [candidate for candidate in candidates if candidate["kind"] == "face"]
     pool = face_candidates or candidates
@@ -478,6 +506,7 @@ def _detect_yolo_subject_focus_box(image: Image.Image):
         ),
         focus_kind,
         status,
+        None,
         None,
     )
 
@@ -568,7 +597,7 @@ def crop_announcement_image(
     normalized = (crop_position or AUTO_CROP_POSITION).strip().lower()
 
     if normalized == AUTO_CROP_POSITION:
-        focus_box, focus_kind, status, suggested_fallback = _detect_yolo_subject_focus_box(image)
+        focus_box, focus_kind, status, suggested_fallback, rejected_title_box = _detect_yolo_subject_focus_box(image)
         if focus_box is not None and focus_kind is not None:
             print(f"[banner crop] Resolved auto crop: {status}.")
             return _crop_around_focus_box(
@@ -577,6 +606,18 @@ def crop_announcement_image(
                 focus_box,
                 focus_kind=focus_kind,
             )
+
+        if rejected_title_box is not None:
+            cropped, resolution = _crop_away_from_title_box(
+                image,
+                ratio,
+                rejected_title_box,
+            )
+            print(
+                f"[banner crop] {status}; "
+                f"resolved auto crop: {resolution}."
+            )
+            return cropped
 
         resolved_fallback = suggested_fallback or fallback_crop_position
         print(
