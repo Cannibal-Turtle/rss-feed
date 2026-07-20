@@ -76,3 +76,6 @@ animated = true
 
 [settings]
 public_global_mention = "||@everyone||"
+
+[settings.banner]
+ratio = "4:1"

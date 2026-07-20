@@ -123,11 +123,47 @@ PUBLIC_GLOBAL_MENTION = setting_str(
 NOVELS_DIR = ROOT / "mappings" / "novels"
 BANNER_OUTPUT_PATH = Path(os.environ.get("MEMBERSHIP_BANNER_OUTPUT", "banner.png")).resolve()
 BANNER_FILENAME = BANNER_OUTPUT_PATH.name
+DEFAULT_BANNER_WIDTH = 1600
+DEFAULT_BANNER_RATIO_TEXT = "4:1"
+BANNER_SETTINGS = _TEMPLATE_SETTINGS.get("banner", {})
+if not isinstance(BANNER_SETTINGS, dict):
+    raise RuntimeError("[settings.banner] must be a TOML table/object")
+TEMPLATE_BANNER_RATIO_TEXT = str(BANNER_SETTINGS.get("ratio") or DEFAULT_BANNER_RATIO_TEXT).strip()
+BANNER_RATIO_TEXT = DEFAULT_BANNER_RATIO_TEXT
 BANNER_SIZE = (1600, 400)
 BANNER_RATIO = BANNER_SIZE[0] / BANNER_SIZE[1]
 VALID_MODES = {"crop preview", "preview", "publish"}
 VALID_CROP_POSITIONS = {"auto", "top", "upper", "upper center", "center", "lower center", "lower", "bottom"}
 CROP_PREVIEW_POSITIONS = ["auto", "top", "upper", "upper center", "center", "lower center", "lower", "bottom"]
+
+
+
+def configure_banner_ratio(override: str = "") -> str:
+    global BANNER_RATIO_TEXT, BANNER_SIZE, BANNER_RATIO
+
+    requested = (override or "").strip() or TEMPLATE_BANNER_RATIO_TEXT or DEFAULT_BANNER_RATIO_TEXT
+
+    try:
+        width_text, height_text = requested.split(":", 1)
+        ratio_width = float(width_text.strip())
+        ratio_height = float(height_text.strip())
+        if ratio_width <= 0 or ratio_height <= 0:
+            raise ValueError
+
+        output_height = max(1, int(round(DEFAULT_BANNER_WIDTH * ratio_height / ratio_width)))
+        BANNER_RATIO_TEXT = requested
+        BANNER_SIZE = (DEFAULT_BANNER_WIDTH, output_height)
+        BANNER_RATIO = ratio_width / ratio_height
+        return requested
+    except Exception:
+        print(
+            f"⚠️ Invalid banner ratio {requested!r}; falling back to {DEFAULT_BANNER_RATIO_TEXT}.",
+            file=sys.stderr,
+        )
+        BANNER_RATIO_TEXT = DEFAULT_BANNER_RATIO_TEXT
+        BANNER_SIZE = (DEFAULT_BANNER_WIDTH, 400)
+        BANNER_RATIO = BANNER_SIZE[0] / BANNER_SIZE[1]
+        return DEFAULT_BANNER_RATIO_TEXT
 
 
 def host_config_key(host: str) -> str:
@@ -672,7 +708,7 @@ def prepare_banner_image(*, novel: dict, manual_banner_url: str, mode: str, crop
 
     - manual_banner_url filled: download it and upload it to Discord as an attachment,
       so the announcement does not depend on the external image URL staying alive.
-    - manual_banner_url empty: use novel featured_image, crop it to 4:1 using crop_position,
+    - manual_banner_url empty: use novel featured_image and the configured ratio/crop position,
       and send it to Discord as an attachment.
     - crop preview + banner_url empty: writes all crop positions plus a contact sheet.
     """
@@ -696,7 +732,7 @@ def prepare_banner_image(*, novel: dict, manual_banner_url: str, mode: str, crop
     else:
         save_banner_preview_from_url(featured_image, BANNER_OUTPUT_PATH, crop=True, crop_position=crop_position)
 
-    return f"attachment://{BANNER_FILENAME}", BANNER_OUTPUT_PATH, f"auto-cropped featured_image ({crop_position})"
+    return f"attachment://{BANNER_FILENAME}", BANNER_OUTPUT_PATH, f"auto-cropped featured_image ({crop_position}, {BANNER_RATIO_TEXT})"
 
 
 def load_toml_file(path: Path) -> dict:
@@ -843,10 +879,11 @@ def resolve_publish_targets(host, hostdata, short_code):
     return dedupe_targets(targets)
 
 def usage():
-    print("Usage: python tools/publish_membership_update.py <short_code> [banner_url] [mode] [crop_position]")
+    print("Usage: python tools/publish_membership_update.py <short_code> [banner_url] [mode] [crop_position] [banner_ratio]")
     print("Modes: crop preview, preview, publish")
     print("Crop positions: auto, top, upper, upper center, center, lower center, lower, bottom")
-    print("banner_url is optional. Leave it empty to auto-crop the novel featured_image to 4:1. Auto uses MediaPipe face detection with upper-center fallback.")
+    print("banner_url is optional. Leave it empty to auto-crop the novel featured_image.")
+    print("banner_ratio is optional, e.g. 8:3. Leave it blank to use [settings.banner].ratio from the TOML.")
 
 
 def main():
@@ -858,6 +895,8 @@ def main():
     banner_url_arg = sys.argv[2].strip() if len(sys.argv) >= 3 else ""
     mode = sys.argv[3].strip().lower() if len(sys.argv) >= 4 else "publish"
     crop_position = sys.argv[4].strip().lower() if len(sys.argv) >= 5 else AUTO_CROP_POSITION
+    banner_ratio_override = sys.argv[5].strip() if len(sys.argv) >= 6 else ""
+    configure_banner_ratio(banner_ratio_override)
 
     if mode not in VALID_MODES:
         print(f"Error: unknown mode {mode!r}.")
@@ -884,6 +923,7 @@ def main():
 
     print(f"Membership update mode: {mode}")
     print(f"Crop position: {crop_position}")
+    print(f"Banner ratio: {BANNER_RATIO_TEXT} ({BANNER_SIZE[0]}x{BANNER_SIZE[1]})")
     print(f"Novel: {novel_title}")
     print(f"Banner source: {banner_source}")
 
@@ -893,7 +933,7 @@ def main():
     if mode == "crop preview":
         print("Crop/image preview only. No Discord message sent and no TOML edited.")
         if banner_url_arg:
-            print("Note: crop_position is ignored when banner_url is provided.")
+            print("Note: crop_position and banner_ratio are ignored when banner_url is provided.")
             print("Manual banner_url preview creates one image only because it is treated as an already-made banner.")
         else:
             print("Created crop preview files:")

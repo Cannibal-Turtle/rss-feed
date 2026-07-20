@@ -92,3 +92,6 @@ time_format = ":D"
 # Blank = use selected novel's assigned discord_color.
 # Fill with hex to override for this announcement, e.g. "#f8d8c9"
 accent_color = ""
+
+[settings.banner]
+ratio = "4:1"

@@ -8,7 +8,11 @@ on:
         required: true
         type: string
       banner_url:
-        description: "Optional banner image URL. Leave empty to auto-crop the novel featured_image to 4:1."
+        description: "Optional banner image URL. Leave empty to auto-crop the novel featured_image."
+        required: false
+        type: string
+      banner_ratio:
+        description: "Optional crop ratio, e.g. 8:3 or 4:1. Leave blank to use message_templates TOML."
         required: false
         type: string
       blur_banner:
@@ -22,7 +26,7 @@ on:
         default: false
         type: boolean
       crop_position:
-        description: "Crop position used only when banner_url is empty. Default is auto (MediaPipe face-aware with upper-center fallback)."
+        description: "Crop position used only when banner_url is empty. Default is auto subject-aware cropping with upper-center fallback."
         required: true
         default: auto
         type: choice
@@ -82,6 +86,7 @@ jobs:
         run: |
           echo "SHORT_CODE=${{ github.event.inputs.short_code }}" >> $GITHUB_ENV
           echo "BANNER_URL=${{ github.event.inputs.banner_url }}" >> $GITHUB_ENV
+          echo "BANNER_RATIO=${{ github.event.inputs.banner_ratio }}" >> $GITHUB_ENV
           echo "SPECIAL_ANNOUNCEMENT_BLUR_BANNER=${{ github.event.inputs.blur_banner }}" >> $GITHUB_ENV
           echo "SPECIAL_ANNOUNCEMENT_BLUR_CARD=${{ github.event.inputs.blur_card }}" >> $GITHUB_ENV
           echo "CROP_POSITION=${{ github.event.inputs.crop_position }}" >> $GITHUB_ENV
@@ -92,7 +97,7 @@ jobs:
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         run: |
-          python tools/publish_special_announcement.py "$SHORT_CODE" "$BANNER_URL" "$MODE" "$CROP_POSITION"
+          python tools/publish_special_announcement.py "$SHORT_CODE" "$BANNER_URL" "$MODE" "$CROP_POSITION" "$BANNER_RATIO"
 
       - name: Upload cropped banner preview
         if: ${{ env.MODE == 'crop preview' }}
