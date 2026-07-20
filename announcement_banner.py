@@ -280,6 +280,38 @@ def _looks_like_title_strip(
     return very_wide_strip or lower_title_band or not looks_like_subject
 
 
+def _choose_title_aware_fallback(
+    rejected_boxes: list[tuple[float, float, float, float]],
+    *,
+    image_height: float,
+    default: str = DEFAULT_FALLBACK_CROP_POSITION,
+) -> str:
+    """Pick the opposite vertical area when title-like text was rejected."""
+    if not rejected_boxes or image_height <= 0:
+        return default
+
+    total_weight = 0.0
+    weighted_center = 0.0
+
+    for x1, y1, x2, y2 in rejected_boxes:
+        box_width = max(x2 - x1, 1.0)
+        box_height = max(y2 - y1, 1.0)
+        weight = box_width * box_height
+        center_y_fraction = ((y1 + y2) / 2.0) / image_height
+        weighted_center += center_y_fraction * weight
+        total_weight += weight
+
+    if total_weight <= 0:
+        return default
+
+    center_y_fraction = weighted_center / total_weight
+    if center_y_fraction >= 0.55:
+        return "upper center"
+    if center_y_fraction <= 0.45:
+        return "lower center"
+    return default
+
+
 def _candidate_score(
     *,
     confidence: float,
@@ -296,7 +328,7 @@ def _candidate_score(
 
 
 def _detect_yolo_subject_focus_box(image: Image.Image):
-    """Return a combined subject box, focus kind, and explanatory status."""
+    """Return a subject box, focus kind, status, and optional fallback."""
     try:
         model = _get_yolo_model()
         result = model.predict(
@@ -310,16 +342,17 @@ def _detect_yolo_subject_focus_box(image: Image.Image):
             verbose=False,
         )[0]
     except Exception as exc:
-        return None, None, f"YOLOE failed: {type(exc).__name__}: {exc}"
+        return None, None, f"YOLOE failed: {type(exc).__name__}: {exc}", None
 
     boxes = getattr(result, "boxes", None)
     if boxes is None or len(boxes) == 0:
-        return None, None, "YOLOE detected no objects"
+        return None, None, "YOLOE detected no objects", None
 
     width, height = image.size
     image_area = max(float(width * height), 1.0)
     candidates = []
     rejected_title_like = []
+    rejected_title_boxes = []
 
     for box in boxes:
         try:
@@ -350,6 +383,7 @@ def _detect_yolo_subject_focus_box(image: Image.Image):
             image_height=height,
         ):
             rejected_title_like.append(label or kind)
+            rejected_title_boxes.append(candidate_box)
             continue
 
         area = (x2 - x1) * (y2 - y1)
@@ -384,8 +418,12 @@ def _detect_yolo_subject_focus_box(image: Image.Image):
                 None,
                 None,
                 f"YOLOE rejected title-like detection(s): {labels}",
+                _choose_title_aware_fallback(
+                    rejected_title_boxes,
+                    image_height=height,
+                ),
             )
-        return None, None, "YOLOE found no usable person, character, or animal subject"
+        return None, None, "YOLOE found no usable person, character, or animal subject", None
 
     face_candidates = [candidate for candidate in candidates if candidate["kind"] == "face"]
     pool = face_candidates or candidates
@@ -440,6 +478,7 @@ def _detect_yolo_subject_focus_box(image: Image.Image):
         ),
         focus_kind,
         status,
+        None,
     )
 
 
@@ -529,7 +568,7 @@ def crop_announcement_image(
     normalized = (crop_position or AUTO_CROP_POSITION).strip().lower()
 
     if normalized == AUTO_CROP_POSITION:
-        focus_box, focus_kind, status = _detect_yolo_subject_focus_box(image)
+        focus_box, focus_kind, status, suggested_fallback = _detect_yolo_subject_focus_box(image)
         if focus_box is not None and focus_kind is not None:
             print(f"[banner crop] Resolved auto crop: {status}.")
             return _crop_around_focus_box(
@@ -539,11 +578,12 @@ def crop_announcement_image(
                 focus_kind=focus_kind,
             )
 
+        resolved_fallback = suggested_fallback or fallback_crop_position
         print(
             f"[banner crop] {status}; "
-            f"resolved auto crop: {fallback_crop_position} fallback."
+            f"resolved auto crop: {resolved_fallback} fallback."
         )
-        normalized = fallback_crop_position
+        normalized = resolved_fallback
 
     return _crop_by_position(image, ratio, crop_position=normalized)
 
