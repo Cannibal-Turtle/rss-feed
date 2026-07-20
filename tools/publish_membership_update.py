@@ -130,8 +130,8 @@ if not isinstance(BANNER_SETTINGS, dict):
     raise RuntimeError("[settings.banner] must be a TOML table/object")
 TEMPLATE_BANNER_RATIO_TEXT = str(BANNER_SETTINGS.get("ratio") or DEFAULT_BANNER_RATIO_TEXT).strip()
 BANNER_RATIO_TEXT = DEFAULT_BANNER_RATIO_TEXT
-BANNER_SIZE = (1600, 400)
-BANNER_RATIO = BANNER_SIZE[0] / BANNER_SIZE[1]
+BANNER_SIZE: tuple[int, int] | None = (1600, 400)
+BANNER_RATIO: float | None = BANNER_SIZE[0] / BANNER_SIZE[1]
 VALID_MODES = {"crop preview", "preview", "publish"}
 VALID_CROP_POSITIONS = {"auto", "top", "upper", "upper center", "center", "lower center", "lower", "bottom"}
 CROP_PREVIEW_POSITIONS = ["auto", "top", "upper", "upper center", "center", "lower center", "lower", "bottom"]
@@ -142,6 +142,12 @@ def configure_banner_ratio(override: str = "") -> str:
     global BANNER_RATIO_TEXT, BANNER_SIZE, BANNER_RATIO
 
     requested = (override or "").strip() or TEMPLATE_BANNER_RATIO_TEXT or DEFAULT_BANNER_RATIO_TEXT
+
+    if requested.casefold() == "original":
+        BANNER_RATIO_TEXT = "original"
+        BANNER_SIZE = None
+        BANNER_RATIO = None
+        return BANNER_RATIO_TEXT
 
     try:
         width_text, height_text = requested.split(":", 1)
@@ -164,6 +170,12 @@ def configure_banner_ratio(override: str = "") -> str:
         BANNER_SIZE = (DEFAULT_BANNER_WIDTH, 400)
         BANNER_RATIO = BANNER_SIZE[0] / BANNER_SIZE[1]
         return DEFAULT_BANNER_RATIO_TEXT
+
+
+def banner_dimensions_label() -> str:
+    if BANNER_SIZE is None:
+        return "source dimensions preserved"
+    return f"{BANNER_SIZE[0]}x{BANNER_SIZE[1]}"
 
 
 def host_config_key(host: str) -> str:
@@ -635,7 +647,7 @@ def save_image_as_png(image: Image.Image, path: Path):
 def save_banner_preview_from_url(url: str, path: Path, *, crop: bool, crop_position: str = AUTO_CROP_POSITION):
     image = download_image(url)
 
-    if crop:
+    if crop and BANNER_RATIO is not None and BANNER_SIZE is not None:
         image = crop_to_ratio(image, BANNER_RATIO, crop_position=crop_position)
         image = image.resize(BANNER_SIZE, Image.Resampling.LANCZOS)
 
@@ -664,6 +676,13 @@ def save_crop_preview_set_from_url(url: str, base_path: Path, *, selected_crop_p
     - contact_sheet.png
     """
     source_image = download_image(url)
+
+    if BANNER_RATIO_TEXT == "original":
+        original_path = banner_preview_path_for_position(base_path, "original")
+        save_image_as_png(source_image, base_path)
+        save_image_as_png(source_image.copy(), original_path)
+        return [base_path, original_path]
+
     preview_images = []
 
     for crop_position in CROP_PREVIEW_POSITIONS:
@@ -732,7 +751,12 @@ def prepare_banner_image(*, novel: dict, manual_banner_url: str, mode: str, crop
     else:
         save_banner_preview_from_url(featured_image, BANNER_OUTPUT_PATH, crop=True, crop_position=crop_position)
 
-    return f"attachment://{BANNER_FILENAME}", BANNER_OUTPUT_PATH, f"auto-cropped featured_image ({crop_position}, {BANNER_RATIO_TEXT})"
+    if BANNER_RATIO_TEXT == "original":
+        source_label = "original featured_image (no crop or resize)"
+    else:
+        source_label = f"auto-cropped featured_image ({crop_position}, {BANNER_RATIO_TEXT})"
+
+    return f"attachment://{BANNER_FILENAME}", BANNER_OUTPUT_PATH, source_label
 
 
 def load_toml_file(path: Path) -> dict:
@@ -883,7 +907,7 @@ def usage():
     print("Modes: crop preview, preview, publish")
     print("Crop positions: auto, top, upper, upper center, center, lower center, lower, bottom")
     print("banner_url is optional. Leave it empty to auto-crop the novel featured_image.")
-    print("banner_ratio is optional, e.g. 8:3. Leave it blank to use [settings.banner].ratio from the TOML.")
+    print("banner_ratio is optional, e.g. 8:3 or original. Leave it blank to use [settings.banner].ratio from the TOML.")
 
 
 def main():
@@ -923,7 +947,7 @@ def main():
 
     print(f"Membership update mode: {mode}")
     print(f"Crop position: {crop_position}")
-    print(f"Banner ratio: {BANNER_RATIO_TEXT} ({BANNER_SIZE[0]}x{BANNER_SIZE[1]})")
+    print(f"Banner ratio: {BANNER_RATIO_TEXT} ({banner_dimensions_label()})")
     print(f"Novel: {novel_title}")
     print(f"Banner source: {banner_source}")
 
@@ -932,6 +956,8 @@ def main():
 
     if mode == "crop preview":
         print("Crop/image preview only. No Discord message sent and no TOML edited.")
+        if BANNER_RATIO_TEXT == "original" and not banner_url_arg:
+            print("Original mode preserves the featured image without cropping or resizing; crop_position is ignored.")
         if banner_url_arg:
             print("Note: crop_position and banner_ratio are ignored when banner_url is provided.")
             print("Manual banner_url preview creates one image only because it is treated as an already-made banner.")

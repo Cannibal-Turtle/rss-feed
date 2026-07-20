@@ -12,7 +12,7 @@ on:
         required: false
         type: string
       banner_ratio:
-        description: "Optional crop ratio, e.g. 8:3 or 4:1. Leave blank to use message_templates TOML."
+        description: "Optional ratio, e.g. 8:3 or 4:1; use original for no crop/resize. Blank uses message_templates TOML."
         required: false
         type: string
       crop_position:

@@ -78,4 +78,5 @@ animated = true
 public_global_mention = "||@everyone||"
 
 [settings.banner]
+# Use a ratio such as "4:1"/"8:3", or "original" for no crop or resize.
 ratio = "4:1"

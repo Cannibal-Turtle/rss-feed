@@ -1401,6 +1401,15 @@ public_global_mention = "||@everyone||"
 
 That setting is the last fallback. Preferred global/public pings should live in the target Discord repo's `config/server.json` as `global_mention`.
 
+Banner cropping for membership updates is configured in `message_templates/membership_update.toml`:
+
+```toml
+[settings.banner]
+ratio = "4:1"  # use "original" to preserve the full featured image
+```
+
+The workflow's optional `banner_ratio` input can override this per run. Ratio values such as `8:3` crop/resize to that shape; `original` performs no crop or resize. The same controls are available for special announcements in `message_templates/special_announcement.toml` and `publish_special_announcement.yml`.
+
 ---
 
 ## Workflow Inputs
@@ -1434,7 +1443,18 @@ That setting is the last fallback. Preferred global/public pings should live in 
 | Input | Purpose |
 | --- | --- |
 | `short_code` | Novel short code, e.g. `AMLWC` |
-| `banner_url` | Membership banner image URL |
+| `banner_url` | Optional finished banner URL |
+| `banner_ratio` | Optional ratio override such as `8:3`, or `original` for no crop/resize |
+| `crop_position` | Auto or manual crop position when using a ratio |
+
+### `publish_special_announcement.yml`
+
+| Input | Purpose |
+| --- | --- |
+| `short_code` | Novel short code |
+| `banner_url` | Optional finished banner URL |
+| `banner_ratio` | Optional ratio override such as `8:3`, or `original` for no crop/resize |
+| `crop_position` | Auto or manual crop position when using a ratio |
 
 ### `update_novel_card.yml`
 
@@ -1456,6 +1476,7 @@ That setting is the last fallback. Preferred global/public pings should live in 
 | `update_novel_card.yml` | Edits existing Discord novel status cards |
 | `publish_novel_card.yml` | Manually posts a novel/status card |
 | `publish_membership_update.yml` | Manually posts membership announcement |
+| `publish_special_announcement.yml` | Manually posts a special announcement |
 | `monthly_revenue.yml` | Posts monthly revenue report |
 | `nu_weekly_readers.yml` | Posts weekly NU reader-count report |
 | `send_token_alert.yml` | Sends token warning/error alerts |
