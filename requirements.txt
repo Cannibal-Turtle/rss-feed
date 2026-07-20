@@ -4,4 +4,3 @@ aiohttp
 beautifulsoup4
 requests
 Pillow
-ultralytics>=8.4,<9

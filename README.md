@@ -1408,7 +1408,7 @@ Banner cropping for membership updates is configured in `message_templates/membe
 ratio = "4:1"  # use "original" to preserve the full featured image
 ```
 
-The workflow's optional `banner_ratio` input can override this per run. Ratio values such as `8:3` crop/resize to that shape; `original` performs no crop or resize. The same controls are available for special announcements in `message_templates/special_announcement.toml` and `publish_special_announcement.yml`.
+The workflow's optional `banner_ratio` input can override this per run. Ratio values such as `8:3` crop/resize to that shape; `original` performs no crop or resize. The same controls are available for special announcements in `message_templates/special_announcement.toml` and `publish_special_announcement.yml`. With `crop_position = "auto"`, a lightweight Pillow-only heuristic compares text-like horizontal activity near the top and bottom: stronger top activity selects `lower center`, stronger bottom activity selects `upper center`, and unclear results default to `upper center`. Manual crop positions remain available.
 
 ---
 
