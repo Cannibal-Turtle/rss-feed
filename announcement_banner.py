@@ -1,21 +1,33 @@
-"""Reusable face- and content-aware cropping for Discord announcement banners."""
+"""Reusable subject-aware cropping for Discord announcement banners."""
 
 from __future__ import annotations
 
 import io
+import math
+import os
+import re
 from pathlib import Path
-from statistics import median
-from tempfile import TemporaryDirectory
+from threading import Lock
 from typing import Final
 
 import requests
-from PIL import Image, ImageFilter, ImageOps
+from PIL import Image, ImageOps
 
 AUTO_CROP_POSITION: Final = "auto"
 DEFAULT_FALLBACK_CROP_POSITION: Final = "upper center"
-FACE_DETECTOR_MODEL_URL: Final = (
-    "https://storage.googleapis.com/mediapipe-models/face_detector/"
-    "blaze_face_short_range/float16/1/blaze_face_short_range.tflite"
+YOLOE_MODEL_FILENAME: Final = "yoloe-11s-seg-pf.pt"
+YOLOE_MODEL_URL: Final = (
+    "https://github.com/ultralytics/assets/releases/download/v8.4.0/"
+    f"{YOLOE_MODEL_FILENAME}"
+)
+YOLOE_CACHE_DIR: Final = Path(
+    os.environ.get(
+        "ANNOUNCEMENT_BANNER_MODEL_CACHE",
+        str(Path.home() / ".cache" / "cannibal-turtle" / "announcement-banner"),
+    )
+).expanduser()
+YOLOE_CONFIDENCE: Final = float(
+    os.environ.get("ANNOUNCEMENT_BANNER_YOLO_CONFIDENCE", "0.08")
 )
 
 _VERTICAL_POSITIONS: Final = {
@@ -28,185 +40,330 @@ _VERTICAL_POSITIONS: Final = {
     "bottom": 1.00,
 }
 
-_FACE_MODEL_BUFFER: bytes | None = None
+_FACE_TERMS: Final = {
+    "face",
+    "head",
+    "portrait",
+}
+
+_HUMAN_TERMS: Final = {
+    "person",
+    "human",
+    "man",
+    "woman",
+    "boy",
+    "girl",
+    "child",
+    "baby",
+    "teenager",
+    "youth",
+    "gentleman",
+    "lady",
+    "prince",
+    "princess",
+    "king",
+    "queen",
+    "warrior",
+    "soldier",
+    "actor",
+    "actress",
+    "character",
+    "anime",
+    "cartoon",
+    "chibi",
+    "doll",
+    "figurine",
+    "mascot",
+}
+
+_ANIMAL_TERMS: Final = {
+    "animal",
+    "pet",
+    "dog",
+    "puppy",
+    "canine",
+    "wolf",
+    "fox",
+    "cat",
+    "kitten",
+    "feline",
+    "rabbit",
+    "bunny",
+    "bird",
+    "owl",
+    "raven",
+    "crow",
+    "horse",
+    "deer",
+    "bear",
+    "lion",
+    "tiger",
+    "leopard",
+    "panther",
+    "dragon",
+    "monster",
+    "creature",
+    "sheep",
+    "goat",
+    "cow",
+    "pig",
+    "mouse",
+    "rat",
+    "squirrel",
+    "raccoon",
+    "monkey",
+    "ape",
+}
+
+_EXCLUDED_LABEL_TERMS: Final = {
+    "book jacket",
+    "book cover",
+    "poster",
+    "billboard",
+    "signboard",
+    "sign",
+    "text",
+    "logo",
+    "font",
+    "website",
+    "web site",
+    "comic book",
+    "magazine",
+    "newspaper",
+    "screen",
+    "monitor",
+    "television",
+}
+
+_YOLO_MODEL = None
+_YOLO_MODEL_LOCK = Lock()
 
 
 def _clamp(value: float, minimum: float, maximum: float) -> float:
     return max(minimum, min(value, maximum))
 
 
-def _get_face_model_buffer() -> bytes:
-    global _FACE_MODEL_BUFFER
-
-    if _FACE_MODEL_BUFFER is None:
-        response = requests.get(
-            FACE_DETECTOR_MODEL_URL,
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=30,
-        )
-        response.raise_for_status()
-        _FACE_MODEL_BUFFER = response.content
-
-    return _FACE_MODEL_BUFFER
+def _normalize_label(label: object) -> str:
+    text = re.sub(r"[^a-z0-9]+", " ", str(label or "").lower())
+    return " ".join(text.split())
 
 
-def _detect_human_face_focus_box(image: Image.Image):
-    """Return a combined human-face box and an explanatory status string."""
+def _label_contains(label: str, terms: set[str]) -> bool:
+    words = set(label.split())
+    return any(term in label if " " in term else term in words for term in terms)
+
+
+def _subject_kind(label: str) -> str | None:
+    if any(term in label for term in _EXCLUDED_LABEL_TERMS):
+        return None
+    if _label_contains(label, _FACE_TERMS):
+        return "face"
+    if _label_contains(label, _HUMAN_TERMS):
+        return "human"
+    if _label_contains(label, _ANIMAL_TERMS):
+        return "animal"
+    return None
+
+
+def _download_yolo_model() -> Path:
+    YOLOE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    model_path = YOLOE_CACHE_DIR / YOLOE_MODEL_FILENAME
+
+    if model_path.is_file() and model_path.stat().st_size > 1_000_000:
+        return model_path
+
+    temporary_path = model_path.with_suffix(model_path.suffix + ".part")
+    temporary_path.unlink(missing_ok=True)
+
+    print(f"[banner crop] Downloading YOLOE model to {model_path} ...")
+    response = requests.get(
+        YOLOE_MODEL_URL,
+        headers={"User-Agent": "Mozilla/5.0"},
+        stream=True,
+        timeout=(15, 180),
+    )
+    response.raise_for_status()
+
+    with temporary_path.open("wb") as output:
+        for chunk in response.iter_content(chunk_size=1024 * 1024):
+            if chunk:
+                output.write(chunk)
+
+    if temporary_path.stat().st_size <= 1_000_000:
+        temporary_path.unlink(missing_ok=True)
+        raise RuntimeError("Downloaded YOLOE model was unexpectedly small.")
+
+    os.replace(temporary_path, model_path)
+    return model_path
+
+
+def _get_yolo_model():
+    global _YOLO_MODEL
+
+    if _YOLO_MODEL is not None:
+        return _YOLO_MODEL
+
+    with _YOLO_MODEL_LOCK:
+        if _YOLO_MODEL is not None:
+            return _YOLO_MODEL
+
+        from ultralytics import YOLO
+
+        _YOLO_MODEL = YOLO(str(_download_yolo_model()))
+        return _YOLO_MODEL
+
+
+def _result_name(names, class_index: int) -> str:
+    if isinstance(names, dict):
+        return str(names.get(class_index, class_index))
     try:
-        import mediapipe as mp
-        from mediapipe.tasks import python as mp_python
-        from mediapipe.tasks.python import vision
+        return str(names[class_index])
+    except Exception:
+        return str(class_index)
 
-        # create_from_file avoids the NumPy-backed mp.Image constructor issue that
-        # can leave a half-created object and emit an _image_ptr destructor warning.
-        with TemporaryDirectory(prefix="announcement-face-") as temp_dir:
-            image_path = Path(temp_dir) / "source.png"
-            image.convert("RGB").save(image_path, "PNG")
-            mp_image = mp.Image.create_from_file(str(image_path))
 
-            options = vision.FaceDetectorOptions(
-                base_options=mp_python.BaseOptions(
-                    model_asset_buffer=_get_face_model_buffer(),
-                ),
-                running_mode=vision.RunningMode.IMAGE,
-                min_detection_confidence=0.35,
-            )
+def _candidate_score(
+    *,
+    confidence: float,
+    area_fraction: float,
+    center_x: float,
+    image_width: float,
+    kind: str,
+) -> float:
+    center_distance = abs(center_x - (image_width / 2.0)) / max(image_width / 2.0, 1.0)
+    center_weight = 1.0 - (0.20 * _clamp(center_distance, 0.0, 1.0))
+    size_weight = 0.70 + min(math.sqrt(max(area_fraction, 0.0)) * 1.15, 0.85)
+    kind_weight = {"face": 1.35, "human": 1.15, "animal": 1.05}.get(kind, 1.0)
+    return confidence * center_weight * size_weight * kind_weight
 
-            with vision.FaceDetector.create_from_options(options) as detector:
-                result = detector.detect(mp_image)
+
+def _detect_yolo_subject_focus_box(image: Image.Image):
+    """Return a combined subject box, focus kind, and explanatory status."""
+    try:
+        model = _get_yolo_model()
+        result = model.predict(
+            source=image.convert("RGB"),
+            imgsz=640,
+            conf=YOLOE_CONFIDENCE,
+            iou=0.45,
+            max_det=30,
+            agnostic_nms=True,
+            device="cpu",
+            verbose=False,
+        )[0]
     except Exception as exc:
-        return None, f"MediaPipe failed: {type(exc).__name__}: {exc}"
+        return None, None, f"YOLOE failed: {type(exc).__name__}: {exc}"
 
-    detections = getattr(result, "detections", None) or []
-    if not detections:
-        return None, "no human face detected"
+    boxes = getattr(result, "boxes", None)
+    if boxes is None or len(boxes) == 0:
+        return None, None, "YOLOE detected no objects"
 
     width, height = image.size
-    boxes = []
+    image_area = max(float(width * height), 1.0)
+    candidates = []
 
-    for detection in detections:
-        box = detection.bounding_box
-        x1 = _clamp(float(box.origin_x), 0, width)
-        y1 = _clamp(float(box.origin_y), 0, height)
-        x2 = _clamp(float(box.origin_x + box.width), 0, width)
-        y2 = _clamp(float(box.origin_y + box.height), 0, height)
+    for box in boxes:
+        try:
+            class_index = int(box.cls.item())
+            confidence = float(box.conf.item())
+            x1, y1, x2, y2 = (float(value) for value in box.xyxy[0].tolist())
+        except Exception:
+            continue
 
-        if x2 > x1 and y2 > y1:
-            boxes.append((x1, y1, x2, y2))
+        x1 = _clamp(x1, 0, width)
+        y1 = _clamp(y1, 0, height)
+        x2 = _clamp(x2, 0, width)
+        y2 = _clamp(y2, 0, height)
 
-    if not boxes:
-        return None, "MediaPipe returned no usable human-face box"
+        if x2 <= x1 or y2 <= y1:
+            continue
 
-    x1 = min(box[0] for box in boxes)
-    y1 = min(box[1] for box in boxes)
-    x2 = max(box[2] for box in boxes)
-    y2 = max(box[3] for box in boxes)
+        label = _normalize_label(_result_name(result.names, class_index))
+        kind = _subject_kind(label)
+        if kind is None:
+            continue
 
-    face_width = x2 - x1
-    face_height = y2 - y1
+        area = (x2 - x1) * (y2 - y1)
+        area_fraction = area / image_area
+
+        # Whole-page boxes are generally the cover/poster itself rather than a subject.
+        if area_fraction > 0.94 and kind != "face":
+            continue
+
+        score = _candidate_score(
+            confidence=confidence,
+            area_fraction=area_fraction,
+            center_x=(x1 + x2) / 2.0,
+            image_width=width,
+            kind=kind,
+        )
+        candidates.append(
+            {
+                "box": (x1, y1, x2, y2),
+                "confidence": confidence,
+                "area_fraction": area_fraction,
+                "kind": kind,
+                "label": label,
+                "score": score,
+            }
+        )
+
+    if not candidates:
+        return None, None, "YOLOE found no usable person, character, or animal subject"
+
+    face_candidates = [candidate for candidate in candidates if candidate["kind"] == "face"]
+    pool = face_candidates or candidates
+    pool.sort(key=lambda candidate: candidate["score"], reverse=True)
+
+    top_score = pool[0]["score"]
+    selected = []
+
+    for candidate in pool:
+        if len(selected) >= 5:
+            break
+        if candidate["score"] < top_score * 0.42:
+            continue
+        if candidate["area_fraction"] < 0.0025:
+            continue
+        selected.append(candidate)
+
+    if not selected:
+        selected = [pool[0]]
+
+    x1 = min(candidate["box"][0] for candidate in selected)
+    y1 = min(candidate["box"][1] for candidate in selected)
+    x2 = max(candidate["box"][2] for candidate in selected)
+    y2 = max(candidate["box"][3] for candidate in selected)
+
+    box_width = x2 - x1
+    box_height = y2 - y1
+    pad_x = box_width * 0.10
+    pad_top = box_height * 0.10
+    pad_bottom = box_height * 0.05
+
+    labels = []
+    for candidate in selected:
+        label = candidate["label"] or candidate["kind"]
+        if label not in labels:
+            labels.append(label)
+
+    focus_kind = "face" if face_candidates else (
+        "human" if any(candidate["kind"] == "human" for candidate in selected) else "animal"
+    )
+    status = (
+        f"YOLOE subject detection ({len(selected)} selected: "
+        f"{', '.join(labels[:4])})"
+    )
 
     return (
         (
-            _clamp(x1 - (face_width * 0.20), 0, width),
-            _clamp(y1 - (face_height * 0.45), 0, height),
-            _clamp(x2 + (face_width * 0.20), 0, width),
-            _clamp(y2 + (face_height * 0.25), 0, height),
+            _clamp(x1 - pad_x, 0, width),
+            _clamp(y1 - pad_top, 0, height),
+            _clamp(x2 + pad_x, 0, width),
+            _clamp(y2 + pad_bottom, 0, height),
         ),
-        f"MediaPipe human face ({len(boxes)} detected)",
-    )
-
-
-def _border_background_color(image: Image.Image) -> tuple[float, float, float]:
-    width, height = image.size
-    border = max(2, min(width, height) // 40)
-    pixels = image.load()
-    samples = []
-
-    for x in range(width):
-        for offset in range(border):
-            samples.append(pixels[x, offset])
-            samples.append(pixels[x, height - 1 - offset])
-
-    for y in range(height):
-        for offset in range(border):
-            samples.append(pixels[offset, y])
-            samples.append(pixels[width - 1 - offset, y])
-
-    return tuple(float(median(pixel[channel] for pixel in samples)) for channel in range(3))
-
-
-def _detect_content_focus_box(image: Image.Image):
-    """Find a likely illustrated subject in the upper half of a cover."""
-    preview = image.convert("RGB").copy()
-    preview.thumbnail((320, 480), Image.Resampling.LANCZOS)
-
-    width, height = preview.size
-    if width < 8 or height < 8:
-        return None
-
-    # Heavy smoothing suppresses thin title text while preserving large subjects.
-    smooth = preview.filter(ImageFilter.GaussianBlur(radius=8))
-    background = _border_background_color(smooth)
-    gray = preview.convert("L")
-    edge = gray.filter(ImageFilter.FIND_EDGES).filter(ImageFilter.GaussianBlur(radius=2))
-
-    smooth_pixels = smooth.load()
-    edge_pixels = edge.load()
-    row_scores = []
-
-    for y in range(height):
-        normalized_y = y / max(height - 1, 1)
-
-        # Novel-cover faces and heads are normally in the upper half. Excluding
-        # the lower title area prevents large lettering from winning the crop.
-        if normalized_y < 0.08 or normalized_y > 0.55:
-            row_scores.append(0.0)
-            continue
-
-        vertical_weight = 1.10 - (0.25 * normalized_y)
-        row_score = 0.0
-
-        for x in range(width):
-            normalized_x = abs((x / max(width - 1, 1)) - 0.5) * 2.0
-            center_weight = 0.25 + (0.75 * ((1.0 - normalized_x) ** 1.8))
-            red, green, blue = smooth_pixels[x, y]
-            background_distance = (
-                abs(red - background[0])
-                + abs(green - background[1])
-                + abs(blue - background[2])
-            ) / 3.0
-            detail = (0.90 * background_distance) + (0.10 * edge_pixels[x, y])
-            row_score += center_weight * detail
-
-        row_scores.append(row_score * vertical_weight)
-
-    band_height = max(8, int(height * 0.14))
-    prefix_sums = [0.0]
-    for score in row_scores:
-        prefix_sums.append(prefix_sums[-1] + score)
-
-    best_y = None
-    best_score = 0.0
-
-    for y in range(height):
-        start = max(0, y - (band_height // 2))
-        end = min(height, y + (band_height // 2) + 1)
-        score = prefix_sums[end] - prefix_sums[start]
-        if score > best_score:
-            best_score = score
-            best_y = y
-
-    if best_y is None or best_score <= 0:
-        return None
-
-    source_y = (best_y / height) * image.height
-    focus_height = max(image.height * 0.08, 1.0)
-
-    return (
-        0.0,
-        _clamp(source_y - (focus_height / 2.0), 0, image.height),
-        float(image.width),
-        _clamp(source_y + (focus_height / 2.0), 0, image.height),
+        focus_kind,
+        status,
     )
 
 
@@ -245,6 +402,8 @@ def _crop_around_focus_box(
     image: Image.Image,
     ratio: float,
     focus_box,
+    *,
+    focus_kind: str,
 ) -> Image.Image:
     width, height = image.size
     current_ratio = width / height
@@ -259,8 +418,24 @@ def _crop_around_focus_box(
 
     if current_ratio < ratio:
         new_height = int(width / ratio)
-        focus_y = y1 + ((y2 - y1) * 0.42)
-        top = int(round(focus_y - (new_height * 0.38)))
+        box_height = max(y2 - y1, 1.0)
+
+        if focus_kind == "face":
+            focus_y = (y1 + y2) / 2.0
+            target_fraction = 0.48
+        elif box_height < height * 0.30:
+            # Small chibis or grouped characters: use the detected group centre.
+            focus_y = (y1 + y2) / 2.0
+            target_fraction = 0.50
+        elif focus_kind == "animal":
+            focus_y = y1 + (box_height * 0.30)
+            target_fraction = 0.45
+        else:
+            # For full-body human/character boxes, aim at the head and upper torso.
+            focus_y = y1 + (box_height * 0.22)
+            target_fraction = 0.45
+
+        top = int(round(focus_y - (new_height * target_fraction)))
         top = int(_clamp(top, 0, max(height - new_height, 0)))
         return image.crop((0, top, width, top + new_height))
 
@@ -274,25 +449,22 @@ def crop_announcement_image(
     *,
     fallback_crop_position: str = DEFAULT_FALLBACK_CROP_POSITION,
 ) -> Image.Image:
-    """Crop around human faces, then illustrated content, then a fixed fallback."""
+    """Crop around a YOLOE-detected subject, then use a fixed fallback."""
     normalized = (crop_position or AUTO_CROP_POSITION).strip().lower()
 
     if normalized == AUTO_CROP_POSITION:
-        face_box, face_status = _detect_human_face_focus_box(image)
-        if face_box is not None:
-            print(f"[banner crop] Resolved auto crop: {face_status}.")
-            return _crop_around_focus_box(image, ratio, face_box)
-
-        content_box = _detect_content_focus_box(image)
-        if content_box is not None:
-            print(
-                f"[banner crop] {face_status}; "
-                "resolved auto crop: content-aware illustration fallback."
+        focus_box, focus_kind, status = _detect_yolo_subject_focus_box(image)
+        if focus_box is not None and focus_kind is not None:
+            print(f"[banner crop] Resolved auto crop: {status}.")
+            return _crop_around_focus_box(
+                image,
+                ratio,
+                focus_box,
+                focus_kind=focus_kind,
             )
-            return _crop_around_focus_box(image, ratio, content_box)
 
         print(
-            f"[banner crop] {face_status}; content-aware crop found nothing; "
+            f"[banner crop] {status}; "
             f"resolved auto crop: {fallback_crop_position} fallback."
         )
         normalized = fallback_crop_position
