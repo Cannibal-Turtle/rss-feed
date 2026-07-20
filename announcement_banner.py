@@ -294,52 +294,21 @@ def _combine_boxes(
     )
 
 
-def _crop_away_from_title_box(
-    image: Image.Image,
-    ratio: float,
+def _title_directional_fallback(
     title_box: tuple[float, float, float, float],
-) -> tuple[Image.Image, str]:
-    """Place the crop directly above or below a rejected title region."""
-    width, height = image.size
+    *,
+    image_height: float,
+) -> str:
+    """Move the crop away from the edge where a rejected title begins."""
+    if image_height <= 0:
+        return DEFAULT_FALLBACK_CROP_POSITION
 
-    if width <= 0 or height <= 0:
-        raise RuntimeError(f"Invalid image size: {width}x{height}")
+    _, title_top, _, _ = title_box
+    title_top_fraction = _clamp(title_top, 0, image_height) / image_height
 
-    current_ratio = width / height
-    if current_ratio >= ratio:
-        return (
-            _crop_by_position(image, ratio, DEFAULT_FALLBACK_CROP_POSITION),
-            f"{DEFAULT_FALLBACK_CROP_POSITION} fallback",
-        )
-
-    new_height = max(1, int(width / ratio))
-    _, title_top, _, title_bottom = title_box
-    title_top = _clamp(title_top, 0, height)
-    title_bottom = _clamp(title_bottom, 0, height)
-    title_top_fraction = title_top / height
-
-    if title_top_fraction < 0.48:
-        # The title begins in the upper half, so the likely artwork is below it.
-        top = int(round(title_bottom))
-        top = int(_clamp(top, 0, max(height - new_height, 0)))
-        return image.crop((0, top, width, top + new_height)), "below rejected title"
-
-    if title_top_fraction > 0.52:
-        # The title begins in the lower half, so preserve the artwork above it.
-        top = int(round(title_top - new_height))
-        top = int(_clamp(top, 0, max(height - new_height, 0)))
-        return image.crop((0, top, width, top + new_height)), "above rejected title"
-
-    top_space = title_top
-    bottom_space = height - title_bottom
-    if bottom_space > top_space:
-        top = int(round(title_bottom))
-        top = int(_clamp(top, 0, max(height - new_height, 0)))
-        return image.crop((0, top, width, top + new_height)), "below rejected title"
-
-    top = int(round(title_top - new_height))
-    top = int(_clamp(top, 0, max(height - new_height, 0)))
-    return image.crop((0, top, width, top + new_height)), "above rejected title"
+    if title_top_fraction < 0.50:
+        return "lower center"
+    return "upper center"
 
 
 def _candidate_score(
@@ -608,16 +577,19 @@ def crop_announcement_image(
             )
 
         if rejected_title_box is not None:
-            cropped, resolution = _crop_away_from_title_box(
-                image,
-                ratio,
+            resolved_fallback = _title_directional_fallback(
                 rejected_title_box,
+                image_height=image.height,
             )
             print(
                 f"[banner crop] {status}; "
-                f"resolved auto crop: {resolution}."
+                f"resolved auto crop: {resolved_fallback} fallback."
             )
-            return cropped
+            return _crop_by_position(
+                image,
+                ratio,
+                crop_position=resolved_fallback,
+            )
 
         resolved_fallback = suggested_fallback or fallback_crop_position
         print(
