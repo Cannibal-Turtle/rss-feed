@@ -29,6 +29,9 @@ _ANALYSIS_WIDTH: Final = 400
 _TEXT_SCORE_MINIMUM: Final = 16.0
 _TEXT_SCORE_RATIO: Final = 1.22
 _TEXT_SCORE_DIFFERENCE: Final = 4.0
+_TOP_TEXT_SCORE_MINIMUM: Final = 32.0
+_TOP_TEXT_SCORE_RATIO: Final = 1.35
+_TOP_TEXT_SCORE_DIFFERENCE: Final = 10.0
 _MIN_HORIZONTAL_COVERAGE: Final = 0.42
 _ACTIVE_PIXEL_THRESHOLD: Final = 24
 _COLUMN_ACTIVITY_RATIO: Final = 0.18
@@ -144,9 +147,9 @@ def _text_aware_auto_position(
     difference = abs(top_score - bottom_score)
 
     if (
-        strongest >= _TEXT_SCORE_MINIMUM
-        and difference >= _TEXT_SCORE_DIFFERENCE
-        and top_score >= bottom_score * _TEXT_SCORE_RATIO
+        top_score >= _TOP_TEXT_SCORE_MINIMUM
+        and difference >= _TOP_TEXT_SCORE_DIFFERENCE
+        and top_score >= bottom_score * _TOP_TEXT_SCORE_RATIO
     ):
         return (
             "lower center",
