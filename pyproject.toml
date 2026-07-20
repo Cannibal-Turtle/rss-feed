@@ -23,6 +23,7 @@ Homepage = "https://github.com/Cannibal-Turtle/rss-feed"
 [tool.setuptools]
 py-modules = [
   "novel_mappings",
+  "announcement_banner",
 ]
 packages = [
   "mappings",

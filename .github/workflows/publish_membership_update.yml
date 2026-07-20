@@ -66,7 +66,7 @@ jobs:
           echo "BANNER_URL=${{ github.event.inputs.banner_url }}" >> $GITHUB_ENV
           echo "CROP_POSITION=${{ github.event.inputs.crop_position }}" >> $GITHUB_ENV
           echo "MODE=${{ github.event.inputs.mode }}" >> $GITHUB_ENV
-          echo "MEMBERSHIP_BANNER_OUTPUT=membership_banner.png" >> $GITHUB_ENV
+          echo "MEMBERSHIP_BANNER_OUTPUT=banner.png" >> $GITHUB_ENV
 
       - name: Run membership update tool
         env:
@@ -78,10 +78,18 @@ jobs:
         if: ${{ env.MODE == 'crop preview' }}
         uses: actions/upload-artifact@v6
         with:
-          name: membership-banner-preview-${{ env.SHORT_CODE }}
+          name: banner-preview-${{ env.SHORT_CODE }}
           path: |
-            membership_banner.png
-            membership_banner_*.png
+            banner.png
+            auto.png
+            top.png
+            upper.png
+            upper_center.png
+            center.png
+            lower_center.png
+            lower.png
+            bottom.png
+            contact_sheet.png
           if-no-files-found: error
           retention-days: 1
 

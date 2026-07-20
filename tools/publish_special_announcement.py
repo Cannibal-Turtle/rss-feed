@@ -112,7 +112,7 @@ PUBLIC_GLOBAL_MENTION = setting_str(
 )
 
 BANNER_OUTPUT_PATH = Path(
-    os.environ.get("SPECIAL_ANNOUNCEMENT_BANNER_OUTPUT", "special_announcement_banner.png")
+    os.environ.get("SPECIAL_ANNOUNCEMENT_BANNER_OUTPUT", "banner.png")
 ).resolve()
 BANNER_FILENAME = BANNER_OUTPUT_PATH.name
 BANNER_SIZE = (1600, 400)
@@ -625,11 +625,11 @@ def save_banner_preview_from_url(url: str, path: Path, *, crop: bool, crop_posit
 
 def banner_preview_path_for_position(base_path: Path, crop_position: str) -> Path:
     safe_crop_position = crop_position.replace(" ", "_")
-    return base_path.with_name(f"{base_path.stem}_{safe_crop_position}{base_path.suffix}")
+    return base_path.with_name(f"{safe_crop_position}{base_path.suffix}")
 
 
 def contact_sheet_path_for_banner(base_path: Path) -> Path:
-    return base_path.with_name(f"{base_path.stem}_contact_sheet{base_path.suffix}")
+    return base_path.with_name(f"contact_sheet{base_path.suffix}")
 
 
 def save_contact_sheet(preview_images, path: Path) -> Path:
@@ -875,8 +875,15 @@ def main() -> None:
             print("Manual banner_url preview creates one image only because it is treated as an already-made banner.")
         else:
             print("Created crop preview files:")
-            for preview_path in sorted(BANNER_OUTPUT_PATH.parent.glob(f"{BANNER_OUTPUT_PATH.stem}*.png")):
-                print(f"- {preview_path.name}")
+            preview_paths = [BANNER_OUTPUT_PATH]
+            preview_paths.extend(
+                banner_preview_path_for_position(BANNER_OUTPUT_PATH, position)
+                for position in CROP_PREVIEW_POSITIONS
+            )
+            preview_paths.append(contact_sheet_path_for_banner(BANNER_OUTPUT_PATH))
+            for preview_path in preview_paths:
+                if preview_path.exists():
+                    print(f"- {preview_path.name}")
         return
 
     require_discord_token()

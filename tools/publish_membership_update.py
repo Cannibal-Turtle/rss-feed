@@ -121,7 +121,7 @@ PUBLIC_GLOBAL_MENTION = setting_str(
 )
 
 NOVELS_DIR = ROOT / "mappings" / "novels"
-BANNER_OUTPUT_PATH = Path(os.environ.get("MEMBERSHIP_BANNER_OUTPUT", "membership_banner.png")).resolve()
+BANNER_OUTPUT_PATH = Path(os.environ.get("MEMBERSHIP_BANNER_OUTPUT", "banner.png")).resolve()
 BANNER_FILENAME = BANNER_OUTPUT_PATH.name
 BANNER_SIZE = (1600, 400)
 BANNER_RATIO = BANNER_SIZE[0] / BANNER_SIZE[1]
@@ -609,23 +609,23 @@ def save_banner_preview_from_url(url: str, path: Path, *, crop: bool, crop_posit
 
 def banner_preview_path_for_position(base_path: Path, crop_position: str) -> Path:
     safe_crop_position = crop_position.replace(" ", "_")
-    return base_path.with_name(f"{base_path.stem}_{safe_crop_position}{base_path.suffix}")
+    return base_path.with_name(f"{safe_crop_position}{base_path.suffix}")
 
 
 def contact_sheet_path_for_banner(base_path: Path) -> Path:
-    return base_path.with_name(f"{base_path.stem}_contact_sheet{base_path.suffix}")
+    return base_path.with_name(f"contact_sheet{base_path.suffix}")
 
 
 def save_crop_preview_set_from_url(url: str, base_path: Path, *, selected_crop_position: str):
     """
     For crop preview mode, create:
-    - membership_banner.png = the selected crop_position
-    - membership_banner_top.png
-    - membership_banner_upper.png
-    - membership_banner_center.png
-    - membership_banner_lower.png
-    - membership_banner_bottom.png
-    - membership_banner_contact_sheet.png
+    - banner.png = the selected crop_position
+    - top.png
+    - upper.png
+    - center.png
+    - lower.png
+    - bottom.png
+    - contact_sheet.png
     """
     source_image = download_image(url)
     preview_images = []
@@ -897,8 +897,15 @@ def main():
             print("Manual banner_url preview creates one image only because it is treated as an already-made banner.")
         else:
             print("Created crop preview files:")
-            for preview_path in sorted(BANNER_OUTPUT_PATH.parent.glob(f"{BANNER_OUTPUT_PATH.stem}*.png")):
-                print(f"- {preview_path.name}")
+            preview_paths = [BANNER_OUTPUT_PATH]
+            preview_paths.extend(
+                banner_preview_path_for_position(BANNER_OUTPUT_PATH, position)
+                for position in CROP_PREVIEW_POSITIONS
+            )
+            preview_paths.append(contact_sheet_path_for_banner(BANNER_OUTPUT_PATH))
+            for preview_path in preview_paths:
+                if preview_path.exists():
+                    print(f"- {preview_path.name}")
         return
 
     require_discord_token()
