@@ -46,6 +46,16 @@ _FACE_TERMS: Final = {
     "portrait",
 }
 
+_GENERIC_ILLUSTRATION_TERMS: Final = {
+    "character",
+    "anime",
+    "cartoon",
+    "chibi",
+    "doll",
+    "figurine",
+    "mascot",
+}
+
 _HUMAN_TERMS: Final = {
     "person",
     "human",
@@ -222,6 +232,41 @@ def _result_name(names, class_index: int) -> str:
         return str(class_index)
 
 
+def _looks_like_title_strip(
+    *,
+    label: str,
+    box: tuple[float, float, float, float],
+    image_width: float,
+    image_height: float,
+) -> bool:
+    """Reject wide, shallow generic detections that are usually cover-title text."""
+    if not _label_contains(label, _GENERIC_ILLUSTRATION_TERMS):
+        return False
+
+    x1, y1, x2, y2 = box
+    box_width = max(x2 - x1, 1.0)
+    box_height = max(y2 - y1, 1.0)
+    width_fraction = box_width / max(image_width, 1.0)
+    height_fraction = box_height / max(image_height, 1.0)
+    center_y_fraction = ((y1 + y2) / 2.0) / max(image_height, 1.0)
+    aspect_ratio = box_width / box_height
+
+    # Large Chinese/English title rows are often mislabelled as "cartoon character".
+    # Real portrait/character boxes are normally taller or occupy much more height.
+    very_wide_strip = (
+        aspect_ratio >= 2.40
+        and width_fraction >= 0.45
+        and height_fraction <= 0.34
+    )
+    lower_title_band = (
+        center_y_fraction >= 0.58
+        and aspect_ratio >= 1.60
+        and width_fraction >= 0.45
+        and height_fraction <= 0.40
+    )
+    return very_wide_strip or lower_title_band
+
+
 def _candidate_score(
     *,
     confidence: float,
@@ -261,6 +306,7 @@ def _detect_yolo_subject_focus_box(image: Image.Image):
     width, height = image.size
     image_area = max(float(width * height), 1.0)
     candidates = []
+    rejected_title_like = []
 
     for box in boxes:
         try:
@@ -283,6 +329,16 @@ def _detect_yolo_subject_focus_box(image: Image.Image):
         if kind is None:
             continue
 
+        candidate_box = (x1, y1, x2, y2)
+        if _looks_like_title_strip(
+            label=label,
+            box=candidate_box,
+            image_width=width,
+            image_height=height,
+        ):
+            rejected_title_like.append(label or kind)
+            continue
+
         area = (x2 - x1) * (y2 - y1)
         area_fraction = area / image_area
 
@@ -299,7 +355,7 @@ def _detect_yolo_subject_focus_box(image: Image.Image):
         )
         candidates.append(
             {
-                "box": (x1, y1, x2, y2),
+                "box": candidate_box,
                 "confidence": confidence,
                 "area_fraction": area_fraction,
                 "kind": kind,
@@ -309,6 +365,13 @@ def _detect_yolo_subject_focus_box(image: Image.Image):
         )
 
     if not candidates:
+        if rejected_title_like:
+            labels = ", ".join(dict.fromkeys(rejected_title_like))
+            return (
+                None,
+                None,
+                f"YOLOE rejected title-like detection(s): {labels}",
+            )
         return None, None, "YOLOE found no usable person, character, or animal subject"
 
     face_candidates = [candidate for candidate in candidates if candidate["kind"] == "face"]
