@@ -251,20 +251,33 @@ def _looks_like_title_strip(
     center_y_fraction = ((y1 + y2) / 2.0) / max(image_height, 1.0)
     aspect_ratio = box_width / box_height
 
-    # Large Chinese/English title rows are often mislabelled as "cartoon character".
-    # Real portrait/character boxes are normally taller or occupy much more height.
+    # Prompt-free YOLOE sometimes labels a complete title row or even one large
+    # title glyph as a generic "cartoon character".  Generic illustration labels
+    # are therefore accepted only when the box still looks like an actual subject.
     very_wide_strip = (
-        aspect_ratio >= 2.40
-        and width_fraction >= 0.45
-        and height_fraction <= 0.34
+        aspect_ratio >= 2.20
+        and width_fraction >= 0.38
+        and height_fraction <= 0.42
     )
     lower_title_band = (
-        center_y_fraction >= 0.58
-        and aspect_ratio >= 1.60
-        and width_fraction >= 0.45
-        and height_fraction <= 0.40
+        center_y_fraction >= 0.56
+        and height_fraction <= 0.50
     )
-    return very_wide_strip or lower_title_band
+
+    tall_subject_shape = height_fraction >= 0.34 and aspect_ratio <= 1.55
+    upper_compact_subject_shape = (
+        center_y_fraction <= 0.50
+        and height_fraction >= 0.18
+        and aspect_ratio <= 1.40
+    )
+    substantial_group_shape = height_fraction >= 0.42 and aspect_ratio <= 2.40
+    looks_like_subject = (
+        tall_subject_shape
+        or upper_compact_subject_shape
+        or substantial_group_shape
+    )
+
+    return very_wide_strip or lower_title_band or not looks_like_subject
 
 
 def _candidate_score(
