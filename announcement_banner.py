@@ -29,6 +29,9 @@ _ANALYSIS_WIDTH: Final = 400
 _TEXT_SCORE_MINIMUM: Final = 16.0
 _TEXT_SCORE_RATIO: Final = 1.22
 _TEXT_SCORE_DIFFERENCE: Final = 4.0
+_MIN_HORIZONTAL_COVERAGE: Final = 0.42
+_ACTIVE_PIXEL_THRESHOLD: Final = 24
+_COLUMN_ACTIVITY_RATIO: Final = 0.18
 
 
 def _clamp(value: float, minimum: float, maximum: float) -> float:
@@ -48,6 +51,36 @@ def _analysis_image(image: Image.Image) -> Image.Image:
         image = image.resize((_ANALYSIS_WIDTH, new_height), Image.Resampling.LANCZOS)
 
     return ImageOps.autocontrast(ImageOps.grayscale(image), cutoff=1)
+
+
+def _horizontal_band_score(band: Image.Image) -> float:
+    """Reward broad horizontal activity and ignore narrow vertical strips."""
+    width, height = band.size
+    if width <= 0 or height <= 0:
+        return 0.0
+
+    min_active_pixels = max(1, int(round(height * _COLUMN_ACTIVITY_RATIO)))
+
+    binary = band.point(lambda px: 255 if px >= _ACTIVE_PIXEL_THRESHOLD else 0, mode="1")
+    data = list(binary.getdata())
+
+    active_columns = 0
+    for x in range(width):
+        active = 0
+        offset = x
+        for _ in range(height):
+            if data[offset]:
+                active += 1
+            offset += width
+        if active >= min_active_pixels:
+            active_columns += 1
+
+    coverage = active_columns / width
+    if coverage < _MIN_HORIZONTAL_COVERAGE:
+        return 0.0
+
+    mean_intensity = float(ImageStat.Stat(band).mean[0])
+    return mean_intensity * coverage
 
 
 def _peak_band_score(
@@ -74,7 +107,7 @@ def _peak_band_score(
     best = 0.0
     for top in range(start, end - window + 1, step):
         band = image.crop((left, top, right, top + window))
-        score = float(ImageStat.Stat(band).mean[0])
+        score = _horizontal_band_score(band)
         best = max(best, score)
 
     return best
