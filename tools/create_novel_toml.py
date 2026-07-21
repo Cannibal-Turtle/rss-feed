@@ -119,6 +119,7 @@ DIRECT_GENRE_ALIASES = {
     "tragedy": "angst",
     "wuxia": "wuxia/xianxia",
     "xianxia": "wuxia/xianxia",
+    "xuanhuan": "wuxia/xianxia",
     "yaoi": "bl",
 }
 
@@ -460,6 +461,11 @@ def load_supported_tags(tag_roles_url: str) -> dict[str, str]:
 
 
 WORLD_HOPPING_TAG_CHOICES = {"", "quick transmigration", "infinite flow"}
+WORLD_HOPPING_SITE_GENRES = {"world hopping", "world-hopping"}
+
+
+def has_world_hopping_genre(site_genres: list[str]) -> bool:
+    return any(norm_key(genre) in WORLD_HOPPING_SITE_GENRES for genre in site_genres)
 
 
 def normalize_world_hopping_tag(value: str) -> str:
@@ -510,14 +516,14 @@ def apply_world_hopping_tag(tags: list[str], world_hopping_tag: str, supported_t
     If a world-hopping tag is chosen, keep it inside tags so downstream Discord
     repos that only read tags still mention the matching role.
 
-    Plain transmigration is removed when quick transmigration/infinite flow is set,
-    so the novel does not get both the broad transmigration role and the specific
-    world-hopping role.
+    Only the two world-hopping subtypes are mutually exclusive. A genuine
+    Transmigration site genre stays as the separate transmigration role, even if
+    the novel also has World Hopping and is classified as QT or IF.
     """
     if not world_hopping_tag:
         return order_tags(enforce_mutually_exclusive_tag_groups(tags), supported_tags)
 
-    blocked = {"transmigration", "quick transmigration", "infinite flow"}
+    blocked = {"quick transmigration", "infinite flow"}
     cleaned = [tag for tag in tags if norm_key(tag) not in blocked]
 
     normalized_special = norm_key(world_hopping_tag)
@@ -558,6 +564,11 @@ def infer_tags(api_novel: dict[str, Any], supported_tags: dict[str, str]) -> tup
 
             if key in supported_tags:
                 add(key)
+                continue
+
+            # World Hopping is intentionally classified by the QT/IF workflow
+            # choice rather than mapped to one broad Discord role.
+            if key in WORLD_HOPPING_SITE_GENRES:
                 continue
 
             unmapped.append(raw)
@@ -777,6 +788,18 @@ def main(argv: list[str]) -> int:
                 raise ScriptError("World-hopping tag is enabled, but no world-hopping tag was provided.")
         else:
             world_hopping_tag = ""
+
+    site_has_world_hopping = has_world_hopping_genre(site_genres)
+    if site_has_world_hopping and not world_hopping_tag:
+        raise ScriptError(
+            'This novel has the Mistmint genre "World Hopping". '
+            'Choose quick transmigration or infinite flow.'
+        )
+    if world_hopping_tag and not site_has_world_hopping:
+        eprint(
+            'Warning: a QT/IF world-hopping tag was selected, but the Mistmint '
+            'genre list does not contain "World Hopping".'
+        )
 
     tags = apply_world_hopping_tag(tags, world_hopping_tag, supported_tags)
 
