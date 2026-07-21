@@ -33,12 +33,12 @@ on:
         required: false
         type: string
       quick_transmigration:
-        description: "If Mistmint genre is World Hopping: classify it as quick transmigration"
+        description: "Classify it as quick transmigration"
         required: false
         default: false
         type: boolean
       infinite_flow:
-        description: "If Mistmint genre is World Hopping: classify it as infinite flow"
+        description: "Classify it as infinite flow"
         required: false
         default: false
         type: boolean
