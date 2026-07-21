@@ -682,7 +682,8 @@ def build_toml_text(
     lines.append(f"tags = [{tag_items}]")
     site_genre_items = ", ".join(quote_toml(genre) for genre in site_genres)
     lines.append(f"site_genres = [{site_genre_items}]")
-    lines.append(f"history_file = {quote_toml(history_file)}")
+    if history_file:
+        lines.append(f"history_file = {quote_toml(history_file)}")
     lines.append("")
     lines.append(f"custom_description = {multiline_toml(description)}")
     lines.append("")
