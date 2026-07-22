@@ -155,13 +155,37 @@ def route_for_single_novel(target_cfg: dict) -> dict:
     }
 
 
+def route_for_single_novel_forum_post(target_cfg: dict) -> dict:
+    """Return the independent route used to build the Forum Post link."""
+    routes = target_cfg.get("routes", {})
+
+    if isinstance(routes, dict):
+        route = routes.get("forum_post")
+        if isinstance(route, dict):
+            return route
+
+        # Backward-compatible fallback for configs that already define a
+        # per-novel thread route for another single-novel announcement.
+        for key in ("membership_update", "special_announcement"):
+            route = routes.get(key)
+            if isinstance(route, dict) and str(route.get("type") or "").strip().lower() == "thread_map":
+                return route
+
+    return {
+        "type": "thread_map",
+        "map_key": "thread_id_map",
+        "default_path": "config/thread_id_map.json",
+    }
+
+
 def resolve_single_novel_thread_route(host: str):
     """
     Resolve which host-specific Discord integration/thread map should be used
     for this novel card's optional Forum Post link.
 
-    The primary/private Discord archive post is still controlled by
-    DISCORD_INTEGRATION. This only controls the host-specific forum/thread link.
+    The host archive destination and the Forum Post link are separate routes:
+    publish_novel_card may point to a shared archive channel while forum_post
+    still looks up the novel's individual thread ID.
     """
     if THREAD_INTEGRATION_OVERRIDE or THREAD_MAP_URL_OVERRIDE:
         return THREAD_INTEGRATION_OVERRIDE or "thread_id_map_url_override", {
@@ -180,7 +204,7 @@ def resolve_single_novel_thread_route(host: str):
     if not integration:
         return "", {}
 
-    return integration, route_for_single_novel(target_cfg)
+    return integration, route_for_single_novel_forum_post(target_cfg)
 
 
 def novel_discord_map_url_for_integration(integration: str) -> str:

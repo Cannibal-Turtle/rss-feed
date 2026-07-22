@@ -54,6 +54,11 @@
           "channel_key": "novel_cards_archive",
           "server_key": "server_json",
           "default_path": "config/server.json"
+        },
+        "forum_post": {
+          "type": "thread_map",
+          "map_key": "thread_id_map",
+          "default_path": "config/thread_id_map.json"
         }
       }
     }
