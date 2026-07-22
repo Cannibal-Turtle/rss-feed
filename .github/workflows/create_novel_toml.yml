@@ -32,6 +32,34 @@ on:
         description: "Translator profile/library URL optional. Leave blank to inherit host default or omit."
         required: false
         type: string
+      personal_role_id:
+        description: "Personal/default Discord novel role ID (optional)"
+        required: false
+        type: string
+      personal_custom_emoji:
+        description: "Personal/default Discord custom emoji, e.g. <:name:123> (optional)"
+        required: false
+        type: string
+      personal_role_url:
+        description: "Personal/default Discord role URL. Leave blank to reuse the latest URL in that server's novel map."
+        required: false
+        type: string
+      host_role_id:
+        description: "Selected host's Discord novel role ID, if that host server has separate novel roles (optional)"
+        required: false
+        type: string
+      host_custom_emoji:
+        description: "Selected host's Discord custom emoji, if different from the personal server (optional)"
+        required: false
+        type: string
+      host_role_url:
+        description: "Selected host's Discord role URL. Leave blank to reuse the latest URL in that host server's novel map."
+        required: false
+        type: string
+      host_destination_id:
+        description: "Per-novel host Discord thread/channel ID. For Mistmint, enter the novel forum thread ID. Leave blank for shared-channel hosts."
+        required: false
+        type: string
       quick_transmigration:
         description: "Classify it as quick transmigration"
         required: false
@@ -59,7 +87,7 @@ on:
           - "false"
           - "true"
       overwrite:
-        description: "Allow replacing mappings/novels/<short_code>.toml"
+        description: "Allow replacing an existing novel TOML or downstream novel mapping"
         required: true
         default: "false"
         type: choice
@@ -119,6 +147,32 @@ jobs:
           fi
 
           python tools/create_novel_toml.py "${ARGS[@]}"
+
+      - name: Update related Discord configs
+        env:
+          PAT_GITHUB: ${{ secrets.PAT_GITHUB }}
+        run: |
+          ARGS=(
+            --host "${{ github.event.inputs.host }}"
+            --short-code "${{ github.event.inputs.short_code }}"
+            --personal-role-id "${{ github.event.inputs.personal_role_id }}"
+            --personal-custom-emoji "${{ github.event.inputs.personal_custom_emoji }}"
+            --personal-role-url "${{ github.event.inputs.personal_role_url }}"
+            --host-role-id "${{ github.event.inputs.host_role_id }}"
+            --host-custom-emoji "${{ github.event.inputs.host_custom_emoji }}"
+            --host-role-url "${{ github.event.inputs.host_role_url }}"
+            --host-destination-id "${{ github.event.inputs.host_destination_id }}"
+          )
+
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            ARGS+=(--dry-run)
+          fi
+
+          if [ "${{ github.event.inputs.overwrite }}" = "true" ]; then
+            ARGS+=(--overwrite)
+          fi
+
+          python tools/update_novel_integrations.py "${ARGS[@]}"
 
       - name: Commit generated files
         if: ${{ github.event.inputs.dry_run != 'true' }}

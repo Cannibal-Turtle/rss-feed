@@ -351,3 +351,58 @@ missing secret = warn or skip, not fail feed generation
 ```
 
 Keep optional features disabled by default unless this repo specifically needs them.
+
+## Novel onboarding writes
+
+`.github/workflows/create_novel_toml.yml` can optionally update novel-specific
+Discord config in related repositories after creating a novel TOML. The updater
+is `tools/update_novel_integrations.py`.
+
+It does not have a separate onboarding target registry. It reuses the existing
+routing config:
+
+- Personal/default Discord role mapping:
+  `primary_discord.integration` and that integration's
+  `paths.novel_discord_map`.
+- Selected host's Discord role mapping, when applicable:
+  `host_discord_targets.<normalized_host>.integration` and that integration's
+  `paths.novel_discord_map`.
+- Selected host's per-novel thread/channel mapping:
+  `host_discord_targets.<normalized_host>.routes.forum_post`.
+
+The integration's `raw_base` supplies the GitHub owner, repository, and branch.
+For example:
+
+```json
+"discord_webhook": {
+  "raw_base": "https://raw.githubusercontent.com/Cannibal-Turtle/discord-webhook/main",
+  "paths": {
+    "novel_discord_map": "config/novel_discord_map.toml"
+  }
+}
+```
+
+No duplicate `repo`, `branch`, or `novel_onboarding` config is required.
+
+### Workflow inputs
+
+| Input | Meaning |
+| --- | --- |
+| `personal_role_id` | Novel role ID in the primary/default Discord server. |
+| `personal_custom_emoji` | Novel custom emoji in the primary/default Discord server. |
+| `personal_role_url` | Role URL for the primary server. Blank inherits the latest non-empty URL from that map. |
+| `host_role_id` | Novel role ID in the selected host's Discord server, when it has separate novel roles. |
+| `host_custom_emoji` | Novel custom emoji in the selected host's Discord server. |
+| `host_role_url` | Role URL for the host server. Blank inherits only from that host's own map. |
+| `host_destination_id` | Per-novel host thread/channel ID. For Mistmint Haven this is the forum thread ID. |
+
+`role_id` and `custom_emoji` must be supplied together for each server. The role
+URL is optional when an earlier entry in the same target map already has one.
+
+For a host whose `forum_post` route is a fixed shared `channel`, leave
+`host_destination_id` blank. For per-novel destinations, configure the route as
+`thread_map` or `channel_map` with `map_key` and `default_path`.
+
+The workflow uses the `PAT_GITHUB` secret to update downstream repositories via
+the GitHub Contents API. The token needs Contents read/write access to each
+repository that may be updated.
