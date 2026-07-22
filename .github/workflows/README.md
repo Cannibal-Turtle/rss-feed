@@ -37,7 +37,7 @@ GitHub does not support real section headings inside a `workflow_dispatch` form.
 | **Monthly Revenue Report** | Last day of the month around 18:30 MYT or manual | Generates the monthly host revenue report and commits revenue state. |
 | **Send Token Alert to Discord** | Repository dispatch or manual | Sends configured token-expiry or invalid-token alerts. |
 | **Delete Discord Messages** | Manual | Deletes specified Discord message IDs/links across configured servers. |
-| **Delete Today's Discord Messages (MYT)** | Manual | Deletes the bot's messages posted today in specified channels/threads, using Malaysia time. |
+| **Delete Today's Discord Messages (MYT)** | Manual | Deletes the bot's messages posted today in specified channels/threads, using UTC+8. |
 | **Healthcheck** | Push, pull request, or manual | Validates configuration and code assumptions and uploads `snapshots/diagnostics.json`. |
 
 ---
@@ -279,7 +279,7 @@ The title, announcement text, button label, and default button URL are controlle
 
 Workflow file: [`update_free_feed.yml`](update_free_feed.yml)
 
-- Scheduled daily at **13:00 Malaysia time**.
+- Scheduled daily at **13:00 UTC+8**.
 - Regenerates `free_chapters_feed.xml`.
 - Compares GUIDs before and after generation.
 - Commits only when the feed changes.
@@ -312,7 +312,7 @@ force_downstream
 
 Workflow file: [`update_comments.yml`](update_comments.yml)
 
-- Scheduled daily at **22:55 Malaysia time**.
+- Scheduled daily at **22:55 UTC+8**.
 - Regenerates `aggregated_comments_feed.xml`.
 - Merges NovelUpdates comments after the host comments run.
 - Updates `token/token_alert_state.json`.
@@ -336,7 +336,7 @@ When enabled in `config/integrations.json`, free/paid feed generation can send a
 
 Workflow file: [`nu_weekly_readers.yml`](nu_weekly_readers.yml)
 
-Runs every Sunday at **21:00 Malaysia time**. It posts the configured NovelUpdates reader-count report and commits changes to:
+Runs every Sunday at **21:00 UTC+8**. It posts the configured NovelUpdates reader-count report and commits changes to:
 
 ```text
 novelupdates/nu_readers.json
@@ -346,7 +346,7 @@ novelupdates/nu_readers.json
 
 Workflow file: [`monthly_revenue.yml`](monthly_revenue.yml)
 
-The cron checks days 28–31, while an internal Malaysia-time guard allows only the actual last-day evening run. A manual run bypasses that date guard.
+The cron checks days 28–31, while an internal UTC+8-time guard allows only the actual last-day evening run. A manual run bypasses that date guard.
 
 It commits:
 
@@ -405,7 +405,7 @@ Input:
 channel_ids
 ```
 
-Accepts channel or thread IDs separated by commas, spaces, or new lines. It deletes matching bot messages from the current Malaysia calendar day.
+Accepts channel or thread IDs separated by commas, spaces, or new lines. It deletes matching bot messages from the current UTC+8 calendar day.
 
 Deletion is irreversible. Verify the IDs before starting either workflow.
 
