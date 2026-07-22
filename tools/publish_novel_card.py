@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT))
 import os
 import json
 import re
+import traceback
 import requests
 from datetime import datetime, timezone
 from dateutil import parser as dateparser
@@ -680,8 +681,7 @@ async def build_forum_post_url(forum_post_id):
         print(f"Warning: could not resolve forum post link for {forum_post_id}: {e}")
         return None
 
-@bot.event
-async def on_ready():
+async def _publish_novel_card():
     state = load_state()
 
     for host, hostdata in HOSTING_SITE_DATA.items():
@@ -811,4 +811,22 @@ async def on_ready():
     await bot.close()
 
 
+_ready_error = None
+
+
+@bot.event
+async def on_ready():
+    global _ready_error
+
+    try:
+        await _publish_novel_card()
+    except Exception as exc:
+        _ready_error = exc
+        traceback.print_exc()
+        await bot.close()
+
+
 bot.run(TOKEN)
+
+if _ready_error is not None:
+    raise RuntimeError("Novel card publishing failed during Discord startup.") from _ready_error
