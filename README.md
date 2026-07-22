@@ -81,7 +81,7 @@ rss-feed/
 ├─ free_chapters_feed.xml
 ├─ paid_chapters_feed.xml
 ├─ aggregated_comments_feed.xml
-├─ novel_status_targets.json
+├─ novel_card_targets.json
 ├─ requirements.txt
 ├─ pyproject.toml
 └─ README.md
@@ -1283,7 +1283,7 @@ tools/update_novel_card.py
 State/targets:
 
 ```text
-novel_status_targets.json
+novel_card_targets.json
 ```
 
 Workflow:
@@ -1306,7 +1306,7 @@ title: "Novel title"
 host: "Mistmint Haven"
 ```
 
-`novel_status_targets.json` stores Discord message targets by short code.
+`novel_card_targets.json` stores Discord message targets by short code.
 
 ---
 
@@ -1583,7 +1583,7 @@ Manual fallback:
 
 7. Run `publish_novel_card.yml` if you need a manual card.
 
-8. Confirm `novel_status_targets.json` updates if the novel has a status card.
+8. Confirm `novel_card_targets.json` updates if the novel has a status card.
 
 ---
 
@@ -1659,7 +1659,7 @@ When adding a new novel:
 3. Check `tags`, `site_genres`, `chapter_count`, `last_chapter`, and `discord_color` before publishing. For world-hopping, tick exactly one world-hopping checkbox so the matching role tag appears inside `tags`.
 4. Add Discord role/emoji/role URL data in the Discord repo.
 5. Run `publish_novel_card.yml`.
-6. Confirm `novel_status_targets.json` was updated.
+6. Confirm `novel_card_targets.json` was updated.
 7. If the novel enters membership, run `publish_membership_update.yml` with:
    - `short_code`
    - `banner_url`
@@ -1766,7 +1766,7 @@ Use:
 - `site_genres` is the full Mistmint API genre list; `tags` is the Discord-supported mention list.
 - Leaving both world-hopping checkboxes unchecked adds no world-hopping tag to `tags`.
 - `update_novel_card.py` edits existing Discord messages instead of reposting.
-- `novel_status_targets.json` stores message targets by short code.
+- `novel_card_targets.json` stores message targets by short code.
 - Discord role IDs, custom emojis, and role URLs belong in Discord bot repos, not in `rss-feed` mappings.
 - Direct-report template settings belong in `message_templates/*.toml`, not hardcoded Python.
 - Mistmint comments can run in `trans`, `public`, or `auto` mode via `comments_source`.

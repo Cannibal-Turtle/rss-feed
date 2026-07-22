@@ -151,7 +151,7 @@ def discover_configuration() -> tuple[list[str], list[str]]:
     collect_all_values(local_thread_map, channels, channel_seen)
 
     # rss-feed: channel IDs already registered for novel-card updates.
-    local_targets = load_json_file(ROOT / "novel_status_targets.json")
+    local_targets = load_json_file(ROOT / "novel_card_targets.json")
     collect_channel_fields(local_targets, channels, channel_seen, guilds, guild_seen)
 
     # rss-feed: load both downstream Discord integrations from their raw configs.

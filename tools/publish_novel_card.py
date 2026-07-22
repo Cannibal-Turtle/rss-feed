@@ -71,7 +71,7 @@ except ModuleNotFoundError:
     import tomli as tomllib
 
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
-STATE_FILE = "novel_status_targets.json"
+STATE_FILE = "novel_card_targets.json"
 
 _TEMPLATE_SETTINGS = load_template_settings("publish_novel_card")
 

@@ -20,7 +20,7 @@ from host_utils import get_host_utils
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 TOKEN = os.environ["DISCORD_BOT_TOKEN"]
-TARGETS_FILE = ROOT / "novel_status_targets.json"
+TARGETS_FILE = ROOT / "novel_card_targets.json"
 # ────────────────────────────────────────────────────────────────────────────────
 
 
