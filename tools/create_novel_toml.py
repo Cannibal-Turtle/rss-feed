@@ -161,6 +161,19 @@ def yes_no(value: Any, *, default: bool = False) -> bool:
     raise ScriptError(f"Expected yes/no true/false value, got: {value!r}")
 
 
+def resolve_nsfw(value: Any, api_novel: dict[str, Any]) -> bool:
+    """Resolve a future checkbox/dropdown override without changing today's default.
+
+    GitHub boolean inputs arrive as ``true``/``false`` strings, while a choice
+    input can additionally send ``auto``. Blank or ``auto`` preserves the host
+    API value; an explicit true/false value overrides it.
+    """
+    normalized = str(value or "").strip().casefold()
+    if normalized in {"", "auto"}:
+        return bool(api_novel.get("isMature", False))
+    return yes_no(normalized)
+
+
 def load_toml(path: Path) -> dict[str, Any]:
     return tomllib.loads(path.read_text(encoding="utf-8"))
 
@@ -651,6 +664,7 @@ def build_toml_text(
     tags: list[str],
     site_genres: list[str],
     history_file: str,
+    is_nsfw: bool,
 ) -> str:
     title = str_clean(api_novel.get("title"))
     description = str_clean(api_novel.get("description"))
@@ -670,7 +684,7 @@ def build_toml_text(
     lines.append(f"start_date = {quote_toml(parse_iso_date_to_dmy(str_clean(api_novel.get('createdAt'))))}")
     lines.append("has_free = true")
     lines.append("has_paid = true")
-    lines.append(f"is_nsfw = {toml_bool(bool(api_novel.get('isMature', False)))}")
+    lines.append(f"is_nsfw = {toml_bool(is_nsfw)}")
     lines.append("is_membership = false")
     lines.append("")
     lines.append(f"discord_color = {quote_toml(discord_color)}")
@@ -718,6 +732,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--chapter-count", default="", help='Optional display text, e.g. "93 Chapters"')
     p.add_argument("--last-chapter", default="", help='Optional target text, e.g. "Chapter 93"')
     p.add_argument("--discord-color", default="", help='Optional hex color, e.g. "#c90016"')
+    p.add_argument(
+        "--nsfw",
+        default="auto",
+        help=(
+            "true/false/auto. Supports a future GitHub checkbox or dropdown. "
+            "Blank/auto uses the host API isMature value; true/false overrides it."
+        ),
+    )
     p.add_argument("--quick-transmigration", default="false", help="true/false. Adds quick transmigration to tags.")
     p.add_argument("--infinite-flow", default="false", help="true/false. Adds infinite flow to tags.")
     p.add_argument(
@@ -802,6 +824,7 @@ def main(argv: list[str]) -> int:
 
     has_arcs = yes_no(args.has_arcs, default=False)
     history_file = f"arc_history/{short_code.casefold()}_history.json" if has_arcs else ""
+    is_nsfw = resolve_nsfw(args.nsfw, api_novel)
 
     toml_text = build_toml_text(
         host_name=host_name,
@@ -816,6 +839,7 @@ def main(argv: list[str]) -> int:
         tags=tags,
         site_genres=site_genres,
         history_file=history_file,
+        is_nsfw=is_nsfw,
     )
 
     if unmapped:
