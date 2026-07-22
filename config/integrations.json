@@ -73,7 +73,9 @@
     "integration": "discord_webhook",
     "channel_key": "mod",
     "mention_role_key": "admin",
-    "mode_label": "api fallback",
+    "novel_feed_mode_label": "per-novel feed fallback",
+    "api_mode_label": "API fallback",
+    "mixed_mode_label": "per-novel feed + API fallback",
     "max_items": 10
   },
   "comments": {

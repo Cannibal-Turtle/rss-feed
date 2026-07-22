@@ -16,6 +16,7 @@ import datetime
 import json
 import os
 import re
+import tempfile
 
 import feedparser
 from pathlib import Path
@@ -30,6 +31,11 @@ NSFW_PAREN_RE = re.compile(r"\([^)]*\b(?:nsfw|r-?18|18\+|h{1,3})\b[^)]*\)", re.I
 FEED_URL_KEYS = {
     "free": "free_feed_url",
     "paid": "paid_feed_url",
+}
+
+NOVEL_FEED_URL_KEYS = {
+    "free": "novel_free_feed_url",
+    "paid": "novel_paid_feed_url",
 }
 
 SOURCE_MODE_KEYS = {
@@ -237,13 +243,58 @@ async def fetch_parsed_feed_async(session: Any, feed_url: str, *, semaphore: Any
             async with session.get(feed_url, timeout=30) as resp:
                 if resp.status >= 400:
                     print(f"{label} fetch failed: {feed_url} → HTTP {resp.status}")
-                    return feedparser.parse("")
+                    parsed = feedparser.parse("")
+                    parsed["_fetch_ok"] = False
+                    parsed["_fetch_error"] = f"HTTP {resp.status}"
+                    return parsed
                 text = await resp.text()
         except Exception as exc:
             print(f"{label} fetch failed: {feed_url} → {exc}")
-            return feedparser.parse("")
+            parsed = feedparser.parse("")
+            parsed["_fetch_ok"] = False
+            parsed["_fetch_error"] = str(exc)
+            return parsed
 
-    return feedparser.parse(text)
+    parsed = feedparser.parse(text)
+    parse_failed = bool(getattr(parsed, "bozo", False)) and not list(
+        getattr(parsed, "entries", []) or []
+    )
+    parsed["_fetch_ok"] = not parse_failed
+    parsed["_fetch_error"] = (
+        str(getattr(parsed, "bozo_exception", "") or "feed parse failed")
+        if parse_failed
+        else ""
+    )
+    return parsed
+
+
+def parsed_feed_fetch_ok(parsed_feed: Any) -> bool:
+    """Return whether an async feed request produced a usable feed document.
+
+    Older/direct feedparser results do not carry the private metadata added by
+    fetch_parsed_feed_async(), so they keep their historical behavior and are
+    treated as usable unless they are both bozo and empty.
+    """
+
+    if isinstance(parsed_feed, dict) and "_fetch_ok" in parsed_feed:
+        return bool(parsed_feed.get("_fetch_ok"))
+
+    explicit = getattr(parsed_feed, "_fetch_ok", None)
+    if explicit is not None:
+        return bool(explicit)
+
+    return not (
+        bool(getattr(parsed_feed, "bozo", False))
+        and not list(getattr(parsed_feed, "entries", []) or [])
+    )
+
+
+def parsed_feed_fetch_error(parsed_feed: Any) -> str:
+    if isinstance(parsed_feed, dict):
+        value = parsed_feed.get("_fetch_error", "")
+    else:
+        value = getattr(parsed_feed, "_fetch_error", "")
+    return str(value or "").strip()
 
 
 # ---------------- Source Scope Helpers ----------------
@@ -262,7 +313,7 @@ def normalize_chapter_source_mode(value: Any) -> str:
     Supported canonical modes:
     - feed: use only RSS/feed-style source
     - api: use only chapter API/data source
-    - feed_api: use feed first, then API only when the feed looks capped
+    - feed_api: use feed first, then configured fallback sources as needed
     """
 
     raw = str(value or "").strip().casefold().replace("-", "_").replace("+", "_")
@@ -289,7 +340,7 @@ def chapter_source_mode(host: str, chapter_type: str) -> str:
     Modes:
     - feed: use the feed/RSS-style source only
     - api: use the chapter API/data source only
-    - feed_api: use feed, then API only when the feed looks capped
+    - feed_api: use feed first, then the generator's configured fallback chain
 
     If the host TOML does not say explicitly:
     - free defaults to feed, unless there is no free_feed_url but there is a chapters_api_url
@@ -331,6 +382,19 @@ def host_level_feed_url(host: str, chapter_type: str) -> str:
     return str(host_data_for(host).get(key, "") or "").strip()
 
 
+def host_novel_feed_url(host: str, chapter_type: str) -> str:
+    """Return a host-defined per-novel feed template, if configured.
+
+    This is separate from free_feed_url/paid_feed_url so a host can expose both
+    one global feed and a per-novel fallback template at the same time.
+    """
+
+    key = NOVEL_FEED_URL_KEYS.get(str(chapter_type or "").strip().casefold(), "")
+    if not key:
+        return ""
+    return str(host_data_for(host).get(key, "") or "").strip()
+
+
 def slug_from_url(url: str) -> str:
     value = str(url or "").strip().rstrip("/")
     if not value:
@@ -364,7 +428,15 @@ def fill_novel_template(template: str, novel_title: str, details: dict[str, Any]
 
 
 def resolved_novel_feed_url(host: str, novel_title: str, details: dict[str, Any], chapter_type: str) -> str:
-    raw = novel_level_feed_url(details, chapter_type) or host_level_feed_url(host, chapter_type)
+    raw = novel_level_feed_url(details, chapter_type) or host_novel_feed_url(host, chapter_type)
+
+    # Backwards compatibility: a host-level free_feed_url/paid_feed_url that
+    # contains a novel placeholder is itself a per-novel template.
+    if not raw:
+        host_feed = host_level_feed_url(host, chapter_type)
+        if needs_novel_value(host_feed):
+            raw = host_feed
+
     return fill_novel_template(raw, novel_title, details)
 
 
@@ -433,6 +505,10 @@ def source_scope_for(host: str, novel_title: str, details: dict[str, Any], chapt
         if novel_feed:
             return "novel_feed"
 
+        host_novel_feed = host_novel_feed_url(host, chapter_type)
+        if host_novel_feed:
+            return "novel_feed"
+
         host_feed = host_level_feed_url(host, chapter_type)
         if host_feed:
             return "novel_feed" if needs_novel_value(host_feed) else "host_feed"
@@ -446,6 +522,55 @@ def source_scope_for(host: str, novel_title: str, details: dict[str, Any], chapt
         return ""
 
     return ""
+
+
+# ---------------- Feed Fallback Run Report ----------------
+
+def feed_fallback_report_path(chapter_type: str) -> Path:
+    """Return the temporary JSON path shared by a generator and its alert step."""
+
+    chapter_type = str(chapter_type or "chapter").strip().casefold() or "chapter"
+    specific_key = f"{chapter_type.upper()}_FEED_FALLBACK_REPORT_PATH"
+    configured = str(
+        os.getenv(specific_key)
+        or os.getenv("FEED_FALLBACK_REPORT_PATH")
+        or ""
+    ).strip()
+    if configured:
+        return Path(configured)
+
+    return Path(tempfile.gettempdir()) / f"rss_feed_{chapter_type}_fallback_report.json"
+
+
+def write_feed_fallback_report(chapter_type: str, events: list[dict[str, Any]]) -> Path:
+    path = feed_fallback_report_path(chapter_type)
+    payload = {
+        "chapter_type": str(chapter_type or "").strip().casefold(),
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "events": events,
+    }
+
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as exc:
+        print(f"Warning: could not write feed fallback report {path}: {exc}")
+
+    return path
+
+
+def load_feed_fallback_report(chapter_type: str) -> dict[str, Any]:
+    path = feed_fallback_report_path(chapter_type)
+    if not path.exists():
+        return {}
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"Warning: could not read feed fallback report {path}: {exc}")
+        return {}
+
+    return data if isinstance(data, dict) else {}
 
 
 # ---------------- Completion State Gate ----------------

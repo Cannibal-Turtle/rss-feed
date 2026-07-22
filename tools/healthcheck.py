@@ -420,13 +420,21 @@ def check_source_modes(hc: Healthcheck, hosts: dict[str, dict[str, Any]]) -> Non
             mode = _normalize_chapter_source_mode(raw)
             chapter_type = "free" if key.startswith("free") else "paid"
             feed_key = f"{chapter_type}_feed_url"
+            novel_feed_key = f"novel_{chapter_type}_feed_url"
 
             if mode not in VALID_CHAPTER_SOURCE_MODES:
                 hc.error("source modes", f"{host_key}.{key}: invalid mode {raw!r}")
                 continue
 
-            if mode in {"feed", "feed_api"} and not str(host_data.get(feed_key) or "").strip():
-                hc.error("source modes", f"{host_key}.{key}={mode!r} needs {feed_key} in host mapping")
+            has_feed = bool(
+                str(host_data.get(feed_key) or "").strip()
+                or str(host_data.get(novel_feed_key) or "").strip()
+            )
+            if mode in {"feed", "feed_api"} and not has_feed:
+                hc.error(
+                    "source modes",
+                    f"{host_key}.{key}={mode!r} needs {feed_key} or {novel_feed_key} in host mapping",
+                )
 
             if mode in {"api", "feed_api"} and not str(host_data.get("chapters_api_url") or "").strip():
                 hc.error("source modes", f"{host_key}.{key}={mode!r} needs chapters_api_url in host mapping")

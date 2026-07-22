@@ -204,7 +204,9 @@ This controls whether novel-card status changes can trigger a status update work
 
 ## `feed_api_alerts`
 
-This controls the optional alert for `feed_api` fallback.
+This controls the optional alert for `feed_api` fallback. Free and paid alerts
+can identify whether a missing chapter was recovered through a per-novel feed,
+the API, or both.
 
 ```json
 "feed_api_alerts": {
@@ -212,7 +214,9 @@ This controls the optional alert for `feed_api` fallback.
   "integration": "discord_webhook",
   "channel_key": "mod",
   "mention_role_key": "admin",
-  "mode_label": "api fallback",
+  "novel_feed_mode_label": "per-novel feed fallback",
+  "api_mode_label": "API fallback",
+  "mixed_mode_label": "per-novel feed + API fallback",
   "max_items": 10
 }
 ```
@@ -225,7 +229,10 @@ Default should stay `false` for fork-friendliness.
 | `integration` | Which integration block to use for channel/role lookup. |
 | `channel_key` | Channel ID key to read from the target repo's `server.json`. |
 | `mention_role_key` | Role ID key to read from the target repo's `roles.json`. |
-| `mode_label` | Text shown in the alert, usually `api fallback`. |
+| `novel_feed_mode_label` | Text shown when a per-novel feed recovered rows missing from the host/global feed. |
+| `api_mode_label` | Text shown when the API was used directly as the fallback. |
+| `mixed_mode_label` | Text shown when per-novel feeds were tried and the API was still needed for some novels. |
+| `mode_label` | Legacy fallback label. Still accepted for older configs. |
 | `max_items` | Maximum number of missing chapters shown in one Discord alert. |
 
 With this config:
@@ -246,6 +253,14 @@ and pings:
 ```text
 discord-webhook/config/roles.json → "admin"
 ```
+
+The free-feed generator writes a temporary run report before this alert step.
+That report is not committed; it only records which fallback path was used in
+the current workflow run. The workflow also passes the pre-generation GUID
+snapshot, so the alert lists only chapters newly recovered during this run even
+when a per-novel feed uses different publication timestamps from the global
+feed. If either temporary file is absent, the alert keeps its older detection
+fallbacks.
 
 If `DISCORD_BOT_TOKEN` is missing, the alert should skip cleanly. It should not break RSS generation.
 

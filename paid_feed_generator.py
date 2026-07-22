@@ -12,8 +12,6 @@ from host_utils import get_host_utils
 from feed_common import (
     chapter_fetch_concurrency,
     chapter_source_mode,
-    chapter_source_uses_api,
-    chapter_source_uses_feed,
     entry_matches_chapter_type,
     feed_looks_capped_at_current_batch,
     fetch_parsed_feed_async,
@@ -21,10 +19,13 @@ from feed_common import (
     host_level_feed_url,
     load_completion_state,
     needs_novel_value,
+    parsed_feed_fetch_error,
+    parsed_feed_fetch_ok,
     resolved_novel_feed_url,
     should_skip_completed,
     sort_feed_items,
     truthy,
+    write_feed_fallback_report,
 )
 
 # Import mapping functions and data from novel_mappings.py
@@ -253,14 +254,18 @@ def process_novel_paid_feed(host, novel_title, details, feed_url):
     return items
 
 
-async def process_novel_paid_feed_async(session, host, novel_title, details, feed_url):
-    utils = get_host_utils(host)
-    parsed_feed = await fetch_parsed_feed_async(
+async def fetch_paid_feed_async(session, feed_url):
+    return await fetch_parsed_feed_async(
         session,
         feed_url,
         semaphore=semaphore,
         label="Paid feed",
     )
+
+
+async def process_novel_paid_feed_async(session, host, novel_title, details, feed_url):
+    utils = get_host_utils(host)
+    parsed_feed = await fetch_paid_feed_async(session, feed_url)
     items = []
 
     for entry in parsed_feed.entries:
@@ -275,7 +280,15 @@ async def process_novel_paid_feed_async(session, host, novel_title, details, fee
             forced_details=details,
         )
 
-    return items
+    return {
+        "host": host,
+        "novel_title": novel_title,
+        "feed_url": feed_url,
+        "items": items,
+        "fetch_ok": parsed_feed_fetch_ok(parsed_feed),
+        "fetch_error": parsed_feed_fetch_error(parsed_feed),
+        "looks_capped": feed_looks_capped_at_current_batch(parsed_feed),
+    }
 
 
 async def process_novel(session, host, novel_title):
@@ -283,11 +296,95 @@ async def process_novel(session, host, novel_title):
         novel_url = get_novel_url(novel_title, host)
         print(f"Scraping: {novel_url}")
         utils = get_host_utils(host)
+        scraper = utils.get("scrape_paid_chapters_async")
+        if not scraper:
+            print(f"No scrape_paid_chapters_async defined for host: {host}")
+            return []
 
         # Paid API/source mode now mirrors free API mode:
         # fetch/build once and let history/state/guid gates decide what is new.
-        paid_chapters, _main_desc = await utils["scrape_paid_chapters_async"](session, novel_url, host)
+        try:
+            paid_chapters, _main_desc = await scraper(session, novel_url, host)
+        except Exception as exc:
+            print(f"Paid API scrape failed for {host} / {novel_title}: {exc}")
+            return []
+
         return [build_paid_item(host, novel_title, chap) for chap in (paid_chapters or [])]
+
+
+def collect_novel_paid_feed_requests(host, data, completion_state):
+    """Return active per-novel paid feed requests and active novels without one."""
+
+    requests = []
+    uncovered = []
+
+    if completion_state is None:
+        completion_state = load_completion_state()
+
+    for novel_title, details in data.get("novels", {}).items():
+        if not should_check_paid_novel(novel_title, details, completion_state):
+            continue
+
+        feed_url = resolved_novel_feed_url(host, novel_title, details, "paid")
+        if feed_url:
+            requests.append((novel_title, details, feed_url))
+        else:
+            uncovered.append(novel_title)
+
+    return requests, uncovered, completion_state
+
+
+async def run_novel_paid_feed_requests(session, host, requests):
+    tasks = [
+        asyncio.create_task(
+            process_novel_paid_feed_async(session, host, novel_title, details, feed_url)
+        )
+        for novel_title, details, feed_url in requests
+    ]
+    return await asyncio.gather(*tasks) if tasks else []
+
+
+def add_paid_api_tasks(
+    tasks,
+    session,
+    host,
+    data,
+    completion_state,
+    *,
+    only_novels=None,
+):
+    """Queue paid API fetches for one host.
+
+    Plain api mode and feed_api fallback both call this helper, so a fallback
+    uses the same host adapter and mapped-novel filtering as normal API mode.
+    """
+
+    utils = get_host_utils(host)
+    if not utils.get("scrape_paid_chapters_async"):
+        print(f"No scrape_paid_chapters_async defined for host: {host}")
+        return completion_state
+
+    if completion_state is None:
+        completion_state = load_completion_state()
+
+    allowed = set(only_novels or []) if only_novels is not None else None
+    any_api_novel = False
+
+    for novel_title, details in data.get("novels", {}).items():
+        if allowed is not None and novel_title not in allowed:
+            continue
+
+        any_api_novel = True
+        if not should_check_paid_novel(novel_title, details, completion_state):
+            continue
+
+        tasks.append(asyncio.create_task(process_novel(session, host, novel_title)))
+
+    if not any_api_novel:
+        print(f"No paid API novels defined for host: {host}")
+
+    return completion_state
+
 
 class MyRSSItem(PyRSS2Gen.RSSItem):
     def __init__(self, *args, volume="", chapter="", chaptername="", coin="", host="", is_nsfw=None, **kwargs):
@@ -375,84 +472,165 @@ class CustomRSS2(PyRSS2Gen.RSS2):
 async def main_async():
     # 1) scrape fresh items
     scraped = []
-    completion_state = load_completion_state()
+    fallback_events = []
 
-    async with aiohttp.ClientSession() as session:
+    # Clear stale state before this run. The workflow alert step reads the
+    # final report from the same temporary path after generation completes.
+    write_feed_fallback_report("paid", fallback_events)
+
+    # Loaded only when a novel-scoped source is needed.
+    completion_state = None
+
+    connector = aiohttp.TCPConnector(limit=_paid_api_concurrency())
+    async with aiohttp.ClientSession(connector=connector) as session:
         tasks = []
 
         for host, data in HOSTING_SITE_DATA.items():
             mode = chapter_source_mode(host, "paid")
 
-            api_scan_reason = ""
+            # Plain API mode does not touch any feed source.
+            if mode == "api":
+                completion_state = add_paid_api_tasks(
+                    tasks,
+                    session,
+                    host,
+                    data,
+                    completion_state,
+                )
+                continue
 
-            # Feed modes: plain feed OR feed_api hybrid.
-            # feed_api only falls back to API when a host/global feed looks capped.
-            if chapter_source_uses_feed(mode):
-                host_feed_url = host_level_feed_url(host, "paid")
-                if host_feed_url and not needs_novel_value(host_feed_url):
-                    parsed_feed = feedparser.parse(host_feed_url)
-                    scraped.extend(build_host_paid_items_from_parsed_feed(host, parsed_feed))
+            if mode not in {"feed", "feed_api"}:
+                continue
 
-                    if mode == "feed_api" and feed_looks_capped_at_current_batch(parsed_feed):
-                        api_scan_reason = (
+            host_feed_url = host_level_feed_url(host, "paid")
+            global_feed_url = (
+                host_feed_url
+                if host_feed_url and not needs_novel_value(host_feed_url)
+                else ""
+            )
+
+            fallback_trigger = ""
+            fallback_reason = ""
+
+            if global_feed_url:
+                parsed_feed = await fetch_paid_feed_async(session, global_feed_url)
+                scraped.extend(build_host_paid_items_from_parsed_feed(host, parsed_feed))
+
+                if mode == "feed_api":
+                    if not parsed_feed_fetch_ok(parsed_feed):
+                        fallback_trigger = "host_feed_failed"
+                        error = parsed_feed_fetch_error(parsed_feed)
+                        fallback_reason = f"{host} paid host feed could not be fetched"
+                        if error:
+                            fallback_reason += f" ({error})"
+                    elif feed_looks_capped_at_current_batch(parsed_feed):
+                        fallback_trigger = "host_feed_capped"
+                        fallback_reason = (
                             f"{host} paid feed shows {len(parsed_feed.entries)} visible entries "
                             "and the oldest visible row is still in the current batch"
                         )
+
+                if not fallback_trigger:
+                    continue
+
+                print(
+                    f"[paid-feed] {fallback_reason}; checking per-novel paid feed fallback first."
+                )
+
+            # Without a global feed, per-novel paid feeds are the primary feed
+            # source. A capped/failed global feed reaches this same path as a
+            # fallback before the API is considered.
+            requests, uncovered, completion_state = collect_novel_paid_feed_requests(
+                host,
+                data,
+                completion_state,
+            )
+            novel_results = await run_novel_paid_feed_requests(session, host, requests)
+
+            successful_novels = []
+            failed_novels = []
+            capped_novels = []
+            for result in novel_results:
+                scraped.extend(result.get("items", []))
+                novel_title = str(result.get("novel_title") or "").strip()
+
+                if not result.get("fetch_ok"):
+                    failed_novels.append(novel_title)
+                    error = str(result.get("fetch_error") or "").strip()
+                    suffix = f": {error}" if error else ""
+                    print(
+                        f"[paid-feed] Per-novel paid feed failed for {host} / "
+                        f"{novel_title}{suffix}"
+                    )
                 else:
-                    # Feed source, novel scope: loop novels and gate before fetching.
-                    any_novel_feed = False
-                    for novel_title, details in data.get("novels", {}).items():
-                        feed_url = resolved_novel_feed_url(host, novel_title, details, "paid")
-                        if not feed_url:
-                            continue
-
-                        any_novel_feed = True
-                        if not details.get("paid_feed"):
-                            print(f"Skipping {novel_title}: has_paid=false or no paid_feed configured.")
-                            continue
-
-                        if should_skip_completed(novel_title, "paid", details, state=completion_state):
-                            print(f"Skipping {novel_title}: paid_completion already exists.")
-                            continue
-
-                        tasks.append(
-                            asyncio.create_task(
-                                process_novel_paid_feed_async(session, host, novel_title, details, feed_url)
-                            )
+                    successful_novels.append(novel_title)
+                    if result.get("looks_capped"):
+                        capped_novels.append(novel_title)
+                        print(
+                            f"[paid-feed] Per-novel paid feed may be capped for "
+                            f"{host} / {novel_title}."
                         )
 
-                    if not any_novel_feed:
-                        print(f"No paid feed source defined for host: {host}")
-                        if mode == "feed_api":
-                            api_scan_reason = f"{host} has no usable paid feed source"
+            api_novels = []
+            if mode == "feed_api":
+                api_novels = list(dict.fromkeys(uncovered + failed_novels + capped_novels))
+                if api_novels:
+                    print(
+                        f"[paid-feed] Scanning {len(api_novels)} mapped novel(s) "
+                        "through paid API fallback."
+                    )
+                    completion_state = add_paid_api_tasks(
+                        tasks,
+                        session,
+                        host,
+                        data,
+                        completion_state,
+                        only_novels=api_novels,
+                    )
+            elif uncovered:
+                print(
+                    f"No per-novel paid feed source defined for {host}: "
+                    + ", ".join(uncovered)
+                )
 
-                if not chapter_source_uses_api(mode):
-                    continue
-
-                if not api_scan_reason:
-                    continue
-
-                print(f"[paid-feed] {api_scan_reason}; scanning mapped novels through API fallback.")
-
-            # API/source handled per novel for api OR feed_api fallback.
-            if chapter_source_uses_api(mode):
-                for novel_title, details in data.get("novels", {}).items():
-                    if not should_check_paid_novel(novel_title, details, completion_state):
-                        continue
-
-                    tasks.append(asyncio.create_task(process_novel(session, host, novel_title)))
-                continue
+            if fallback_trigger or failed_novels or capped_novels or uncovered:
+                fallback_events.append({
+                    "host": host,
+                    "chapter_type": "paid",
+                    "trigger": fallback_trigger or (
+                        "novel_feed_failed"
+                        if failed_novels
+                        else "novel_feed_capped"
+                        if capped_novels
+                        else "novel_feed_unavailable"
+                    ),
+                    "reason": fallback_reason,
+                    "host_feed_url": global_feed_url,
+                    "novel_feed_attempted": len(requests),
+                    "novel_feed_used": bool(successful_novels),
+                    "novel_feed_successful_novels": successful_novels,
+                    "novel_feed_failed_novels": failed_novels,
+                    "novel_feed_capped_novels": capped_novels,
+                    "novel_feed_uncovered_novels": uncovered,
+                    "api_fallback_used": bool(api_novels),
+                    "api_fallback_novels": api_novels,
+                })
 
         if tasks:
             results = await asyncio.gather(*tasks)
             for items in results:
                 scraped.extend(items)
 
+    report_path = write_feed_fallback_report("paid", fallback_events)
+    if fallback_events and report_path.exists():
+        print(f"[paid-feed] Fallback report written to {report_path}")
+
     # 2) load previous history
     old_items = [dict_to_item(x) for x in load_history()]
 
     # 3) merge & de-dupe by GUID (new wins)
     merged = {}
+
     def key_for(it):
         return getattr(it.guid, "guid", None) if isinstance(it.guid, PyRSS2Gen.Guid) else it.guid or it.link
 
@@ -495,6 +673,7 @@ async def main_async():
 
     print(f"Modified feed generated with {len(kept)} items.")
     print(f"Output written to {output_file}")
+
 
 if __name__ == "__main__":
     asyncio.run(main_async())

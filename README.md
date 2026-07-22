@@ -355,6 +355,9 @@ coin_emoji = "🪙"
 ticket_emoji = "🎟️"
 
 free_feed_url = "https://example.com/feed/"
+novel_free_feed_url = "https://example.com/novels/{slug}/feed"
+paid_feed_url = "https://example.com/feed/paid/"
+novel_paid_feed_url = "https://example.com/novels/{slug}/paid-feed"
 chapters_api_url = "https://api.example.com/api/novels/slug/{slug}/chapters"
 
 free_chapters_source = "feed"
@@ -383,7 +386,8 @@ Examples:
 - `host_logo`
 - `coin_emoji`
 - `ticket_emoji`
-- host/global feed URLs, such as `free_feed_url`
+- host/global feed URLs, such as `free_feed_url` and `paid_feed_url`
+- host-defined per-novel feed templates, such as `novel_free_feed_url` and `novel_paid_feed_url`
 - API URL templates, such as `chapters_api_url = ".../{slug}/..."`
 - feed/API mode settings
 - `comments_api_url`
@@ -747,6 +751,18 @@ A host/global feed is recognized when a feed URL is defined in `mappings/hosts/*
 free_feed_url = "https://www.mistminthaven.com/feed/"
 ```
 
+A host can also define reusable per-novel feed templates alongside its global
+feeds:
+
+```toml
+novel_free_feed_url = "https://www.mistminthaven.com/novels/{slug}/feed"
+novel_paid_feed_url = "https://www.mistminthaven.com/novels/{slug}/paid-feed"
+```
+
+These do not replace the global feeds. In `feed_api` mode the matching
+per-novel feed is the first fallback when its global feed is capped or
+unavailable. A host only needs to define the URLs it actually provides.
+
 A novel-level feed is recognized when a feed URL is defined in a specific `mappings/novels/*.toml` file.
 
 A URL template like this is stored at host level but fetched per novel because it needs the novel slug:
@@ -760,7 +776,7 @@ chapters_api_url = "https://api.mistminthaven.com/api/novels/slug/{slug}/chapter
 Simple rule:
 
 ```text
-global feed URL = sync single fetch
+global feed URL = one async fetch
 slugged / per-novel feed URL = async concurrent fetches
 paid / free API source = async concurrent scraping
 ```
@@ -772,7 +788,7 @@ free_feed_url = "https://www.mysite.com/feed/"
 paid_feed_url = "https://www.mysite.com/feed/premium/"
 ```
 
-These are global feeds, so each one is fetched once with sync `feedparser.parse()`.
+These are global feeds, so each one is fetched once.
 
 ```toml
 free_feed_url = "https://www.mysite.com/feed/{novel_slug}/"
@@ -780,6 +796,30 @@ paid_feed_url = "https://www.mysite.com/feed/premium/{novel_slug}/"
 ```
 
 These are per-novel feeds, so the generator creates async tasks per novel and fetches them concurrently.
+
+A host may expose both scopes at once:
+
+```toml
+free_feed_url = "https://www.mysite.com/feed/"
+novel_free_feed_url = "https://www.mysite.com/novels/{slug}/feed"
+paid_feed_url = "https://www.mysite.com/feed/paid/"
+novel_paid_feed_url = "https://www.mysite.com/novels/{slug}/paid-feed"
+chapters_api_url = "https://api.mysite.com/novels/{slug}/chapters"
+```
+
+With either chapter source set to `feed_api`, its generator uses the same
+scope-aware chain:
+
+```text
+host/global free or paid feed
+→ if capped or unavailable, fetch mapped novels through the matching per-novel feed template
+→ use chapters_api_url only for novels whose per-novel feed is missing, failed, or also looks capped
+→ de-duplicate by GUID/link
+```
+
+The free and paid generators each write a temporary fallback report for the
+Discord alert step. The report identifies whether the current batch used
+per-novel feeds, API fallback, or both; it is not committed to the repository.
 
 For shared free + paid feeds:
 
@@ -834,10 +874,14 @@ Supports:
 
 ```text
 host/global paid feed
-novel-level paid feed
-novel-level paid API/scraper logic
+per-novel paid feed as a primary source or global-feed fallback
+novel-level paid API/scraper fallback for uncovered, failed, or capped novel feeds
 manual/state fallback when a host uses it
 ```
+
+When `paid_chapters_source = "feed_api"` and both feed scopes are configured,
+the paid generator follows `global paid feed → per-novel paid feed → API`, the
+same way the free generator handles its sources.
 
 Paid-only behavior stays inside this generator, including:
 
@@ -1607,6 +1651,20 @@ Manual fallback:
    free_chapters_source = "feed"
    free_feed_url = "https://example.com/feed/"
    ```
+
+   Global feed with per-novel and API fallback:
+
+   ```toml
+   # mappings/hosts/new_host.toml
+   free_feed_url = "https://example.com/feed/"
+   novel_free_feed_url = "https://example.com/novels/{slug}/feed"
+   paid_feed_url = "https://example.com/feed/paid/"
+   novel_paid_feed_url = "https://example.com/novels/{slug}/paid-feed"
+   chapters_api_url = "https://api.example.com/novels/{slug}/chapters"
+   ```
+
+   Then set the relevant `free_chapters_source` and/or
+   `paid_chapters_source` to `feed_api` in `config/source_modes.json`.
 
    Novel-level feed example:
 

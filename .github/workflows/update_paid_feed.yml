@@ -59,6 +59,7 @@ jobs:
         if: steps.feed_changes.outputs.new_items == 'true'
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          FEED_API_ALERT_BEFORE_GUIDS_PATH: /tmp/paid_guids_before.txt
         run: python feed_api/send_feed_api_alert.py paid
 
       - name: Commit and Push Changes

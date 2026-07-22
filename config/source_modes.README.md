@@ -32,7 +32,7 @@ These apply to:
 | ---------- | ------------------------------------------------------------------------------------------------------------ |
 | `feed`     | Use the host-provided feed/RSS-style source only.                                                            |
 | `api`      | Use the host API/chapter data source only.                                                                   |
-| `feed_api` | Use the feed first, then scan mapped novels through API only if the host feed looks capped or overflow-risk. |
+| `feed_api` | Use the host/global feed first. If it is capped or unavailable, use the matching per-novel feed; use the API only for novels whose feed is missing, failed, or also appears capped. This order applies to both free and paid chapters. |
 
 ## Chapter mode
 
@@ -60,7 +60,9 @@ Examples:
 ```text
 base_url
 free_feed_url
+novel_free_feed_url
 paid_feed_url
+novel_paid_feed_url
 chapters_api_url
 comments_api_url
 token_secret

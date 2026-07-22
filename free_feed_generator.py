@@ -11,8 +11,6 @@ from host_utils import get_host_utils
 from feed_common import (
     chapter_fetch_concurrency,
     chapter_source_mode,
-    chapter_source_uses_api,
-    chapter_source_uses_feed,
     entry_matches_chapter_type,
     feed_looks_capped_at_current_batch,
     fetch_parsed_feed_async,
@@ -20,9 +18,12 @@ from feed_common import (
     host_level_feed_url,
     load_completion_state,
     needs_novel_value,
+    parsed_feed_fetch_error,
+    parsed_feed_fetch_ok,
     resolved_novel_feed_url,
     should_skip_completed,
     sort_feed_items,
+    write_feed_fallback_report,
 )
 
 # Import mapping functions and data from novel_mappings.py
@@ -339,7 +340,15 @@ async def process_novel_free_feed(session, host, novel_title, details, feed_url)
             forced_details=details,
         )
 
-    return items
+    return {
+        "host": host,
+        "novel_title": novel_title,
+        "feed_url": feed_url,
+        "items": items,
+        "fetch_ok": parsed_feed_fetch_ok(parsed_feed),
+        "fetch_error": parsed_feed_fetch_error(parsed_feed),
+        "looks_capped": feed_looks_capped_at_current_batch(parsed_feed),
+    }
 
 
 async def process_free_api_novel(session, host, novel_title, details):
@@ -368,39 +377,47 @@ def should_check_free_novel(novel_title, details, completion_state):
     return True
 
 
-def add_novel_free_feed_tasks(tasks, session, host, data, completion_state):
-    """Queue novel-scoped free feed fetches for one host.
+def collect_novel_free_feed_requests(host, data, completion_state):
+    """Return active per-novel feed requests and active novels without one."""
 
-    This keeps feed scheduling separate from source-mode control flow, so
-    main_async only decides *when* to use feed/API and these helpers decide
-    *which mapped novels* should be checked.
-    """
+    requests = []
+    uncovered = []
 
-    any_novel_feed = False
+    if completion_state is None:
+        completion_state = load_completion_state()
 
     for novel_title, details in data.get("novels", {}).items():
-        feed_url = resolved_novel_feed_url(host, novel_title, details, "free")
-        if not feed_url:
-            continue
-
-        any_novel_feed = True
-
-        if completion_state is None:
-            completion_state = load_completion_state()
-
         if not should_check_free_novel(novel_title, details, completion_state):
             continue
 
-        tasks.append(
-            asyncio.create_task(
-                process_novel_free_feed(session, host, novel_title, details, feed_url)
-            )
+        feed_url = resolved_novel_feed_url(host, novel_title, details, "free")
+        if feed_url:
+            requests.append((novel_title, details, feed_url))
+        else:
+            uncovered.append(novel_title)
+
+    return requests, uncovered, completion_state
+
+
+async def run_novel_free_feed_requests(session, host, requests):
+    tasks = [
+        asyncio.create_task(
+            process_novel_free_feed(session, host, novel_title, details, feed_url)
         )
+        for novel_title, details, feed_url in requests
+    ]
+    return await asyncio.gather(*tasks) if tasks else []
 
-    return any_novel_feed, completion_state
 
-
-def add_free_api_tasks(tasks, session, host, data, completion_state):
+def add_free_api_tasks(
+    tasks,
+    session,
+    host,
+    data,
+    completion_state,
+    *,
+    only_novels=None,
+):
     """Queue free API fetches for one host.
 
     Plain api mode and feed_api fallback both call this same helper, so the
@@ -419,7 +436,12 @@ def add_free_api_tasks(tasks, session, host, data, completion_state):
 
     any_api_novel = False
 
+    allowed = set(only_novels or []) if only_novels is not None else None
+
     for novel_title, details in data.get("novels", {}).items():
+        if allowed is not None and novel_title not in allowed:
+            continue
+
         any_api_novel = True
 
         if not should_check_free_novel(novel_title, details, completion_state):
@@ -439,6 +461,11 @@ def add_free_api_tasks(tasks, session, host, data, completion_state):
 
 async def main_async():
     rss_items = []
+    fallback_events = []
+
+    # Clear any stale report before this run. The alert step reads the final
+    # version from the same temporary path later in the workflow.
+    write_feed_fallback_report("free", fallback_events)
 
     # Loaded only if we actually hit a novel-scoped source.
     completion_state = None
@@ -450,47 +477,9 @@ async def main_async():
         # Loop over each host defined in the mapping.
         for host, data in HOSTING_SITE_DATA.items():
             mode = chapter_source_mode(host, "free")
-            api_scan_reason = ""
 
-            # Feed modes: plain feed OR feed_api hybrid.
-            # feed_api only falls back to API when a host/global feed looks capped.
-            if chapter_source_uses_feed(mode):
-                host_feed_url = host_level_feed_url(host, "free")
-
-                if host_feed_url and not needs_novel_value(host_feed_url):
-                    parsed_feed = feedparser.parse(host_feed_url)
-                    rss_items.extend(build_host_free_items_from_parsed_feed(host, parsed_feed))
-
-                    if mode == "feed_api" and feed_looks_capped_at_current_batch(parsed_feed):
-                        api_scan_reason = (
-                            f"{host} feed shows {len(parsed_feed.entries)} visible entries "
-                            "and the oldest visible row is still in the current batch"
-                        )
-                else:
-                    any_novel_feed, completion_state = add_novel_free_feed_tasks(
-                        tasks,
-                        session,
-                        host,
-                        data,
-                        completion_state,
-                    )
-
-                    if not any_novel_feed:
-                        print(f"No free feed source defined for host: {host}")
-                        if mode == "feed_api":
-                            api_scan_reason = f"{host} has no usable free feed source"
-
-                if not chapter_source_uses_api(mode):
-                    continue
-
-                if not api_scan_reason:
-                    continue
-
-                print(f"[free-feed] {api_scan_reason}; scanning mapped novels through API fallback.")
-
-            # API modes: plain api OR feed_api fallback.
-            # Both paths queue API fetches through the same helper.
-            if chapter_source_uses_api(mode):
+            # Plain API mode does not touch any feed source.
+            if mode == "api":
                 completion_state = add_free_api_tasks(
                     tasks,
                     session,
@@ -500,10 +489,131 @@ async def main_async():
                 )
                 continue
 
+            if mode not in {"feed", "feed_api"}:
+                continue
+
+            host_feed_url = host_level_feed_url(host, "free")
+            global_feed_url = (
+                host_feed_url
+                if host_feed_url and not needs_novel_value(host_feed_url)
+                else ""
+            )
+
+            fallback_trigger = ""
+            fallback_reason = ""
+
+            if global_feed_url:
+                parsed_feed = await fetch_feed_async(session, global_feed_url)
+                rss_items.extend(build_host_free_items_from_parsed_feed(host, parsed_feed))
+
+                if mode == "feed_api":
+                    if not parsed_feed_fetch_ok(parsed_feed):
+                        fallback_trigger = "host_feed_failed"
+                        error = parsed_feed_fetch_error(parsed_feed)
+                        fallback_reason = f"{host} host feed could not be fetched"
+                        if error:
+                            fallback_reason += f" ({error})"
+                    elif feed_looks_capped_at_current_batch(parsed_feed):
+                        fallback_trigger = "host_feed_capped"
+                        fallback_reason = (
+                            f"{host} feed shows {len(parsed_feed.entries)} visible entries "
+                            "and the oldest visible row is still in the current batch"
+                        )
+
+                if not fallback_trigger:
+                    continue
+
+                print(
+                    f"[free-feed] {fallback_reason}; checking per-novel feed fallback first."
+                )
+
+            # No global feed means the host's per-novel feeds are the primary
+            # feed source. A capped/failed global feed reaches this same path as
+            # a fallback.
+            requests, uncovered, completion_state = collect_novel_free_feed_requests(
+                host,
+                data,
+                completion_state,
+            )
+            novel_results = await run_novel_free_feed_requests(session, host, requests)
+
+            successful_novels = []
+            failed_novels = []
+            capped_novels = []
+            for result in novel_results:
+                rss_items.extend(result.get("items", []))
+                novel_title = str(result.get("novel_title") or "").strip()
+
+                if not result.get("fetch_ok"):
+                    failed_novels.append(novel_title)
+                    error = str(result.get("fetch_error") or "").strip()
+                    suffix = f": {error}" if error else ""
+                    print(
+                        f"[free-feed] Per-novel feed failed for {host} / "
+                        f"{novel_title}{suffix}"
+                    )
+                else:
+                    successful_novels.append(novel_title)
+                    if result.get("looks_capped"):
+                        capped_novels.append(novel_title)
+                        print(
+                            f"[free-feed] Per-novel feed may be capped for "
+                            f"{host} / {novel_title}."
+                        )
+
+            api_novels = []
+            if mode == "feed_api":
+                api_novels = list(dict.fromkeys(uncovered + failed_novels + capped_novels))
+                if api_novels:
+                    print(
+                        f"[free-feed] Scanning {len(api_novels)} mapped novel(s) "
+                        "through API fallback."
+                    )
+                    completion_state = add_free_api_tasks(
+                        tasks,
+                        session,
+                        host,
+                        data,
+                        completion_state,
+                        only_novels=api_novels,
+                    )
+            elif uncovered:
+                print(
+                    f"No per-novel free feed source defined for {host}: "
+                    + ", ".join(uncovered)
+                )
+
+            if fallback_trigger or failed_novels or capped_novels or uncovered:
+                fallback_events.append({
+                    "host": host,
+                    "chapter_type": "free",
+                    "trigger": fallback_trigger or (
+                        "novel_feed_failed"
+                        if failed_novels
+                        else "novel_feed_capped"
+                        if capped_novels
+                        else "novel_feed_unavailable"
+                    ),
+                    "reason": fallback_reason,
+                    "host_feed_url": global_feed_url,
+                    "novel_feed_attempted": len(requests),
+                    "novel_feed_used": bool(successful_novels),
+                    "novel_feed_successful_novels": successful_novels,
+                    "novel_feed_failed_novels": failed_novels,
+                    "novel_feed_capped_novels": capped_novels,
+                    "novel_feed_uncovered_novels": uncovered,
+                    "api_fallback_used": bool(api_novels),
+                    "api_fallback_novels": api_novels,
+                })
+
         if tasks:
             results = await asyncio.gather(*tasks)
             for items in results:
                 rss_items.extend(items)
+
+    report_path = write_feed_fallback_report("free", fallback_events)
+    if fallback_events and report_path.exists():
+        print(f"[free-feed] Fallback report written to {report_path}")
 
     # feed_api can surface the same chapter from both feed and API.
     # Dedupe before sorting so downstream repos see one item per GUID/link.

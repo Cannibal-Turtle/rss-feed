@@ -26,6 +26,7 @@ from feed_common import (  # noqa: E402
     chapter_source_mode,
     feed_looks_capped_at_current_batch,
     host_level_feed_url,
+    load_feed_fallback_report,
     needs_novel_value,
 )
 from message_renderer import (  # noqa: E402
@@ -144,6 +145,30 @@ def _read_generated_items(feed_path: Path) -> list[dict[str, Any]]:
         })
 
     return items
+
+
+def _read_before_guids(config: dict[str, Any], chapter_type: str) -> set[str] | None:
+    raw_path = str(
+        os.getenv("FEED_API_ALERT_BEFORE_GUIDS_PATH")
+        or config.get(f"{chapter_type}_before_guids_path")
+        or config.get("before_guids_path")
+        or ""
+    ).strip()
+    if not raw_path:
+        return None
+
+    path = Path(raw_path)
+    if not path.is_absolute():
+        path = ROOT / path
+    if not path.exists():
+        print(f"[feed_api alert] GUID snapshot not found: {path}; using timestamp fallback.")
+        return None
+
+    return {
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    }
 
 
 def _chapter_label(item: dict[str, Any]) -> str:
@@ -353,17 +378,25 @@ def _missing_items_for_host(
     host: str,
     chapter_type: str,
     generated_items: list[dict[str, Any]],
+    fallback_event: dict[str, Any] | None = None,
+    before_guids: set[str] | None = None,
 ) -> tuple[str, _dt.datetime | None, list[dict[str, Any]]]:
     mode = chapter_source_mode(host, chapter_type)
     if mode != "feed_api":
         return "", None, []
 
-    feed_url = host_level_feed_url(host, chapter_type)
+    fallback_event = _as_dict(fallback_event)
+    if fallback_event and fallback_event.get("trigger") != "host_feed_capped":
+        return "", None, []
+
+    feed_url = str(fallback_event.get("host_feed_url") or "").strip()
+    if not feed_url:
+        feed_url = host_level_feed_url(host, chapter_type)
     if not feed_url or needs_novel_value(feed_url):
         return "", None, []
 
     parsed_feed = feedparser.parse(feed_url)
-    if not feed_looks_capped_at_current_batch(parsed_feed):
+    if not fallback_event and not feed_looks_capped_at_current_batch(parsed_feed):
         return "", None, []
 
     entries = list(getattr(parsed_feed, "entries", []) or [])
@@ -385,17 +418,68 @@ def _missing_items_for_host(
         if not key or key in feed_keys or key in seen:
             continue
 
-        if batch_dt is not None and _utc_second(item.get("pubDate")) != batch_dt:
+        if before_guids is not None:
+            if key in before_guids:
+                continue
+        elif batch_dt is not None and _utc_second(item.get("pubDate")) != batch_dt:
             continue
 
         seen.add(key)
         missing.append(item)
 
-    reason = (
+    reason = str(fallback_event.get("reason") or "").strip() or (
         f"{host} {chapter_type} feed shows {len(entries)} visible entries "
         "and the oldest visible row is still in the current batch"
     )
     return reason, batch_dt, missing
+
+
+def _fallback_event_by_host(
+    chapter_type: str,
+) -> tuple[bool, dict[str, dict[str, Any]]]:
+    report = load_feed_fallback_report(chapter_type)
+    report_present = isinstance(report, dict) and "events" in report
+    events = report.get("events", []) if report_present else []
+    by_host: dict[str, dict[str, Any]] = {}
+
+    for event in events if isinstance(events, list) else []:
+        event = _as_dict(event)
+        host = str(event.get("host") or "").strip()
+        if host:
+            by_host[host] = event
+
+    return report_present, by_host
+
+
+def _fallback_mode_label(config: dict[str, Any], event: dict[str, Any] | None) -> str:
+    event = _as_dict(event)
+    used_novel_feed = bool(event.get("novel_feed_used"))
+    used_api = bool(event.get("api_fallback_used"))
+
+    if used_novel_feed and used_api:
+        return str(
+            config.get("mixed_mode_label")
+            or "per-novel feed + API fallback"
+        ).strip()
+
+    if used_novel_feed:
+        return str(
+            config.get("novel_feed_mode_label")
+            or "per-novel feed fallback"
+        ).strip()
+
+    if used_api:
+        return str(
+            config.get("api_mode_label")
+            or config.get("mode_label")
+            or "API fallback"
+        ).strip()
+
+    return str(
+        config.get("api_mode_label")
+        or config.get("mode_label")
+        or "API fallback"
+    ).strip()
 
 
 def main(argv: list[str]) -> int:
@@ -435,15 +519,26 @@ def main(argv: list[str]) -> int:
     )
 
     mention = _resolve_mention(config)
-    mode_label = str(config.get("mode_label") or "api fallback").strip() or "api fallback"
     max_items = int(config.get("max_items") or 10)
+    before_guids = _read_before_guids(config, chapter_type)
+    report_present, fallback_events = _fallback_event_by_host(chapter_type)
 
     sent = 0
     for host in HOSTING_SITE_DATA:
+        fallback_event = fallback_events.get(host)
+
+        # When a current-run report exists, only inspect hosts that actually
+        # entered fallback during this generator run. If no report exists, the
+        # old cap-detection behavior remains available for backwards compatibility.
+        if report_present and not fallback_event:
+            continue
+
         reason, _batch_dt, missing = _missing_items_for_host(
             host=host,
             chapter_type=chapter_type,
             generated_items=generated_items,
+            fallback_event=fallback_event,
+            before_guids=before_guids,
         )
         if not missing:
             continue
@@ -461,7 +556,7 @@ def main(argv: list[str]) -> int:
         ctx = {
             "mention": mention,
             "host": host,
-            "mode": mode_label,
+            "mode": _fallback_mode_label(config, fallback_event),
             "chapter_type": chapter_type,
             "feed_label": _feed_label(chapter_type),
             "missing_lines": missing_lines,
