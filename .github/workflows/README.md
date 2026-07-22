@@ -346,7 +346,7 @@ novelupdates/nu_readers.json
 
 Workflow file: [`monthly_revenue.yml`](monthly_revenue.yml)
 
-The cron checks days 28–31, while an internal Malaysia-time guard allows only the actual last-day evening run. A manual run bypasses that date guard.
+The cron checks days 28–31, while an internal UTC+8-time guard allows only the actual last-day evening run. A manual run bypasses that date guard.
 
 It commits:
 
