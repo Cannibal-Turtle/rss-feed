@@ -28,38 +28,6 @@ on:
         description: "Discord color optional, e.g. #c90016. Leave blank to write an empty string."
         required: false
         type: string
-      translator_url:
-        description: "Translator profile/library URL optional. Leave blank to inherit host default or omit."
-        required: false
-        type: string
-      personal_role_id:
-        description: "Personal/default Discord novel role ID (optional)"
-        required: false
-        type: string
-      personal_custom_emoji:
-        description: "Personal/default Discord custom emoji, e.g. <:name:123> (optional)"
-        required: false
-        type: string
-      personal_role_url:
-        description: "Personal/default Discord role URL. Leave blank to reuse the latest URL in that server's novel map."
-        required: false
-        type: string
-      host_role_id:
-        description: "Selected host's Discord novel role ID, if that host server has separate novel roles (optional)"
-        required: false
-        type: string
-      host_custom_emoji:
-        description: "Selected host's Discord custom emoji, if different from the personal server (optional)"
-        required: false
-        type: string
-      host_role_url:
-        description: "Selected host's Discord role URL. Leave blank to reuse the latest URL in that host server's novel map."
-        required: false
-        type: string
-      host_destination_id:
-        description: "Per-novel host Discord thread/channel ID. For Mistmint, enter the novel forum thread ID. Leave blank for shared-channel hosts."
-        required: false
-        type: string
       quick_transmigration:
         description: "Classify it as quick transmigration"
         required: false
@@ -94,6 +62,34 @@ on:
         options:
           - "false"
           - "true"
+      personal_role_id:
+        description: "--- INTEGRATIONS --- Personal server's Discord novel role ID (optional)"
+        required: false
+        type: string
+      personal_custom_emoji:
+        description: "Personal server's Discord custom emoji, e.g. <:name:123> (optional)"
+        required: false
+        type: string
+      personal_role_url:
+        description: "Personal server's Discord role URL. Leave blank to reuse the latest URL in that server's novel map."
+        required: false
+        type: string
+      host_role_id:
+        description: "Host server's Discord novel role ID (optional)"
+        required: false
+        type: string
+      host_custom_emoji:
+        description: "Host server's Discord custom emoji, e.g. <:name:123> (optional)"
+        required: false
+        type: string
+      host_role_url:
+        description: "Host server's Discord role URL. Leave blank to reuse the latest URL in that host server's novel map."
+        required: false
+        type: string
+      host_destination_id:
+        description: "Per-novel host Discord thread/channel ID. Leave blank for shared-channel hosts."
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -132,7 +128,6 @@ jobs:
             --chapter-count "${{ github.event.inputs.chapter_count }}"
             --last-chapter "${{ github.event.inputs.last_chapter }}"
             --discord-color "${{ github.event.inputs.discord_color }}"
-            --translator-url "${{ github.event.inputs.translator_url }}"
             --quick-transmigration "${{ github.event.inputs.quick_transmigration }}"
             --infinite-flow "${{ github.event.inputs.infinite_flow }}"
             --has-arcs "${{ github.event.inputs.has_arcs }}"
