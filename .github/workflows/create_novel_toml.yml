@@ -74,18 +74,6 @@ on:
         description: "Personal server's Discord role URL. Leave blank to reuse the latest URL in that server's novel map."
         required: false
         type: string
-      host_role_id:
-        description: "Host server's Discord novel role ID (optional)"
-        required: false
-        type: string
-      host_custom_emoji:
-        description: "Host server's Discord custom emoji, e.g. <:name:123> (optional)"
-        required: false
-        type: string
-      host_role_url:
-        description: "Host server's Discord role URL. Leave blank to reuse the latest URL in that host server's novel map."
-        required: false
-        type: string
       host_destination_id:
         description: "Per-novel host Discord thread/channel ID. Leave blank for shared-channel hosts."
         required: false
@@ -153,9 +141,6 @@ jobs:
             --personal-role-id "${{ github.event.inputs.personal_role_id }}"
             --personal-custom-emoji "${{ github.event.inputs.personal_custom_emoji }}"
             --personal-role-url "${{ github.event.inputs.personal_role_url }}"
-            --host-role-id "${{ github.event.inputs.host_role_id }}"
-            --host-custom-emoji "${{ github.event.inputs.host_custom_emoji }}"
-            --host-role-url "${{ github.event.inputs.host_role_url }}"
             --host-destination-id "${{ github.event.inputs.host_destination_id }}"
           )
 
