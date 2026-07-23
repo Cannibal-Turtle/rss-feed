@@ -4,7 +4,7 @@
     <title>Aggregated Free Chapters Feed</title>
     <link>https://github.com/cannibal-turtle/</link>
     <description>Aggregated RSS feed for free chapters across all hosting sites.</description>
-    <lastBuildDate>Thu, 23 Jul 2026 05:00:55 +0000</lastBuildDate>
+    <lastBuildDate>Thu, 23 Jul 2026 07:38:48 +0000</lastBuildDate>
     <docs>http://blogs.law.harvard.edu/tech/rss</docs>
     <generator>PyRSS2Gen-1.1.0</generator>
     <item>
@@ -60,29 +60,6 @@ Damn dog:
       <host>Mistmint Haven</host>
       <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
       <guid isPermaLink="false">52e1a436-8c7e-42e8-a461-982a57d705ce</guid>
-    </item>
-    <item>
-      <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
-      <volume>Arc 16: The Abandoned Supporting Female Role</volume>
-      <chapter>Chapter 621</chapter>
-      <chaptername>16.3</chaptername>
-      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring/arc-16-the-abandoned-supporting-female-role-chapter-621</link>
-      <description><![CDATA[To survive, Sheng Nuan must traverse different worlds, playing the role of self-destructive cannon fodder while saving the darkest villains. These villains are cold-blooded, obsessive, and ruthless—capable of annihilating millions with a smile and destroying the world with a wave of their hand. Holding the cannon fodder’s script, Sheng Nuan is terrified…
-Later:
-A paranoid young man with a gloomy expression: “Nuan Nuan, you’re not allowed to go anywhere except by my side…”
-The cold-blooded emperor whose face was stained with blood: “Nuan Nuan, for you, what does it matter if the empire falls?”
-The demonized immortal with snow-white hair: “Nuan Nuan, you are my inner demon.”
-The zombie king of the apocalypse with an unwavering gaze: “Nuan Nuan, it’s your choice—kill me, or save me.”
-Sheng Nuan became even more panicked…
-]]></description>
-      <category>SFW</category>
-      <translator>CannibalTurtle</translator>
-      <short_code>TVITPA</short_code>
-      <featuredImage url="https://i.imgur.com/iqZDcKV.jpeg"/>
-      <pubDate>Thu, 23 Jul 2026 05:00:00 +0000</pubDate>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <guid isPermaLink="false">852b605f-08ea-4d67-be6d-d48352ac1de7</guid>
     </item>
   </channel>
 </rss>
