@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import html
 import json
 import os
 import re
@@ -383,66 +382,6 @@ def build_novel_url(host_name: str, api_novel: dict[str, Any]) -> str:
     return ""
 
 
-def decode_possible_escaped_url(url: str) -> str:
-    url = html.unescape(url or "")
-    url = url.replace(r"\/", "/")
-    try:
-        url = bytes(url, "utf-8").decode("unicode_escape")
-    except Exception:
-        pass
-    return url.strip()
-
-
-def extract_og_image_from_html(page_html: str) -> str:
-    text = page_html or ""
-
-    # Real HTML meta tag path.
-    meta_patterns = [
-        r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
-        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
-        r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)["\']',
-        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image["\']',
-    ]
-    for pat in meta_patterns:
-        m = re.search(pat, text, flags=re.I | re.S)
-        if m:
-            return decode_possible_escaped_url(m.group(1))
-
-    # Next.js inline JSON / escaped RSC payload path.
-    jsonish_patterns = [
-        r'property\\?"\s*:\s*\\?"og:image\\?".*?content\\?"\s*:\s*\\?"(https?:.*?)(?<!\\)\\?"',
-        r'name\\?"\s*:\s*\\?"twitter:image\\?".*?content\\?"\s*:\s*\\?"(https?:.*?)(?<!\\)\\?"',
-    ]
-    for pat in jsonish_patterns:
-        m = re.search(pat, text, flags=re.I | re.S)
-        if m:
-            return decode_possible_escaped_url(m.group(1))
-
-    return ""
-
-
-def fetch_featured_image(novel_url: str, api_novel: dict[str, Any]) -> str:
-    if novel_url:
-        try:
-            r = requests.get(
-                novel_url,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124 Safari/537.36",
-                    "Accept": "text/html,application/xhtml+xml",
-                },
-                timeout=30,
-            )
-            if r.ok:
-                og_image = extract_og_image_from_html(r.text)
-                if og_image:
-                    return og_image
-            else:
-                eprint(f"Warning: novel page returned HTTP {r.status_code}; falling back to avatarUrl.")
-        except Exception as exc:
-            eprint(f"Warning: could not fetch novel page OG image: {exc}; falling back to avatarUrl.")
-
-    return str_clean(api_novel.get("avatarUrl"))
-
 
 def parse_iso_date_to_dmy(value: str) -> str:
     s = str_clean(value)
@@ -779,7 +718,7 @@ def main(argv: list[str]) -> int:
     assert_not_duplicate(api_novel, short_code, target_path, overwrite=args.overwrite)
 
     novel_url = build_novel_url(host_name, api_novel)
-    featured_image = fetch_featured_image(novel_url, api_novel)
+    featured_image = str_clean(api_novel.get("avatarUrl"))
 
     nu_slug = novelupdates_slug_from_title(str_clean(api_novel.get("title")))
     novelupdates_url = f"https://www.novelupdates.com/series/{nu_slug}" if nu_slug else ""

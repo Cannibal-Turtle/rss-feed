@@ -1244,7 +1244,7 @@ Purpose:
 
 - fetch an existing dashboard novel from a configured host API
 - create `mappings/novels/<short_code>.toml`
-- fill host-provided fields automatically, including title, slug URL, novel ID, description, start date, NSFW flag, and Mistmint cover image
+- fill host-provided fields automatically, including title, slug URL, novel ID, description, start date, NSFW flag, and the cover image
 - guess the Novel Updates URL from the title
 - keep only Discord-supported mention tags from `discord-webhook/config/tag_roles.json` in `tags`
 - preserve the full Mistmint Haven API genre list in `site_genres`
