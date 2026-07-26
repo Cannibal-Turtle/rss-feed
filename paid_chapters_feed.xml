@@ -4,7 +4,7 @@
     <title>Aggregated Paid Chapters Feed</title>
     <link>https://github.com/cannibal-turtle/</link>
     <description>Aggregated RSS feed for paid chapters across mapped novels.</description>
-    <lastBuildDate>Sun, 26 Jul 2026 16:16:07 +0000</lastBuildDate>
+    <lastBuildDate>Sun, 26 Jul 2026 16:17:00 +0000</lastBuildDate>
     <docs>http://blogs.law.harvard.edu/tech/rss</docs>
     <generator>PyRSS2Gen-1.1.0</generator>
     <item>
@@ -3178,36 +3178,6 @@ Damn dog:
       <host>Mistmint Haven</host>
       <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
       <guid isPermaLink="false">7ea1de1c-a6ad-4186-8363-177047a26ec4</guid>
-    </item>
-    <item>
-      <title>Help! I Accidentally Flirted with the Lord God, What Do I Do?!</title>
-      <volume>Arc 10: Cannon Fodder in a Wuxia Novel</volume>
-      <chapter>Chapter 363</chapter>
-      <chaptername>10.24</chaptername>
-      <link>https://www.mistminthaven.com/novels/help-i-accidentally-flirted-with-the-lord-god-what-do-i-do/arc-10-cannon-fodder-in-a-wuxia-novel-chapter-363</link>
-      <description><![CDATA[【Quick Transmigration + Double Male Leads + Cannon Fodder Counterattack + Main Shou + 1v1 + Double Clean】
-The Lord God got scammed in an online relationship!
-The other party even ran off on the way to meet in person!
-Enraged, the Lord God issued a special-class wanted order, determined to drag back the wife who suddenly disappeared on him.
-......
-Xie Yaochen, who has already hidden himself inside a small world to carry out missions, blinks innocently.
-“Dating? Never done that.”
-“Online dating scam? No idea.”
-“Special-class wanted criminal? Don’t know him either.”
-Bound to a cannon fodder counterattack system, he happily travels through various small worlds. While cleaning up idiots, he even starts a sweet romance on the side.
-His boyfriend is tall and handsome and loves him so much. If certain parts of him didn’t keep making him see that damn dog Lord God, it would be perfect...
-Damn dog:
-^_^
-]]></description>
-      <category>SFW</category>
-      <translator>CannibalTurtle</translator>
-      <short_code>HIAFLG</short_code>
-      <featuredImage url="https://i.imgur.com/pxkBTeh.jpeg"/>
-      <coin>5</coin>
-      <pubDate>Sun, 19 Jul 2026 16:16:29 +0000</pubDate>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <guid isPermaLink="false">089a59f2-8b15-48e9-b5bc-989ba415e559</guid>
     </item>
   </channel>
 </rss>
