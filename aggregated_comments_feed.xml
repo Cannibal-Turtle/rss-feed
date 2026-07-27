@@ -4,7 +4,22 @@
     <title>Aggregated Comments Feed</title>
     <link>https://github.com/Cannibal-Turtle</link>
     <description>Aggregated RSS feed for comments across hosting sites.</description>
-    <lastBuildDate>Mon, 27 Jul 2026 13:02:07 +0000</lastBuildDate>
+    <lastBuildDate>Mon, 27 Jul 2026 13:31:51 +0000</lastBuildDate>
+    <item>
+      <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
+      <chapter>Chapter 78</chapter>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring/arc-2-the-humble-concubine-will-not-be-a-cannon-fodder-chapter-78</link>
+      <dc:creator><![CDATA[lucy]]></dc:creator>
+      <description><![CDATA[So the intent to rape her was real.]]></description>
+      <translator>CannibalTurtle</translator>
+      <short_code>TVITPA</short_code>
+      <featuredImage url="https://i.imgur.com/iqZDcKV.jpeg"/>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <category>SFW</category>
+      <pubDate>Mon, 27 Jul 2026 13:14:54 +0000</pubDate>
+      <guid isPermaLink="false">5aa211d4-5d3c-4985-9c55-4295b9905c09</guid>
+    </item>
     <item>
       <title>After the Male Leads Went Crazy, They All Turned into Male Ghosts</title>
       <chapter>Chapter 11</chapter>
@@ -146,22 +161,6 @@
       <category>SFW</category>
       <pubDate>Sun, 26 Jul 2026 04:28:33 +0000</pubDate>
       <guid isPermaLink="false">2fcc081d-6ed7-42f2-aae7-6e1ad3f298e2</guid>
-    </item>
-    <item>
-      <title>After Transmigrating into a Book, the Hot-Tempered Little Marquis Starts Training Dogs</title>
-      <chapter>Chapter 2</chapter>
-      <link>https://www.mistminthaven.com/novels/after-transmigrating-into-a-book-the-hot-tempered-little-marquis-starts-training-dogs/chapter-2</link>
-      <dc:creator><![CDATA[Sarah]]></dc:creator>
-      <description><![CDATA[Sticker comment]]></description>
-      <commentImage url="https://cdn.discordapp.com/emojis/1514344178207952946.webp?size=128&amp;quality=lossless"/>
-      <translator>CannibalTurtle</translator>
-      <short_code>ATBHTLM</short_code>
-      <featuredImage url="https://web-novel-mistmint.s3.ap-southeast-1.amazonaws.com/novels/49ff5fa3-dc0a-4080-b2e3-9dcfbd4f8fa3.jpg"/>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <category>SFW</category>
-      <pubDate>Sat, 25 Jul 2026 01:22:19 +0000</pubDate>
-      <guid isPermaLink="false">1e2b0e6f-7b9d-4837-a47f-2475f4143700</guid>
     </item>
   </channel>
 </rss>
