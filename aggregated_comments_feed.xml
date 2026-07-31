@@ -4,7 +4,22 @@
     <title>Aggregated Comments Feed</title>
     <link>https://github.com/Cannibal-Turtle</link>
     <description>Aggregated RSS feed for comments across hosting sites.</description>
-    <lastBuildDate>Fri, 31 Jul 2026 12:01:42 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 31 Jul 2026 12:31:34 +0000</lastBuildDate>
+    <item>
+      <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
+      <chapter>Chapter 556</chapter>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring/arc-14-the-beautiful-cannon-fodder-in-a-horror-world-chapter-556</link>
+      <dc:creator><![CDATA[lucy]]></dc:creator>
+      <description><![CDATA[Why is rape such a casual thing]]></description>
+      <translator>CannibalTurtle</translator>
+      <short_code>TVITPA</short_code>
+      <featuredImage url="https://i.imgur.com/iqZDcKV.jpeg"/>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <category>SFW</category>
+      <pubDate>Fri, 31 Jul 2026 12:24:56 +0000</pubDate>
+      <guid isPermaLink="false">91e54801-5588-4d74-bff6-9700f458efb4</guid>
+    </item>
     <item>
       <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
       <chapter>Chapter 544</chapter>
@@ -141,22 +156,6 @@
       <category>SFW</category>
       <pubDate>Thu, 30 Jul 2026 08:06:43 +0000</pubDate>
       <guid isPermaLink="false">32435eee-33b6-4388-845b-3db823e9ecab</guid>
-    </item>
-    <item>
-      <title>After the Male Leads Went Crazy, They All Turned into Male Ghosts</title>
-      <chapter>Chapter 12</chapter>
-      <link>https://www.mistminthaven.com/novels/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts/arc-1-the-charming-landlord-is-too-hard-to-handle-chapter-12</link>
-      <dc:creator><![CDATA[Hoshi_Moshi]]></dc:creator>
-      <description><![CDATA[Sticker comment]]></description>
-      <commentImage url="https://cdn.discordapp.com/emojis/1514344176026648646.webp?size=128&amp;quality=lossless"/>
-      <translator>CannibalTurtle</translator>
-      <short_code>AMLWC</short_code>
-      <featuredImage url="https://i.imgur.com/EBt5zTK.jpeg"/>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <category>SFW</category>
-      <pubDate>Thu, 30 Jul 2026 07:59:50 +0000</pubDate>
-      <guid isPermaLink="false">3ce50a12-a316-4e51-9e4f-6c5ca43e017e</guid>
     </item>
   </channel>
 </rss>
