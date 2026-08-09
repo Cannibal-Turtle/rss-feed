@@ -4,7 +4,22 @@
     <title>Aggregated Comments Feed</title>
     <link>https://github.com/Cannibal-Turtle</link>
     <description>Aggregated RSS feed for comments across hosting sites.</description>
-    <lastBuildDate>Sun, 09 Aug 2026 19:31:37 +0000</lastBuildDate>
+    <lastBuildDate>Sun, 09 Aug 2026 20:02:04 +0000</lastBuildDate>
+    <item>
+      <title>After the Male Leads Went Crazy, They All Turned into Male Ghosts</title>
+      <chapter>Homepage</chapter>
+      <link>https://www.mistminthaven.com/novels/after-the-male-leads-went-crazy-they-all-turned-into-male-ghosts</link>
+      <dc:creator><![CDATA[lueb]]></dc:creator>
+      <description><![CDATA[Arghh this is my type of novel]]></description>
+      <translator>CannibalTurtle</translator>
+      <short_code>AMLWC</short_code>
+      <featuredImage url="https://i.imgur.com/EBt5zTK.jpeg"/>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <category>SFW</category>
+      <pubDate>Sun, 09 Aug 2026 19:37:36 +0000</pubDate>
+      <guid isPermaLink="false">90a0da92-a578-4486-a245-dba4ba0856ef</guid>
+    </item>
     <item>
       <title>After Transmigrating into the Villain, I Got a HE with the Female Lead's Older Brother</title>
       <chapter>Chapter 1</chapter>
@@ -146,22 +161,6 @@
       <category>SFW</category>
       <pubDate>Fri, 31 Jul 2026 19:46:50 +0000</pubDate>
       <guid isPermaLink="false">80565ca4-13f1-41b2-bad5-02b61eb02a2e</guid>
-    </item>
-    <item>
-      <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
-      <chapter>Chapter 590</chapter>
-      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-villain-is-too-pampered-and-alluring/arc-15-the-imprisoned-evil-queen-chapter-590</link>
-      <dc:creator><![CDATA[lucy]]></dc:creator>
-      <description><![CDATA[What motivates him to be such a dog father?]]></description>
-      <reply_chain><![CDATA[ᯓ✿ In reply to Bilibilibalabala]]></reply_chain>
-      <translator>CannibalTurtle</translator>
-      <short_code>TVITPA</short_code>
-      <featuredImage url="https://i.imgur.com/iqZDcKV.jpeg"/>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <category>SFW</category>
-      <pubDate>Fri, 31 Jul 2026 17:47:49 +0000</pubDate>
-      <guid isPermaLink="false">a0b51ce6-aed8-4361-93ed-623bae4059ca</guid>
     </item>
   </channel>
 </rss>
