@@ -4,7 +4,23 @@
     <title>Aggregated Comments Feed</title>
     <link>https://github.com/Cannibal-Turtle</link>
     <description>Aggregated RSS feed for comments across hosting sites.</description>
-    <lastBuildDate>Tue, 11 Aug 2026 03:31:38 +0000</lastBuildDate>
+    <lastBuildDate>Tue, 11 Aug 2026 04:02:00 +0000</lastBuildDate>
+    <item>
+      <title>Entering the Cage</title>
+      <chapter>Homepage</chapter>
+      <link>https://www.mistminthaven.com/novels/entering-the-cage</link>
+      <dc:creator><![CDATA[CPbdu6]]></dc:creator>
+      <description><![CDATA[Sticker comment]]></description>
+      <commentImage url="https://cdn.discordapp.com/emojis/1514344185585733723.webp?size=128&amp;quality=lossless"/>
+      <translator>CannibalTurtle</translator>
+      <short_code>EC</short_code>
+      <featuredImage url="https://i.imgur.com/hrscn54.jpeg"/>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <category>SFW</category>
+      <pubDate>Tue, 11 Aug 2026 03:38:05 +0000</pubDate>
+      <guid isPermaLink="false">bf343c09-a550-4d89-8227-4a766c9d761d</guid>
+    </item>
     <item>
       <title>Help! I Accidentally Flirted with the Lord God, What Do I Do?!</title>
       <chapter>Chapter 61</chapter>
@@ -146,22 +162,6 @@
       <category>SFW</category>
       <pubDate>Fri, 07 Aug 2026 04:42:16 +0000</pubDate>
       <guid isPermaLink="false">02e4b0fd-53d0-4423-a414-09758363a5d9</guid>
-    </item>
-    <item>
-      <title>After Transmigrating into the Villain, I Got a HE with the Female Lead's Older Brother</title>
-      <chapter>Chapter 50</chapter>
-      <link>https://www.mistminthaven.com/novels/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother/chapter-50</link>
-      <dc:creator><![CDATA[Jaefir7]]></dc:creator>
-      <description><![CDATA[Sticker comment]]></description>
-      <commentImage url="https://cdn.discordapp.com/emojis/1514344176026648646.webp?size=128&amp;quality=lossless"/>
-      <translator>CannibalTurtle</translator>
-      <short_code>ATVHE</short_code>
-      <featuredImage url="https://i.imgur.com/xZHo6u6.jpeg"/>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <category>SFW</category>
-      <pubDate>Wed, 05 Aug 2026 01:12:19 +0000</pubDate>
-      <guid isPermaLink="false">457a832d-f194-4956-9f97-1335da0380bb</guid>
     </item>
   </channel>
 </rss>
