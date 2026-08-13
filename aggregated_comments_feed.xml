@@ -4,7 +4,23 @@
     <title>Aggregated Comments Feed</title>
     <link>https://github.com/Cannibal-Turtle</link>
     <description>Aggregated RSS feed for comments across hosting sites.</description>
-    <lastBuildDate>Thu, 13 Aug 2026 23:01:40 +0000</lastBuildDate>
+    <lastBuildDate>Thu, 13 Aug 2026 23:31:43 +0000</lastBuildDate>
+    <item>
+      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
+      <chapter>Homepage</chapter>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught</link>
+      <dc:creator><![CDATA[Gudetama]]></dc:creator>
+      <description><![CDATA[Love it]]></description>
+      <commentImage url="https://cdn.discordapp.com/emojis/1514344183475732520.webp?size=128&amp;quality=lossless"/>
+      <translator>CannibalTurtle</translator>
+      <short_code>TDLBKGC</short_code>
+      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <category>SFW</category>
+      <pubDate>Thu, 13 Aug 2026 23:30:27 +0000</pubDate>
+      <guid isPermaLink="false">ffa8b582-89a3-4515-b08f-97a6cea499e6</guid>
+    </item>
     <item>
       <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
       <chapter>Chapter 642</chapter>
@@ -146,22 +162,6 @@
       <category>SFW</category>
       <pubDate>Sun, 09 Aug 2026 19:37:36 +0000</pubDate>
       <guid isPermaLink="false">90a0da92-a578-4486-a245-dba4ba0856ef</guid>
-    </item>
-    <item>
-      <title>After Transmigrating into the Villain, I Got a HE with the Female Lead's Older Brother</title>
-      <chapter>Chapter 1</chapter>
-      <link>https://www.mistminthaven.com/novels/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother/chapter-1</link>
-      <dc:creator><![CDATA[Luna_Lavgud]]></dc:creator>
-      <description><![CDATA[Sticker comment]]></description>
-      <commentImage url="https://cdn.discordapp.com/emojis/1514344183475732520.webp?size=128&amp;quality=lossless"/>
-      <translator>CannibalTurtle</translator>
-      <short_code>ATVHE</short_code>
-      <featuredImage url="https://i.imgur.com/xZHo6u6.jpeg"/>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <category>SFW</category>
-      <pubDate>Sun, 09 Aug 2026 07:06:33 +0000</pubDate>
-      <guid isPermaLink="false">14ac5cd1-a325-4188-bc54-6c4bd42a772f</guid>
     </item>
   </channel>
 </rss>
