@@ -4,7 +4,22 @@
     <title>Aggregated Comments Feed</title>
     <link>https://github.com/Cannibal-Turtle</link>
     <description>Aggregated RSS feed for comments across hosting sites.</description>
-    <lastBuildDate>Fri, 14 Aug 2026 22:31:50 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 14 Aug 2026 23:01:44 +0000</lastBuildDate>
+    <item>
+      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
+      <chapter>Chapter 32</chapter>
+      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-32</link>
+      <dc:creator><![CDATA[ShadowLicker]]></dc:creator>
+      <description><![CDATA[Bruh Im all for misunderstandings but this mc really needs a brain transplant.]]></description>
+      <translator>CannibalTurtle</translator>
+      <short_code>TDLBKGC</short_code>
+      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <category>SFW</category>
+      <pubDate>Fri, 14 Aug 2026 22:44:28 +0000</pubDate>
+      <guid isPermaLink="false">f8198be0-ae9c-4706-bfe8-671f4e829409</guid>
+    </item>
     <item>
       <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
       <chapter>Chapter 643</chapter>
@@ -146,22 +161,6 @@
       <category>SFW</category>
       <pubDate>Tue, 11 Aug 2026 04:35:37 +0000</pubDate>
       <guid isPermaLink="false">a37922b9-31ff-4872-881d-33caed75c305</guid>
-    </item>
-    <item>
-      <title>Entering the Cage</title>
-      <chapter>Homepage</chapter>
-      <link>https://www.mistminthaven.com/novels/entering-the-cage</link>
-      <dc:creator><![CDATA[CPbdu6]]></dc:creator>
-      <description><![CDATA[Sticker comment]]></description>
-      <commentImage url="https://cdn.discordapp.com/emojis/1514344185585733723.webp?size=128&amp;quality=lossless"/>
-      <translator>CannibalTurtle</translator>
-      <short_code>EC</short_code>
-      <featuredImage url="https://i.imgur.com/hrscn54.jpeg"/>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <category>SFW</category>
-      <pubDate>Tue, 11 Aug 2026 03:38:05 +0000</pubDate>
-      <guid isPermaLink="false">bf343c09-a550-4d89-8227-4a766c9d761d</guid>
     </item>
   </channel>
 </rss>
