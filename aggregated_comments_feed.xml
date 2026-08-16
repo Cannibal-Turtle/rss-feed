@@ -4,7 +4,23 @@
     <title>Aggregated Comments Feed</title>
     <link>https://github.com/Cannibal-Turtle</link>
     <description>Aggregated RSS feed for comments across hosting sites.</description>
-    <lastBuildDate>Sun, 16 Aug 2026 00:01:38 +0000</lastBuildDate>
+    <lastBuildDate>Sun, 16 Aug 2026 00:31:48 +0000</lastBuildDate>
+    <item>
+      <title>After Transmigrating into the Villain, I Got a HE with the Female Lead's Older Brother</title>
+      <chapter>Chapter 53</chapter>
+      <link>https://www.mistminthaven.com/novels/after-transmigrating-into-the-villain-i-got-a-he-with-the-female-lead-s-older-brother/chapter-53</link>
+      <dc:creator><![CDATA[Jaefir7]]></dc:creator>
+      <description><![CDATA[Sticker comment]]></description>
+      <commentImage url="https://cdn.discordapp.com/emojis/1514344185585733723.webp?size=128&amp;quality=lossless"/>
+      <translator>CannibalTurtle</translator>
+      <short_code>ATVHE</short_code>
+      <featuredImage url="https://i.imgur.com/xZHo6u6.jpeg"/>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <category>SFW</category>
+      <pubDate>Sun, 16 Aug 2026 00:04:21 +0000</pubDate>
+      <guid isPermaLink="false">7bb5d768-a570-4785-b0e1-ee5b2d14626a</guid>
+    </item>
     <item>
       <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
       <chapter>Chapter 73</chapter>
@@ -141,21 +157,6 @@
       <category>SFW</category>
       <pubDate>Sat, 15 Aug 2026 05:53:20 +0000</pubDate>
       <guid isPermaLink="false">3c1f657f-4f6a-412c-94b9-d3242c24792f</guid>
-    </item>
-    <item>
-      <title>[Quick Transmigration] The Delicate Little Beauty Keeps Getting Caught</title>
-      <chapter>Chapter 39</chapter>
-      <link>https://www.mistminthaven.com/novels/quick-transmigration-the-delicate-little-beauty-keeps-getting-caught/arc-1-tycoon-boss-gong-pure-little-male-servant-shou-chapter-39</link>
-      <dc:creator><![CDATA[ShadowLicker]]></dc:creator>
-      <description><![CDATA[Not sure if I should be scared, happy or sad. 😰]]></description>
-      <translator>CannibalTurtle</translator>
-      <short_code>TDLBKGC</short_code>
-      <featuredImage url="https://i.imgur.com/vqvVVz9.png"/>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <category>SFW</category>
-      <pubDate>Fri, 14 Aug 2026 23:31:03 +0000</pubDate>
-      <guid isPermaLink="false">eea8b6b4-a4fe-463e-a13e-44364875dbd4</guid>
     </item>
   </channel>
 </rss>
