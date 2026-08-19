@@ -4,7 +4,22 @@
     <title>Aggregated Comments Feed</title>
     <link>https://github.com/Cannibal-Turtle</link>
     <description>Aggregated RSS feed for comments across hosting sites.</description>
-    <lastBuildDate>Wed, 19 Aug 2026 01:31:33 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 19 Aug 2026 02:01:13 +0000</lastBuildDate>
+    <item>
+      <title>Entering the Cage</title>
+      <chapter>Chapter 29</chapter>
+      <link>https://www.mistminthaven.com/novels/entering-the-cage/chapter-29</link>
+      <dc:creator><![CDATA[Pipero]]></dc:creator>
+      <description><![CDATA[can’t wait for the next chapters yoo]]></description>
+      <translator>CannibalTurtle</translator>
+      <short_code>EC</short_code>
+      <featuredImage url="https://i.imgur.com/hrscn54.jpeg"/>
+      <host>Mistmint Haven</host>
+      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
+      <category>SFW</category>
+      <pubDate>Wed, 19 Aug 2026 01:59:00 +0000</pubDate>
+      <guid isPermaLink="false">cd3a149d-6a9b-4df8-b669-51ca8368c773</guid>
+    </item>
     <item>
       <title>Quick Transmigration: The Villain Is Too Pampered and Alluring</title>
       <chapter>Chapter 647</chapter>
@@ -143,21 +158,6 @@
       <category>SFW</category>
       <pubDate>Sat, 15 Aug 2026 12:18:02 +0000</pubDate>
       <guid isPermaLink="false">05e54e7b-a9bf-41c2-a0da-72323af6c6f2</guid>
-    </item>
-    <item>
-      <title>Whose Simping Male Supporting Character Is Being Held and Kissed by the Male Lead?</title>
-      <chapter>Chapter 27</chapter>
-      <link>https://www.mistminthaven.com/novels/whose-simping-male-supporting-character-is-being-held-and-kissed-by-the-male-lead/chapter-27</link>
-      <dc:creator><![CDATA[Hoshi_Moshi]]></dc:creator>
-      <description><![CDATA[This hit me in the feels like a train, is the author finally rewarding us readers with wholesome fluff?? This is so cute I’m getting tooth cavities (´°̥̥̥̥̥̥̥̥ω°̥̥̥̥̥̥̥̥｀)]]></description>
-      <translator>CannibalTurtle</translator>
-      <short_code>WSMSC</short_code>
-      <featuredImage url="https://i.imgur.com/BVyD5c9.jpeg"/>
-      <host>Mistmint Haven</host>
-      <hostLogo url="https://www.mistminthaven.com/images/mascot_mistmint.png"/>
-      <category>SFW</category>
-      <pubDate>Sat, 15 Aug 2026 12:05:59 +0000</pubDate>
-      <guid isPermaLink="false">b79d8ff5-721e-4fe0-9f8d-87b23172e435</guid>
     </item>
   </channel>
 </rss>
